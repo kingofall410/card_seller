@@ -108,7 +108,7 @@ def add_token(request):
         new_value = data.get("token", "").lower()
 
         
-        
+
         print(f"add_token: {field_key}: {new_value}")
 
         if app_settings.add_token(field_key, new_value, None):
@@ -222,16 +222,18 @@ def text_search_collection(request, collection_id):
     
     return JsonResponse({"success": True, "error": ""})
 
-def upload_image(request):
+def upload_image_no_id(request):
+    collection = Collection.get_default()
+    return redirect(f"/upload_image/{collection.id}")
+             
+def upload_image(request, collection_id):
     match_back = True#should eventually be passed in from the html
 
-    collection_id = request.GET.get("collection_id")
     print("collection_id2: ", collection_id)
     if collection_id and collection_id != "" and collection_id != "None":
         collection = Collection.objects.get(id=collection_id) 
     else:
-        collection = Collection.objects.create()
-        collection.save()
+        collection = Collection.get_default()
     
     print("collection_id2: ", collection.id)
     if request.method == 'POST':
@@ -265,7 +267,7 @@ def upload_image(request):
 
             return redirect(f"/collection/{collection.id}")
                            
-    return render(request, "upload_image.html")
+    return render(request, "upload_image.html", {"collection_id":collection.id})
 
 def select_directory(request):
     if request.method == "POST":
@@ -355,7 +357,7 @@ def update_settings(request):
 
 def collection_create(request):
     new_collection = Collection.objects.create()
-    return redirect(reverse("upload_image") + f"?collection_id={new_collection.id}")
+    return redirect(reverse(f"upload_image/${new_collection.id}"))
 
 def settings_file_upload(request, file_type):
     uploaded_files = request.FILES.getlist("file")

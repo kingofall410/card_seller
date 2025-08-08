@@ -1,3 +1,6 @@
+{% load custom_tags %}
+{% get_collections as collections %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,27 +30,43 @@
     <h2>📷 Upload an Image</h2>
 
     <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <input type="file" name="images" id="image-input" accept="image/*" multiple>
-        <div class="file-name" id="file-name-display"></div>
-        <br>
-        <button type="submit">Submit</button>
+    {% csrf_token %}
+
+    <!-- 📁 Collection Selector -->
+    <label for="collection-select">Choose a Collection:</label>
+    <select name="collection_id" id="collection-select">
+        {% for collection in collections %}
+        <option value="{{ collection.id }}" {% if collection.id == collection_id %}selected{% endif %}>
+            Collection #{{ collection.id }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <br><br>
+
+    <!-- 📷 Image Upload -->
+    <input type="file" name="images" id="image-input" accept="image/*" multiple>
+    <div class="file-name" id="file-name-display"></div>
+
+    <br>
+    <button type="submit">Submit</button>
     </form>
 
     <script>
-        const input = document.getElementById('image-input');
-        const nameDisplay = document.getElementById('file-name-display');
+    const input = document.getElementById('image-input');
+    const nameDisplay = document.getElementById('file-name-display');
 
-        input.addEventListener('change', () => {
+    input.addEventListener('change', () => {
         const files = input.files;
         if (files.length > 0) {
-            const names = Array.from(files).map(f => f.name).join(', ');
-            nameDisplay.textContent = `Selected ${files.length} image(s): ${names}`;
+        const names = Array.from(files).map(f => f.name).join(', ');
+        nameDisplay.textContent = `Selected ${files.length} image(s): ${names}`;
         } else {
-            nameDisplay.textContent = '';
+        nameDisplay.textContent = '';
         }
-        });
-
+    });
     </script>
+
+
 </body>
 </html>
