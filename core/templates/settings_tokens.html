@@ -1,0 +1,152 @@
+{% load custom_tags %}
+{% get_autocomplete_options primary_field_key as primary_options %}
+{% get_autocomplete_options secondary_field_key as secondary_options %}
+{{ primary_options|json_script:primary_autocomplete_id }}
+{{ secondary_options|json_script:secondary_autocomplete_id }}
+
+<style>
+  .list-group-item {
+    cursor: pointer;
+  }
+
+  .list-group-item:hover {
+    background-color: #f0f8ff;
+  }
+
+  .list-group-item.selected {
+    background-color: #0d6efd;
+    color: white;
+    font-weight: 500;
+  }
+
+  .autocomplete-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 80px; /* Adds consistent spacing between children */
+  }
+
+
+  .autocomplete-container {
+    display: flex;
+    gap: 100px;
+    flex-wrap: wrap;
+  }
+
+  .autocomplete-box {
+    max-width: 400px;
+    min-width: 300px;
+    flex: 1;
+  }
+
+  .autocomplete-results {
+    list-style: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    max-height: 200px;
+    min-height: 200px;
+    overflow-y: auto;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .hidden {
+  display: none;
+}
+
+</style>
+
+<div class="autocomplete-container">
+  <!-- Primary Autocomplete -->
+  <div class="autocomplete-box">
+    <input type="text" class="form-control" id="{{ primary_field_key }}-autocomplete" placeholder="Search primary..." autocomplete="off">
+    <ul id="{{ primary_field_key }}-autocomplete-results" class="list-group autocomplete-results"></ul>
+  </div>
+
+  <!-- Secondary Autocomplete -->
+   <div class="autocomplete-box {% if not secondary_field_key or not secondary_autocomplete_id %}hidden{% endif %}">
+    <input type="text" class="form-control" id="{{ secondary_field_key }}-autocomplete" placeholder="Search secondary..." autocomplete="off">
+    <ul id="{{ secondary_field_key }}-autocomplete-results" class="list-group autocomplete-results"></ul>
+</div>
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const primaryId = "{{ primary_field_key }}";
+    const primaryInput = document.getElementById(`${primaryId}-autocomplete`);
+    const primaryResults = document.getElementById(`${primaryId}-autocomplete-results`);
+    const primaryOptions = JSON.parse(document.getElementById("{{ primary_autocomplete_id }}").textContent);
+
+    let selectedPrimary = null;
+
+    function renderList(container, inputEl, options, query = "") {
+        container.innerHTML = "";
+
+        const lowerQuery = query.toLowerCase();
+        let displayOptions = [...options].sort((a, b) => a.localeCompare(b));
+        const hasMatch = displayOptions.some(opt => opt.toLowerCase().includes(lowerQuery));
+
+        if (query && !hasMatch) {
+        displayOptions.push(query);
+        displayOptions.sort((a, b) => a.localeCompare(b));
+        }
+
+        displayOptions.forEach((opt) => {
+        const li = document.createElement("li");
+        li.textContent = opt;
+        li.className = "list-group-item list-group-item-action";
+
+        li.addEventListener("click", () => {
+            inputEl.value = opt;
+            Array.from(container.children).forEach(el => el.classList.remove("selected"));
+            li.classList.add("selected");
+
+            if (inputEl === primaryInput) {
+            selectedPrimary = opt;
+            if (secondaryInput && secondaryResults && secondaryOptions) {
+                renderSecondary();
+            }
+            }
+        });
+
+        container.appendChild(li);
+        });
+    }
+
+    renderList(primaryResults, primaryInput, primaryOptions);
+
+    primaryInput.addEventListener("input", function () {
+        const query = primaryInput.value.trim();
+        renderList(primaryResults, primaryInput, primaryOptions, query);
+    });
+
+    // ✅ Secondary logic only runs if all required elements exist
+    const secondaryId = "{{ secondary_field_key|default:'' }}";
+    const secondaryInput = document.getElementById(`${secondaryId}-autocomplete`);
+    const secondaryResults = document.getElementById(`${secondaryId}-autocomplete-results`);
+    const secondaryOptionsEl = document.getElementById("{{ secondary_autocomplete_id|default:'' }}");
+    const secondaryOptions = secondaryOptionsEl ? JSON.parse(secondaryOptionsEl.textContent) : null;
+
+    if (secondaryInput && secondaryResults && secondaryOptions) {
+        secondaryInput.addEventListener("input", renderSecondary);
+
+        function renderSecondary() {
+        if (!selectedPrimary) {
+            secondaryResults.innerHTML = "";
+            return;
+        }
+
+        const query = secondaryInput.value.trim().toLowerCase();
+
+        const filtered = secondaryOptions.filter(([supercat, subcat]) => {
+            return (
+            supercat === selectedPrimary &&
+            subcat.toLowerCase().includes(query)
+            );
+        });
+
+        renderList(secondaryResults, secondaryInput, filtered.map(([_, subcat]) => subcat), query);
+        }
+    }
+    });
+
+</script>

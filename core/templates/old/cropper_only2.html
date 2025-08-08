@@ -1,0 +1,256 @@
+{% load custom_tags %}
+<style>
+.thumb-container {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin-bottom: 4px;
+  max-width: 520px; /* ✨ Added missing 'px' unit */
+  align-items:flext-start;
+}
+
+.thumb-box {
+  width: auto;
+  text-align: center;
+}
+
+.thumb-box img {
+  margin: 2px;
+  max-width: 100%;
+  height: 240px;
+  width: auto;
+  box-sizing: border-box;
+}
+
+.thumb-label {
+  margin-top: 12px; /* ✨ Replaced '3cap' with valid 'px' unit */
+  font-size: 14px;
+}
+</style>
+
+<!-- Cropper CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"/>
+<div style="display: flex; flex-direction: column;">
+
+  <!-- Thumbnails Panel -->
+  <div id="thumb_panel-{{ card }}" class="thumb-container">
+    <div class="thumb-box">
+      <img id="original-{{ card_id }}" src="{{ original_img|safe }}" alt="Original" />
+      <div class="thumb-label">Original</div>
+    </div>
+    <div class="thumb-box">
+      <img id="portrait-{{ card_id }}" src="{{ portrait_img|safe }}" alt="Portrait" />
+      <div class="thumb-label">Portrait</div>
+    </div>
+    <div class="thumb-box">
+      <img id="cropped-{{ card_id }}" src="{{ cropped_img|safe }}" alt="Cropped" />
+      <div class="thumb-label">Cropped</div>
+    </div>
+  </div>
+
+
+  <!-- Cropper Image Container -->
+  <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 480px;">
+    <img id="cropper-{{ card_id }}" style="height: 520px; width: 480px;" />
+  </div> 
+  <!-- Crop Actions (Lower Row) -->
+  <div style="margin-top: 10px; display: flex; gap: 10px;">
+    <button id="lock-btn-{{ card_id }}">🔒 Lock</button>
+    <button id="save-btn-{{ card_id }}">💾 Save</button>
+    <button id="reset-btn-{{ card_id }}">⟳ Reset</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+  console.log("script loaded")
+  document.addEventListener("DOMContentLoaded", function () {
+    console.log("f")
+    const imageUrl = "{{ original_img|safe }}";
+    const cropped_preview = document.getElementById("cropped-{{ card_id|safe }}");
+    const portrait_preview = document.getElementById("portrait-{{ card_id|safe }}");
+    const cropperImage = document.getElementById("cropper-{{ card_id|safe }}");    
+    //const rotateCWBtn = document.getElementById("rotate-cw-{{ card_id }}");
+    //const rotateCCWBtn = document.getElementById("rotate-ccw-{{ card_id }}");
+    //const rotate180Btn = document.getElementById("rotate-180-{{ card_id }}");    
+    //const lockBtn = document.getElementById("lock-btn-{{ forloop.counter }}");
+    const saveBtn = document.getElementById("save-btn-{{ card_id|safe }}");
+    //const resetBtn = document.getElementById("reset-btn-{{ forloop.counter }}");
+    const cardId = "{{ card_id|safe }}";
+    
+    const crop = {
+        x: "{{ crop_params.x|safe }}",
+        y: "{{ crop_params.y|safe }}",
+        width: "{{ crop_params.width|safe }}",
+        height: "{{ crop_params.height|safe }}",
+        rotate: "{{ crop_params.rotate|safe }}",
+        canvasLeft: "{{ crop_params.display_offset_left|safe }}",
+        canvasTop:  "{{ crop_params.display_offset_top|safe }}"
+      };
+      
+    let savedData = null;
+    let savedCanvas = null;
+    let savedCropBox = null;
+
+    if (cropperImage.dataset.bound === "true") {
+        console.log("Cropper already bound — skipping.");
+        return;
+    }
+    
+    
+    cropperImage.onload = () => {
+      cropperImage.style.display = "block";
+      const cropper = new Cropper(cropperImage, {
+
+        viewMode: 0,
+        autoCrop: true,
+        autoCropArea: 1.0,
+        responsive: true,
+        dragMode: 'none',
+        zoomable: false,
+
+        ready() {
+          console.log("READY-here");
+          
+          console.log(cropper)
+          const scaleX = imageData.width / imageData.naturalWidth;
+          const scaleY = imageData.height / imageData.naturalHeight;
+          
+          const cropCenterX = imageData.left + crop.x * scaleX + (crop.width * scaleX) / 2;
+          const cropCenterY = imageData.top + crop.y * scaleY + (crop.height * scaleY) / 2;
+          const canvasCenterX = containerData.width / 2;
+          const canvasCenterY = containerData.height / 2;
+          const offsetX = canvasCenterX - cropCenterX;
+          const offsetY = canvasCenterY - cropCenterY;
+          let currentRotation = 0;
+          const canvasBefore = {
+            left: imageData.left + offsetX,
+            top: imageData.top + offsetY,
+            width: imageData.width,
+            height: imageData.height
+          };
+          console.log(crop)
+        
+          cropper.setCanvasData(canvasBefore);
+          console.log("Canvas Before:", cropper.getCanvasData());
+          console.log("crop:", crop);
+          cropper.rotateTo(-crop.rotate);
+          const parsedLeft = parseFloat(crop.canvasLeft);
+          const parsedTop = parseFloat(crop.canvasTop);
+          console.log("Parsed Left:", parsedLeft, "Parsed Top:", parsedTop);
+          if (!isNaN(parsedLeft) && !isNaN(parsedTop)) {
+
+            //reset to original
+            cropper.setCanvasData({
+              left: parsedLeft,
+              top: parsedTop,
+              width: imageData.width,
+              height: imageData.height
+            });
+          }
+
+                   
+        }//ready
+      });
+      /*saveBtn.addEventListener("click", function () {
+        console.log("Saving crop data...");
+      
+        if (saveBtn.disabled) {
+          console.warn("Save button is disabled, cannot save crop data.");
+          return;
+        }
+        savedData = cropper.getData();
+        savedCanvas = cropper.getCanvasData();
+        savedCropBox = cropper.getCropBoxData();
+
+        const imageData = cropper.getImageData();
+        const canvas = cropper.getCroppedCanvas();
+        const currentRotation = savedData.rotate || 0;
+
+        canvas.toBlob(function (blob) {
+          const formData = new FormData();
+          formData.append('cropped_image', blob, 'cropped.jpg');
+          console.log("1"); 
+          const scaleX = imageData.naturalWidth / imageData.width;
+          const scaleY = imageData.naturalHeight / imageData.height;
+          console.log("2");
+          const imageX = (savedCropBox.left - imageData.left) * scaleX;
+          const imageY = (savedCropBox.top - imageData.top) * scaleY;
+          const imageWidth = savedCropBox.width * scaleX;
+          const imageHeight = savedCropBox.height * scaleY;
+          console.log("3");
+          formData.append('card_id', "{{ card_id }}");
+          console.log("4");
+          formData.append('crop_left', imageX);
+          formData.append('crop_top', imageY);
+          formData.append('crop_width', imageWidth);
+          formData.append('crop_height', imageHeight);
+          formData.append('canvas_rotation', currentRotation);
+          console.log("5: ", currentRotation);
+          console.log(savedCanvas);
+          console.log("6");
+          formData.append('canvas_left', savedCanvas.left);
+          formData.append('canvas_top', savedCanvas.top);
+          console.log("7");
+
+          
+          cropped_preview.src = canvas.toDataURL();
+          
+          const easyRotation = (Math.round(currentRotation / 90) * 90) % 360;
+
+          resetAndRotate(portrait_preview, easyRotation).then(blob => {
+            portrait_preview.src = URL.createObjectURL(blob);
+            console.log("Portrait image updated with rotation:", easyRotation);
+            
+          fetch('/upload-crop/', { 
+            method: 'POST',
+            body: formData
+          }).then(response => {
+            console.log("Saved successfully");
+            location.reload()
+          }).catch(error => {
+            console.error("Save error", error);
+          });
+          }).catch(err => {
+            console.error(err);
+          });
+        }, 'image/jpeg');
+      });*/
+    }
+    cropperImage.src = "{{ portrait_img|safe }}";
+  });
+</script>
+      <!--
+          /**/
+          
+          /*function resetAndRotate(imgElement, angleDeg = 90, callback) {
+            console.log("Resetting and rotating image by", angleDeg, "degrees");
+            const radians = angleDeg * Math.PI / 180;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const w = imgElement.naturalWidth;
+            const h = imgElement.naturalHeight;
+
+            canvas.width = (angleDeg % 180 === 0) ? w : h;
+            canvas.height = (angleDeg % 180 === 0) ? h : w;
+
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(radians);
+            ctx.drawImage(imgElement, -w / 2, -h / 2);
+
+            return new Promise((resolve, reject) => {
+              canvas.toBlob(blob => {
+                if (blob) {
+                  resolve(blob);
+                } else {
+                  reject("❌ Blob creation failed.");
+                }
+              }, 'image/jpeg');
+            });
+          }*/
+       
+      /**/
+      /**/-->

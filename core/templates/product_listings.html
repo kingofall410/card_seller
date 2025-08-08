@@ -1,0 +1,26 @@
+<div class="image-grid">
+    {% for listing in search_result.listings.all %}
+    <div class="listing">
+        <div class="listing">
+            <img src="{{ listing.thumb_url }}" alt="Product Listing" class="listing-thumb" />
+        </div>
+    </div>
+    {% empty %}
+    <p>No listings found for this card.</p>
+    {% endfor %}
+</div>
+<style>
+.image-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.listing-thumb {
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: contain;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+</style>

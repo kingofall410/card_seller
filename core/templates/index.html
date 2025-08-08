@@ -1,0 +1,35 @@
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            vertical-align: top;
+        }
+        .preview-block img {
+            max-height: 220px;
+            object-fit: contain;
+            width: auto;
+            border: 1px solid #ccc;
+        }
+    </style>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h2>Image Comparison Index</h2>
+    <table>
+        <tr><th>Preview</th></tr>
+        {% for preview_block in preview_blocks %}
+            <tr><td>{{ preview_block|safe }}</td></tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

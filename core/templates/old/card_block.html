@@ -1,0 +1,41 @@
+<div style="margin-bottom: 40px; padding: 20px; border-radius: 10px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+    <div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="flex: 0 0 auto; display: flex; gap: 20px;">
+            <img src="{{ original_img }}" style="height: 240px; width: auto; object-fit: contain; border-radius: 6px;">
+            <img src="{{ cropped_img }}" style="height: 240px; width: auto; object-fit: contain; border-radius: 6px;">
+        </div>
+
+        <div style="flex: 1;">
+            {% if search_result %}
+            <table style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+                <thead>
+                    <tr style="background-color: #f0f0f0;">
+                        <th style="padding: 8px; text-align: left;">Field</th>
+                        <th style="padding: 8px; text-align: left;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for field in search_result._meta.fields %}
+                        {% if field.name not in ["id", "parent_card"] %}
+                            {% with value=field.value_from_object(search_result) %}
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 6px;">{{ field.verbose_name|capfirst }}</td>
+                                <td style="padding: 6px;">
+                                    {% if value %}
+                                        {{ value }}
+                                    {% else %}
+                                        <span style="color: #999;">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endwith %}
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p style="color: #666;">No search result data available for this card.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>

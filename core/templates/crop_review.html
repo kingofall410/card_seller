@@ -1,0 +1,123 @@
+{% load custom_tags %}
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cropper Interface</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"/>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 960px;
+      margin: auto;
+    }
+
+    .thumb-container {
+      display: flex;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      gap: 2px;
+      margin-bottom: 4px;
+      max-width: 520px;
+      align-items: flex-start;
+    }
+
+    .thumb-box {
+      width: auto;
+      text-align: center;
+    }
+
+    .thumb-box img {
+      max-height: 240px;
+      height: 240px;
+      width: auto;
+      object-fit: contain;
+      box-sizing: border-box;
+    }
+
+    .thumb-label {
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .cropper-container-wrapper {
+      position: relative;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      max-width: 720px;
+      margin-bottom: 16px;
+    }
+
+    .crop-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .footer-actions {
+      margin-top: 40px;
+      text-align: right;
+    }
+
+    .footer-actions button {
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+
+    .cropper-nav-wrapper {
+    margin-top: 20px;
+    }
+
+    .cropper-nav-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    }
+
+    .cropper-nav-left,
+    .cropper-nav-right {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    }
+
+    .cropper-nav-center {
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: center;
+    }
+
+  </style>
+</head>
+<body>
+  <h2>Crop Image for Card {{ card_id }}</h2>
+  <div class="cropper-nav-wrapper">
+  <div class="cropper-nav-row">
+    <!-- Left Navigation -->
+    <div class="cropper-nav-left">
+      <a href="{% url 'next' card.id %}" class="nav-arrow">⬅ Previous</a>
+    </div>
+
+    <!-- Cropper -->
+    <div class="cropper-nav-center">
+      {% include "cropper_only.html" with card=card card_id=card.id original_img=card.uploaded_image.url portrait_img=card.portrait_image.url cropped_img=card.cropped_image.url reverse_img=card.cropped_reverse.url search_results=search_results crop_params=search_results.front_crop_params %}
+      {% include "cropper_only.html" with card=card card_id=card.reverse_id original_img=card.reverse_image.url portrait_img=card.portrait_reverse.url cropped_img=card.cropped_reverse.url reverse_img=card.cropped_image.url search_results=card crop_params=card.reverse_crop_params %}
+    </div>
+
+    <!-- Right Navigation -->
+    <div class="cropper-nav-right">
+      <form method="post" action="{% url 'save_and_next' card.id %}" onsubmit=getCropDataForSave(card.id) style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="nav-arrow">✅ Save & Next ➡</button>
+      </form>
+      <a href="{% url 'next' card.id %}" class="nav-arrow">➡ Next (Don’t Save!)</a>
+    </div>
+  </div>
+</div>

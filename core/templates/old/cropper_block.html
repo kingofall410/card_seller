@@ -1,0 +1,715 @@
+{% load custom_tags %}
+<style>
+.context-menu {
+  position: absolute;
+  display: none;
+  background: white;
+  border: 1px solid #ccc;
+  z-index: 1000;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.context-menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.context-menu li {
+  padding: 6px 10px;
+  cursor: pointer;
+  position: relative;
+}
+
+.context-menu li:hover {
+  background-color: #eee;
+}
+
+.submenu {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  background: white;
+  border: 1px solid #ccc;
+  min-width: 150px;
+}
+
+.register-item {
+  position: relative;
+}
+.register-item:hover .submenu {
+  display: block;
+}
+
+.table-row {
+  border-bottom: 1px solid #eee;
+}
+.field-label {
+  padding: 6px;
+}
+.field-value {
+  padding: 6px;
+}
+
+</style>
+<!-- Cropper CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"/>
+
+<div style="margin-top: 40px; padding: 20px; border-radius: 10px; background: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+  <div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
+    
+    <!-- Left side -->
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 20px; align-items: center;">
+
+      <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px;">
+  <!-- Original Image -->
+  <div style="text-align: center;">
+    <img src="{{ original_img }}" alt="Original" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Original</div>
+  </div>
+
+  <!-- Portrait Image -->
+  <div style="text-align: center;">
+    <img id="portrait-{{ forloop.counter }}" src="{{ portrait_img }}" alt="Portrait" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Portrait</div>
+  </div>
+
+  <!-- Cropped Image -->
+  <div style="text-align: center;">
+    <img id="cropped-{{ forloop.counter }}" src="{{ cropped_img }}" alt="Cropped" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Cropped</div>
+  </div>
+</div>
+
+      <!-- Cropper Image Container -->
+      <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 480px;">
+        <img id="cropper-{{ forloop.counter }}" style="height: 520px; width: 480px;" />
+      </div>
+
+      <!-- Rotation Buttons (Upper Row) -->
+      <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <button id="rotate-cw-{{ forloop.counter }}">↻ Clockwise</button>
+        <button id="rotate-ccw-{{ forloop.counter }}">↺ Counterclockwise</button>
+        <button id="rotate-180-{{ forloop.counter }}">🔄 180°</button>
+      </div>
+
+      <!-- Crop Actions (Lower Row) -->
+      <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <button id="lock-btn-{{ forloop.counter }}">🔒 Lock</button>
+        <button id="save-btn-{{ forloop.counter }}">💾 Save</button>
+        <button id="reset-btn-{{ forloop.counter }}">⟳ Reset</button>
+      </div>
+    </div>
+
+
+    <!-- Right side -->
+    <div style="flex: 1;">
+      <div id="contextMenu" style="
+        position: absolute;
+        display: none;
+        z-index: 9999;
+        background-color: white;
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+        border-radius: 6px;
+        min-width: 160px;
+        font-size: 14px;
+      ">
+        <div style="padding: 8px; font-weight: bold;">Register as...</div>
+        <div id="fieldList"></div>
+      </div>
+      <form id="card-form-{{ forloop.counter }}" method="post" action="{% url 'save_overrides' card_id %}">
+        {% csrf_token %}
+        {{ card_id }}
+
+        <table id="fields-{{ forloop.counter }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+          <thead>
+            <tr style="background-color: #f0f0f0;">
+              <th style="padding: 8px;">Field</th>
+              <th style="padding: 8px;">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% with card_counter=forloop.counter %}
+            {% for field_name in search_result.display_fields %}
+              {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" %}
+                <tr style="border-bottom: 1px solid #eee;">
+                  <td style="padding: 6px;">
+                    <label style="display: flex; align-items: center; gap: 6px;">
+                      {% if field_name in search_result.overrideable_fields %}
+                      <input type="checkbox"
+                            id="{{ field_name }}_is_manual-{{ card_counter }}"
+                            name="{{ field_name }}_is_manual"
+                            {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                            onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+                      {% else %}
+                      <input type="checkbox"
+                            {% if not field_name in search_result.readonly_fields %}checked{% endif %}
+                            disabled
+                            style="cursor: not-allowed;">
+                      {% endif %}
+                      <span>{{ search_result|get_field_verbose:field_name }}</span>
+                    </label>
+                  </td>
+                  <td style="padding: 6px;">
+                  {% with resolved_value=search_result|get_attribute:display_attr %}
+                    {% if field_name in search_result.overrideable_fields %}
+                    <input type="text" style="width: 100%; box-sizing: border-box;"
+                          id="resolved_{{ field_name }}-{{ card_counter }}"
+                          name="{{ field_name }}_m"
+                          value="{{ resolved_value|default:'-' }}"
+                          color="#999999"
+                          {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}
+                          {% if not field_name in search_result.calculated_fields %}data-default="{{ search_result|get_attribute:field_name|default:'-' }}"{% endif %}
+                          oninput="handleManualInput('{{ field_name }}', {{ card_counter }})">
+                    {% elif field_name in search_result.readonly_fields %}
+                    <input type="text" style="width: 100%; box-sizing: border-box;"
+                          id="{{ field_name }}-{{ card_counter }}"
+                          color="#999999"
+                          value="{{ search_result|get_attribute:field_name|default:'-' }}"
+                          disabled>
+                    {% else %}
+                    <textarea rows="4"
+                              cols="30"
+                              style="width: 100%; resize: vertical; box-sizing: 
+                              border-box;">{{ search_result|get_attribute:field_name|default:'-' }}</textarea>
+                  {% endif %}
+                  {% endwith %}
+                  </td>
+                </tr>
+              {% endwith %}
+            {% endfor %}
+            {% endwith %}
+          </tbody>
+        </table>
+        <button type="submit"
+                class="btn btn-primary"
+                style="margin-left: 8px;"
+                onclick="handleSaveOverrides({{ card_id }})">
+          Save Fields
+        </button>
+      </form>
+
+
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button id="image-search-btn-{{ forloop.counter }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          🔍 Image Search
+        </button>
+        <button id="text-search-btn-{{ forloop.counter }}" style="padding: 8px 16px; background-color: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          🔎 Text Search
+        </button>
+
+      </div>
+
+    </div>
+    <div id="customMenu" class="context-menu">
+      <ul>
+        <li class="native-sim">Inspect</li>
+        <li class="native-sim">Reload</li>
+        <li class="native-sim">View Source</li>
+        <li class="register-item">Register…
+          <ul class="submenu">
+            {% for label, value in search_fields %}
+              <li data-value="{{ value }}">{{ label }}</li>
+            {% endfor %}
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+
+  </div>
+</div>
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+  
+    const imageUrl = "{{ original_img|safe }}";
+    const canvasLeft = "{{ crop_canvas_left|safe }}";
+    const canvasTop = "{{ crop_canvas_top|safe }}";
+    const cropped_preview = document.getElementById("cropped-{{ forloop.counter }}");
+    const portrait_preview = document.getElementById("portrait-{{ forloop.counter }}");
+    const cropperImage = document.getElementById("cropper-{{ forloop.counter }}");
+    const searchFields = JSON.parse('{{ search_fields_json|escapejs }}');
+    const lockBtn = document.getElementById("lock-btn-{{ forloop.counter }}");
+    const saveBtn = document.getElementById("save-btn-{{ forloop.counter }}");
+    const resetBtn = document.getElementById("reset-btn-{{ forloop.counter }}");
+    const imageSearchBtn = document.getElementById("image-search-btn-{{ forloop.counter }}");
+    const textSearchBtn = document.getElementById("text-search-btn-{{ forloop.counter }}");
+    const contextMenu = document.getElementById("customMenu");
+    const fieldList = document.getElementById('fieldList');
+    const cardId = "{{ card_id }}";
+
+    const crop = {
+        x: "{{ crop_params.x }}",
+        y: "{{ crop_params.y }}",
+        width: "{{ crop_params.width }}",
+        height: "{{ crop_params.height }}",
+        rotate: "{{ crop_params.rotate }}"
+      };
+
+    console.log(fieldList)
+
+    let isLocked = false;
+    let savedData = null;
+    let savedCanvas = null;
+    let savedCropBox = null;
+
+    cropperImage.src = "{{ portrait_img|safe }}";
+    cropperImage.onload = () => {
+      cropperImage.style.display = "block";
+
+      // Initialize Cropper after image is ready...
+      const cropper = new Cropper(cropperImage, {
+        viewMode: 0,
+        autoCrop: true,
+        autoCropArea: 1.0,
+        responsive: true,
+        dragMode: 'none',
+        zoomable: false,
+
+        ready() {
+          
+          const imageData = cropper.getImageData();
+          const containerData = cropper.getContainerData();
+          
+          const scaleX = imageData.width / imageData.naturalWidth;
+          const scaleY = imageData.height / imageData.naturalHeight;
+          
+          const cropCenterX = imageData.left + crop.x * scaleX + (crop.width * scaleX) / 2;
+          const cropCenterY = imageData.top + crop.y * scaleY + (crop.height * scaleY) / 2;
+          const canvasCenterX = containerData.width / 2;
+          const canvasCenterY = containerData.height / 2;
+          const offsetX = canvasCenterX - cropCenterX;
+          const offsetY = canvasCenterY - cropCenterY;
+          let currentRotation = 0;
+          const rotateCWBtn = document.getElementById("rotate-cw-{{ forloop.counter }}");
+          const rotateCCWBtn = document.getElementById("rotate-ccw-{{ forloop.counter }}");
+          const rotate180Btn = document.getElementById("rotate-180-{{ forloop.counter }}");
+
+          rotateCWBtn.addEventListener("click", function () {
+            currentRotation = (currentRotation + 90) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+
+          rotateCCWBtn.addEventListener("click", function () {
+            currentRotation = (currentRotation - 90 + 360) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+
+          rotate180Btn.addEventListener("click", function () {
+            currentRotation = (currentRotation + 180) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+          const canvasBefore = {
+            left: imageData.left + offsetX,
+            top: imageData.top + offsetY,
+            width: imageData.width,
+            height: imageData.height
+          };
+          
+          cropper.setCanvasData(canvasBefore);
+          console.log("Canvas Before:", canvasBefore);
+          console.log("crop:", crop);
+          cropper.rotateTo(-crop.rotate);
+          const parsedLeft = parseFloat(canvasLeft);
+          const parsedTop = parseFloat(canvasTop);
+          console.log("Parsed Left:", parsedLeft, "Parsed Top:", parsedTop);
+          if (!isNaN(parsedLeft) && !isNaN(parsedTop)) {
+
+            //reset to original
+            cropper.setCanvasData({
+              left: parsedLeft,
+              top: parsedTop,
+              width: imageData.width,
+              height: imageData.height
+            });
+          } 
+        
+          setTimeout(() => {
+            const canvasAfter = cropper.getCanvasData();
+            const deltaX = canvasAfter.left - canvasBefore.left;
+            const deltaY = canvasAfter.top - canvasBefore.top;
+            console.log("Canvas After:", canvasAfter);
+            console.log(crop.x, crop.y, crop.width, crop.height);
+            console.log("Delta X:", deltaX, "Delta Y:", deltaY);
+            console.log("Scale X:", scaleX, "Scale Y:", scaleY);
+            console.log("Offset X:", offsetX, "Offset Y:", offsetY);
+            console.log("Parsed Left:", parsedLeft, "Parsed Top:", parsedTop);
+
+
+            const cropBoxData = {
+              left: crop.x * scaleX + imageData.left + offsetX + deltaX - parsedLeft,
+              top: crop.y * scaleY + imageData.top + offsetY + deltaY - parsedTop,
+              width: crop.width * scaleX,
+              height: crop.height * scaleY
+            };
+            console.log("Crop Box Data:", cropBoxData);
+
+            cropper.setCanvasData(canvasAfter);
+            cropper.setCropBoxData(cropBoxData);
+          }, 1000);
+          
+          function resetAndRotate(imgElement, angleDeg = 90, callback) {
+            console.log("Resetting and rotating image by", angleDeg, "degrees");
+            const radians = angleDeg * Math.PI / 180;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const w = imgElement.naturalWidth;
+            const h = imgElement.naturalHeight;
+
+            canvas.width = (angleDeg % 180 === 0) ? w : h;
+            canvas.height = (angleDeg % 180 === 0) ? h : w;
+
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(radians);
+            ctx.drawImage(imgElement, -w / 2, -h / 2);
+
+            return new Promise((resolve, reject) => {
+              canvas.toBlob(blob => {
+                if (blob) {
+                  resolve(blob);
+                } else {
+                  reject("❌ Blob creation failed.");
+                }
+              }, 'image/jpeg');
+            });
+          }
+        
+          lockBtn.addEventListener("click", function () {
+            isLocked = !isLocked;
+
+            if (isLocked) {
+              cropper.disable()
+              lockBtn.textContent = "🔓 Unlock";
+              lockBtn.style.backgroundColor = "#aaa";
+              resetBtn.disabled = true;
+              saveBtn.disabled = true;
+            } else {
+              cropper.enable();
+              lockBtn.textContent = "🔒 Lock";
+              lockBtn.style.backgroundColor = "";
+              resetBtn.disabled = false;
+              saveBtn.disabled = false;
+            }
+          });        
+          saveBtn.addEventListener("click", function () {
+            console.log("Saving crop data...");
+          
+            if (saveBtn.disabled) {
+              console.warn("Save button is disabled, cannot save crop data.");
+              return;
+            }
+            savedData = cropper.getData();
+            savedCanvas = cropper.getCanvasData();
+            savedCropBox = cropper.getCropBoxData();
+
+            const imageData = cropper.getImageData();
+            const canvas = cropper.getCroppedCanvas();
+            const currentRotation = savedData.rotate || 0;
+
+            canvas.toBlob(function (blob) {
+              const formData = new FormData();
+              formData.append('cropped_image', blob, 'cropped.jpg');
+              console.log("1"); 
+              const scaleX = imageData.naturalWidth / imageData.width;
+              const scaleY = imageData.naturalHeight / imageData.height;
+              console.log("2");
+              const imageX = (savedCropBox.left - imageData.left) * scaleX;
+              const imageY = (savedCropBox.top - imageData.top) * scaleY;
+              const imageWidth = savedCropBox.width * scaleX;
+              const imageHeight = savedCropBox.height * scaleY;
+              console.log("3");
+              formData.append('card_id', "{{ card_id }}");
+              console.log("4");
+              formData.append('crop_left', imageX);
+              formData.append('crop_top', imageY);
+              formData.append('crop_width', imageWidth);
+              formData.append('crop_height', imageHeight);
+              formData.append('canvas_rotation', currentRotation);
+              console.log("5: ", currentRotation);
+              console.log(savedCanvas);
+              console.log("6");
+              formData.append('canvas_left', savedCanvas.left);
+              formData.append('canvas_top', savedCanvas.top);
+              console.log("7");
+
+              
+              cropped_preview.src = canvas.toDataURL();
+              
+              const easyRotation = (Math.round(currentRotation / 90) * 90) % 360;
+
+              resetAndRotate(portrait_preview, easyRotation).then(blob => {
+                portrait_preview.src = URL.createObjectURL(blob);
+                console.log("Portrait image updated with rotation:", easyRotation);
+                
+              fetch('/upload-crop/', { 
+                method: 'POST',
+                body: formData
+              }).then(response => {
+                console.log("Saved successfully");
+                location.reload()
+              }).catch(error => {
+                console.error("Save error", error);
+              });
+              }).catch(err => {
+                console.error(err);
+              });
+            }, 'image/jpeg');
+          });
+        } 
+      });  
+    };//end cropper init block
+
+    let cachedSelection = '';
+    let cachedTableId = '';
+    let cachedFieldName = '';    
+
+    function moveFieldInHtml(label, newValue, oldLabel, tableId) {
+      console.log("atp:", label, newValue, oldLabel, tableId);
+      
+      let fields = null;
+      //console.log(searchFields);
+      for (let i = 0; i < searchFields.length; i++) {
+        const [key, values] = searchFields[i];
+        //console.log(key, values, label)
+        if (key === label) {
+          fields = searchFields[i];
+          if (fields[1] == "") {
+            fields[1] = newValue;
+          } else {
+            fields[1] += ", "+newValue;
+          }
+        }
+        else if (key === oldLabel) {
+          fields = searchFields[i];
+          let values = fields[1].split(',').map(v => v.trim());
+          const index = values.indexOf(newValue);
+
+          if (index > -1) {
+            values.splice(index, 1);
+          }
+
+          fields[1] = values.length ? values.join(', ') : '—';
+        }
+
+      }
+    }      
+
+    function redrawTable(tableId) {
+      const tableBody = document.querySelector(`#${tableId} tbody`);
+      if (!tableBody) {
+        console.warn("🚫 No tbody found for table ID:", tableId);
+        return;
+      }
+      tableBody.parentElement.style.display='table';
+
+      tableBody.innerHTML = '';
+
+      searchFields.forEach(([label, values]) => {
+        console.log("processing: ", label, values, typeof values)
+        const row = document.createElement('tr');
+        row.className = 'table-row';
+
+        const labelCell = document.createElement('td');
+        labelCell.className = 'field-label';
+        labelCell.textContent = label;
+
+        const valueCell = document.createElement('td');
+        valueCell.className = 'field-value';
+        valueCell.textContent = values || '—';
+
+        row.appendChild(labelCell);
+        row.appendChild(valueCell);
+        tableBody.appendChild(row);
+
+      })
+    }
+
+    //single launch listeners
+    if (!window.contextMenuBound) {
+      document.addEventListener('contextmenu', function (e) {
+        const cell = e.target.closest('td');
+        if (!cell) return;
+
+          const table = cell.closest('table');
+          cachedTableId = table ? table.id : null;
+          const row = cell.parentElement;
+          const cells = Array.from(row.children);
+          const index = cells.indexOf(cell);
+
+          if (index > 0) {
+            const leftCell = cells[index - 1];
+            cachedFieldName = leftCell.textContent.trim();
+            console.log("📌 Cached left cell text:", cachedFieldName);
+          } else {
+            cachedFieldName = '';
+            console.log("🚫 No left cell found");
+          }
+
+          console.log("📌 Table ID:", cachedTableId);
+
+        e.preventDefault();
+
+        cachedSelection = window.getSelection().toString().trim();
+
+        const contextMenu = document.getElementById('customMenu');
+        contextMenu.style.left = `${e.pageX}px`;
+        contextMenu.style.top = `${e.pageY}px`;
+        contextMenu.style.display = 'block';
+      });
+      document.querySelectorAll('.submenu li').forEach(item => {
+        item.addEventListener('click', (e) => {
+          console.log("submenu click")
+          const targetFieldName = item.textContent;
+          if (!cachedSelection) return;
+    
+          moveFieldInHtml(targetFieldName, cachedSelection, cachedFieldName, cachedTableId);
+          redrawTable(cachedTableId);
+          console.log("done")
+          fetch('/register-field/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              //'X-CSRFToken': getCookie('csrftoken')  // Make sure you have a getCookie() helper
+            },
+            body: JSON.stringify({
+              search_fields: searchFields,
+              field_name: targetFieldName,
+              new_value: cachedSelection,
+              card_id: cardId
+            })
+
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log(`✅ Registered "${cachedSelection}" as "${targetFieldName}"`);
+          })
+          .catch(err => {
+            console.error("❌ Error sending data:", err);
+          });
+
+          document.getElementById('customMenu').style.display = 'none';
+        });
+      });
+      document.addEventListener('click', function () {
+        const contextMenu = document.getElementById('customMenu');
+        contextMenu.style.display = 'none';
+      });
+    }
+    window.contextMenuBound = true
+    
+  
+
+  function handleOverrideToggle(field, idx) {
+    console.log(`handleOverrideToggle called with field="${field}", idx=${idx}`);
+    const checkboxId = `${field}_is_manual-${idx}`;
+    const checkbox = document.getElementById(checkboxId);
+
+    const input = document.getElementById(`resolved_${field}-${idx}`);
+
+    const titleCheckboxId = `title_to_be_is_manual-${idx}`;
+    
+    console.log(`resolved_${field}-${idx}`)
+
+    if (!checkbox) {
+      console.error(`❌ Checkbox not found: ${checkboxId}`);
+      return;
+    }
+    if (!input) {
+      console.error(`❌ Input not found: ${inputId}`);
+      return;
+    }
+
+  try {
+      const isManual = checkbox.checked;
+      let defaultVal
+      console.log(`✅ Input disabled = ${!isManual}`);
+      //console.log(checkboxId, titleCheckboxId)
+      input.disabled = !isManual;
+      if (!isManual) {
+        if (checkboxId === titleCheckboxId) {
+          defaultVal = build_title_to_be(idx);
+        } else {
+          defaultVal = input.getAttribute("data-default") || "-";
+        }
+        console.log(`🔄 Reset value to default: ${defaultVal}`);
+        
+        input.value = defaultVal;
+      }
+    } catch (error) {
+      console.error(`🔥 Error processing toggle: ${error.message}`);
+    }
+  }
+
+  function build_title_to_be(idx) {
+    
+    //eventually these need to be read from a config
+    const year = document.getElementById(`resolved_year-${idx}`)?.value;
+    const brand = document.getElementById(`resolved_brand-${idx}`)?.value;
+    const name = document.getElementById(`resolved_full_name-${idx}`)?.value;
+    const team = document.getElementById(`resolved_team-${idx}`)?.value;
+    const city = document.getElementById(`resolved_city-${idx}`)?.value;
+    const nr = document.getElementById(`resolved_card_number-${idx}`)?.value;
+    const serial = document.getElementById(`resolved_serial_number-${idx}`)?.value;
+    //console.log(`${year} ${brand} ${name} ${city} ${team} #${nr} `)
+    return `${year} ${brand} ${name} ${serial} ${city} ${team} #${nr}`
+  }
+
+
+  function handleManualInput(field, idx) {
+    console.log(`handleManualInput called with field="${field}", idx=${idx}`);
+    const titleFieldId = `resolved_title_to_be-${idx}`;
+    const thisFieldId = `resolved_${field}-${idx}`;
+
+    if (titleFieldId != thisFieldId) {
+      const titleCheckbox = document.getElementById(`title_to_be_is_manual-${idx}`);
+      const titleElement = document.getElementById(titleFieldId);
+      
+      if (titleElement && !titleCheckbox.checked) {
+        titleElement.value = build_title_to_be(idx)
+      } else {
+        console.log("no title element!");
+      }
+   }
+  }
+
+  function handleSaveOverrides(cardId) {
+    // Collect all manual fields
+    console.log("handleSaveOverrides: ", card_id);
+    const form = document.getElementById(`card-form-${cardId}`);
+    const data = new FormData(form);
+
+    fetch(`/save_overrides/${cardId}/`, {
+      method: 'POST',
+      body: data
+    }).then(res => res.json()).then(data => {
+      alert("Saved!");
+      location.reload();  // or update UI with data.title
+    });
+
+    let idx = 1;
+
+    while (true) {
+      const fieldId = `resolved_title_to_be-${idx}`;
+      const input = document.getElementById(fieldId);
+
+      if (!input) break;
+
+      handleManualInput("resolved_full_name", idx);
+      
+      idx++;
+    }
+
+
+
+  }
+
+</script>
+  

@@ -1,0 +1,147 @@
+{% load static %}
+{% load custom_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Card Collection</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background-color: #eef2f6;
+            margin: 0;
+            padding: 40px 20px;
+            color: #2d2d2d;
+        }
+        .container {
+            max-width: 1600px;
+            margin: auto;
+        }
+        h1 {
+            font-size: 30px;
+            margin-bottom: 40px;
+            color: #222;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .card-block {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            border: 1px solid #e3e7ee;
+            margin-bottom: 32px;
+            padding: 32px 24px;
+            transition: box-shadow 0.2s;
+        }
+        .card-block:hover {
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .cropper-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .cropper-column-left {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .cropper-column-right {
+            /* Ensures it spans both rows */
+        }
+        
+        .no-cards {
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.05);
+        }
+
+        .btn-link {
+            display: inline-block;
+            padding: 10px 16px;
+            background-color: #0077cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            transition: background 0.2s ease;
+        }
+
+            .btn-link:hover {
+            background-color: #005fa3;
+        }
+
+    </style>
+</head>
+<body>
+    {% include "header.html" %}
+    <div class="container">
+        <div class="pagination" style="text-align:center; margin-top:40px;">
+            <h1>Collection {{collection_id}}</h1>
+            
+            <a href="/image_search_collection/{{ collection_id }}/" class="btn-link" >🔍 Image Search</a>
+            <a href="/text_search_collection/{{ collection_id }}/" class="btn-link" >🔎 Text Search</a>
+            <a href="/export_collection/{{ collection_id }}/" class="btn-link" download="card_collection.csv">Download CSV</a>
+            <br><br>
+            {% if page_obj.has_previous %}
+                <a href="?page=1">⏪ First</a>
+                <a href="?page={{ page_obj.previous_page_number }}">◀ Prev</a>
+            {% endif %}
+
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
+            {% endif %}
+        </div><br>
+        {% for card in page_obj %}
+            <div class="card-block">
+                <div class="cropper-row">
+                    <div class="cropper-column-left">
+                        {{card.0.id}}
+                        {% include "cropper_only.html" with card=card.0 card_id=card.0.id original_img=card.0.uploaded_image.url portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url search_results=card.1 crop_params=card.1.front_crop_params %}
+                        {% include "cropper_only.html" with card=card.0 card_id=card.0.reverse_id original_img=card.0.reverse_image.url portrait_img=card.0.portrait_reverse.url cropped_img=card.0.cropped_reverse.url reverse_img=card.0.cropped_image.url search_results=card.1 crop_params=card.1.reverse_crop_params %}
+                    </div>
+                    <div class="cropper-column-right">
+                        {% include "search_results.html" with card_id=card.0.id search_result=card.1 %}
+                        {% include "re_search_buttons.html" with card_id=card.0.id search_result=card.1%}
+                        {% include "product_listings.html" with search_result=card.1%}
+                    </div>
+                </div>
+
+            </div>
+        {% empty %}
+            <div class="no-cards">
+                No cards found in your collection.
+            </div>
+        {% endfor %}
+        <div class="pagination" style="text-align:center; margin-top:40px;">
+            {% if page_obj.has_previous %}
+                <a href="?page=1">⏪ First</a>
+                <a href="?page={{ page_obj.previous_page_number }}">◀ Prev</a>
+            {% endif %}
+
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
+            {% endif %}
+        </div>
+    </div>   
+</body>
+</html>

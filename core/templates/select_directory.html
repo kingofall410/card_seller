@@ -1,0 +1,5 @@
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="files" webkitdirectory directory multiple>
+    <button type="submit">Generate Index</button>
+</form>

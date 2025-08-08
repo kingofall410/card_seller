@@ -1,0 +1,37 @@
+<div style="margin-bottom: 40px; padding: 20px; border-radius: 10px; background-color: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+    <div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
+        <div class="preview-block" style="flex: 0 0 auto; display: flex; gap: 20px;">
+            <img src="{{ original_img }}" style="height: 480px; width: auto; object-fit: contain; border-radius: 6px;">
+            <img src="{{ cropped_img }}" style="height: 480px; width: auto; object-fit: contain; border-radius: 6px;">
+        </div>
+
+        <div style="flex: 1;">
+            <table style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+                <thead>
+                    <tr style="background-color: #f0f0f0;">
+                        <th style="padding: 8px; text-align: left;">Label</th>
+                        <th style="padding: 8px; text-align: left;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in dropdown_rows %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px;">{{ row.label }}</td>
+                        <td style="padding: 6px;">
+                            {% if row.type == "dropdown" %}
+                                <select name="value_{{ forloop.counter }}" style="width: 100%; padding: 4px; border-radius: 4px; border: 1px solid #ccc;">
+                                    {% for option in row.options %}
+                                        <option value="{{ option }}" {% if option == row.initial %}selected{% endif %}>{{ option }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% else %}
+                                <textarea name="value_{{ forloop.counter }}" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc; resize: vertical;" rows="3">{{ row.initial }}</textarea>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

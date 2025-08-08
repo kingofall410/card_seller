@@ -1,0 +1,12 @@
+{% comment %} file_upload_block.html {% endcomment %}
+<div class="custom-file-upload mb-3">
+  <button type="button" class="btn btn-primary" id="triggerUpload">Choose File</button>
+  <input
+    type="file"
+    name="file"
+    id="{{ field_key|default:'genericFile' }}"
+    data-endpoint="{{ upload_url|default:'' }}"
+    style="display: none;"
+    required
+  >
+</div>

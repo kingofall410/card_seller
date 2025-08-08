@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container my-4">
+
+  <!-- 🔄 Load file input from subtemplate -->
+  {% include "load_file.html" with title="Upload Image" instructions="Choose an image to crop." input_id="imageUpload" upload_url="/upload/image/" %}
+
+  <!-- 🖼️ Original image preview -->
+  <h5>Original Image</h5>
+  <img id="originalImage" src="" alt="Original Image" style="max-width: 300px; border: 1px solid #ccc; margin-bottom: 16px;">
+
+  <!-- ✂️ Cropped image preview -->
+  <h5>Cropped Image</h5>
+  <img id="croppedImage" src="" alt="Cropped Image" style="max-width: 300px; border: 1px solid #ccc; margin-bottom: 16px;">
+
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const input = document.getElementById("imageUpload");
+    const originalPreview = document.getElementById("originalImage");
+    const croppedPreview = document.getElementById("croppedImage");
+
+    input.addEventListener("change", function () {
+      const file = input.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fetch("/upload/image/", {
+        method: "POST",
+        headers: { "X-CSRFToken": "{{ csrf_token }}" },
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          originalPreview.src = data.original_url;
+
+          // Call crop method with filename or endpoint
+          fetch(`/crop/image/?path=${encodeURIComponent(data.original_path)}`)
+            .then(res => res.json())
+            .then(result => {
+              if (result.success) {
+                croppedPreview.src = result.cropped_url;
+              } else {
+                croppedPreview.alt = "Crop failed";
+              }
+            });
+        } else {
+          originalPreview.alt = "Upload failed";
+        }
+      })
+      .catch(err => {
+        console.error(err);
+      });
+    });
+  });
+</script>
+{% endblock %}

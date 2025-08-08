@@ -1,0 +1,82 @@
+{% load custom_tags %}
+{% load static %}
+<style>
+.thumb-container {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin-bottom: 4px;
+  max-width: 520px; /* ✨ Added missing 'px' unit */
+  align-items: flext-start;
+}
+
+.thumb-box {
+  width: auto;
+  text-align: center;
+}
+
+.thumb-box img {
+  max-height: 240px;
+  height: 240px;
+  width: auto;
+  object-fit: contain;
+  box-sizing: border-box;
+}
+
+.thumb-label {
+  margin-top: 12px; /* ✨ Replaced '3cap' with valid 'px' unit */
+  font-size: 14px;
+}
+</style>
+
+<!-- Cropper CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"/>
+<div style="display: flex; flex-direction: column;">
+
+  <!-- Thumbnails Panel -->
+  <div id="thumb_panel-{{ card_id }}" class="thumb-container">
+    <div class="thumb-box">
+      <img id="original-{{ card_id }}" src="{{ original_img|safe }}" alt="Original" />
+      <div class="thumb-label">Original</div>
+    </div>
+    <div class="thumb-box">
+      <img id="portrait-{{ card_id }}" src="{{ portrait_img|safe }}" alt="Portrait" />
+      <div class="thumb-label">Portrait</div>
+    </div>
+    <div class="thumb-box">
+      <img id="cropped-{{ card_id }}" src="{{ cropped_img|safe }}" alt="Cropped" />
+      <div class="thumb-label">Cropped</div>
+    </div>
+  </div>
+
+
+  <!-- Cropper Image Container -->
+  <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 720px;">
+    <img id="cropper-{{ card_id }}" src="{{ portrait_img }}" data-card-id="{{ card_id }}" 
+        data-portrait="{{ portrait_img }}" 
+        data-bound="false"  class="cropper-target" style="height: 720px;" />
+  </div> 
+  <!-- Crop Actions (Lower Row) -->
+  <div style="margin-top: 10px; display: flex; gap: 10px;">
+    <button id="save-btn-{{ card_id }}">⟳ Save</button>
+    <button id="rotate-1ccw-{{ card_id }}">↺ Counterclockwise 1°</button>
+    <button id="rotate-1cw-{{ card_id }}">↻ Clockwise 1°</button>
+    <button id="rotate-ccw-{{ card_id }}">↺ Counterclockwise 90°</button>
+    <button id="rotate-cw-{{ card_id }}">↻ Clockwise 90°</button>
+    <button id="reset-btn-{{ card_id }}">⟳ Reset</button>
+  </div>
+</div>
+<script>
+  window["starting_crop_{{ card_id }}"] = {
+      x: "{{ crop_params.x|safe }}",
+      y: "{{ crop_params.y|safe }}",
+      width: "{{ crop_params.width|safe }}",
+      height: "{{ crop_params.height|safe }}",
+      rotate: "{{ crop_params.rotate|safe }}",
+      canvasLeft: "{{ crop_params.display_offset_left|safe }}",
+      canvasTop: "{{ crop_params.display_offset_top|safe }}"
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script src="{% static 'js/test.js' %}?v={{ timestamp }}"></script>

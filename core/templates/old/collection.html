@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Card Collection</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background-color: #eef2f6;
+            margin: 0;
+            padding: 40px 20px;
+            color: #2d2d2d;
+        }
+        .container {
+            max-width: 1600px;
+            margin: auto;
+        }
+        h1 {
+            font-size: 30px;
+            margin-bottom: 40px;
+            color: #222;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .card-block {
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .no-cards {
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+    {% include "header.html" %}
+    <div class="container">
+        <h1>Your Card Collection</h1>
+
+        {% for block in preview_blocks %}
+            <div class="card-block">
+                {% include "cropper_block.html" with card_id=block.card_id original_img=block.original_img cropped_img=block.cropped_img portrait_img=block.portrait_img dropdown_rows=block.dropdown_rows search_result=block.search_result search_fields=block.search_fields search_fields_json=block.search_fields_json crop_params=block.crop_params crop_canvas_left=block.crop_canvas_left crop_canvas_top=block.crop_canvas_top %}
+                <div class="listing">
+                    {% include "product_listings.html" with listings=block.listings %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="no-cards">
+                No cards found in your collection.
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

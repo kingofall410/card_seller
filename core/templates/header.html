@@ -1,0 +1,89 @@
+{% load custom_tags %}
+<style>
+.nav-link {
+  display: block;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: #333;
+  font-weight: bold;
+  border-bottom: 1px solid #eee;
+  transition: background 0.2s ease;
+}
+
+.nav-link:hover {
+  background-color: #f2f4f7;
+}
+
+.navbar-link {
+  color: white;
+  text-decoration: none;
+  font-weight: bold;
+  margin-right: 24px;
+}
+
+.navbar-link:hover {
+  text-decoration: underline;
+}
+
+</style>
+<nav style="background-color: #333; padding: 16px 24px; display: flex; align-items: center; position: relative;">
+  
+  <div class="collection-dropdown" style="position: relative;">
+    <button style="color: white; background: none; border: none; cursor: pointer;
+      font-weight: bold;
+      margin-right: 24px; ">
+      🗂️ COLLECTION ▾
+    </button>
+    <div class="dropdown-menu" style="
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      border-radius: 6px;
+      overflow: hidden;
+      min-width: 200px;
+      z-index: 1000;
+    ">
+      <a href="{% url 'collection_create' %}" class="nav-link">
+        ➕ Add new Collection
+      </a>
+      {% get_collections as collections %}
+      {% for collection in collections %}
+      <a href="{% url 'collection' collection.id %}" class="nav-link">
+         🗃️ Collection {{ collection.id }}
+      </a>
+      {% endfor %}
+
+    </div>
+  </div>
+
+  <a href="{% url 'upload_image' %}" class="navbar-link">
+     📤 UPLOAD
+  </a>
+
+  <a href="{% url 'settings' %}" class="navbar-link" style="margin-left: auto;">
+     ⚙️ SETTINGS
+  </a>
+
+</nav>
+
+<script>
+  // Toggle dropdown on click
+  document.addEventListener("DOMContentLoaded", function() {
+    const dropdown = document.querySelector(".collection-dropdown");
+    const button = dropdown.querySelector("button");
+    const menu = dropdown.querySelector(".dropdown-menu");
+
+    button.addEventListener("click", function(e) {
+      e.stopPropagation();
+      menu.style.display = (menu.style.display === "block") ? "none" : "block";
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", function() {
+      menu.style.display = "none";
+    });
+  });
+</script>

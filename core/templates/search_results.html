@@ -1,0 +1,382 @@
+{% load custom_tags %}
+<style>
+  input:disabled {
+    background-color: #f9f9f9;
+    color: #999;
+    cursor: not-allowed;
+  }
+</style>
+
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script>
+$(document).ready(function () {
+  // 🔤 Title-case helper
+  function toTitleCase(str) {
+    return str.replace(/\w\S*/g, txt =>
+      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+    );
+  }
+
+  // 🧩 Allow HTML in autocomplete labels
+  $.ui.autocomplete.prototype._renderItem = function (ul, item) {
+    return $("<li>").append(`<div>${item.label}</div>`).appendTo(ul);
+  };
+
+  // 🗂️ Initialize saved values
+  const savedValues = {};
+  $("input[type='text']").each(function () {
+    let name = $(this).attr("name");
+    const value = $(this).val();
+
+    if (name && name.endsWith("_m")) {
+      name = name.slice(0, -2);
+    }
+
+    if (name) {
+      if (!savedValues[name]) {
+        savedValues[name] = new Set();
+      }
+      savedValues[name].add(value);
+    }
+  });
+
+  // 📦 Autocomplete options from backend
+  const autocompleteOptions = {
+    {% for field_name in search_result.display_fields %}
+      "{{ field_name|escapejs }}": [
+        {% with options=search_result.collapsed_tokens|dict_get:field_name %}
+          {% if options %}
+            {% for option in options %}
+              {
+                label: "{{ option.2|title|escapejs }} | (<strong>{{ option.1|escapejs }}%</strong>)",
+                value: "{{ option.2|title|escapejs }}"
+              }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+      ]{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  };
+
+  // 🚀 Initialize autocomplete per field
+  Object.keys(autocompleteOptions).forEach(function (fieldName) {
+    const selector = `#field_${fieldName}-{{ card_id }}`;
+    const staticOptions = autocompleteOptions[fieldName];
+
+    $(selector).autocomplete({
+      minLength: 0,
+      autoFocus: true,
+      source: function (request, response) {
+        const term = request.term.toLowerCase();
+        const combined = [...staticOptions];
+
+        if (savedValues[fieldName]) {
+          savedValues[fieldName].forEach(val => {
+            if (!combined.some(opt => opt.value === val)) {
+              combined.unshift({ label: val, value: val });
+            }
+          });
+        }
+
+        const filtered = combined.filter(opt =>
+          typeof opt.value === "string" && opt.value.toLowerCase().includes(term)
+        );
+
+        filtered.push({
+          label: `<em>Add '${request.term}'</em>`,
+          value: "__add__",
+          rawValue: request.term
+        });
+
+        response(filtered);
+      },
+      select: function (event, ui) {
+        const idParts = this.id.split("_")[1].split("-");
+        const fieldName = idParts[0];
+        const cardId = idParts[1];
+
+        if (ui.item.value === "__add__") {
+          const inputValue = ui.item.rawValue;
+          const allFields = collectAllFields(cardId);
+
+          allFields["new_field"] = fieldName;
+          allFields["new_value"] = inputValue;
+
+          if (!savedValues[fieldName]) {
+            savedValues[fieldName] = new Set();
+          }
+          savedValues[fieldName].add(inputValue);
+
+          $.ajax({
+            url: "/add_token/",
+            method: "POST",
+            data: {
+              ...allFields,
+              csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            success: response => console.log("Token added:", response),
+            error: xhr => console.error("Error adding token:", xhr.responseText)
+          });
+
+          handleManualInput(fieldName, cardId);
+          return false;
+        } else {
+          $(this).val(ui.item.value);
+          handleManualInput(fieldName, cardId);
+          return false;
+        }
+      }
+    })
+    .on("focus", function () {
+      console.log("fuckus")
+      $(this).autocomplete("search", "");
+    })
+    .on("blur", function () {
+      console.log("blur")
+      const input = $(this);
+      const rawValue = input.val();
+      const titleCasedValue = toTitleCase(rawValue);
+      input.val(titleCasedValue);
+
+      const match = this.id.match(/^field_(.+)-(\d+)$/);
+      if (!match) {
+        console.warn("Unexpected field ID format on blur:", this.id);
+        return;
+      }
+
+      const fieldName = match[1];
+      const cardId = match[2];
+
+      // Check if value is already known
+      const knownValues = savedValues[fieldName] || new Set();
+      if (!knownValues.has(titleCasedValue)) {
+        console.log("Manual blur entry detected:", titleCasedValue);
+
+        // Add to saved values
+        if (!savedValues[fieldName]) {
+          savedValues[fieldName] = new Set();
+        }
+        savedValues[fieldName].add(titleCasedValue);
+
+        // Collect all fields
+        const allFields = collectAllFields(cardId);
+        allFields["new_field"] = fieldName;
+        allFields["new_value"] = titleCasedValue;
+        // Always call manual input handler
+        handleManualInput(allFields, cardId);
+      }
+
+    });
+
+  });
+
+  // 💾 Save button handler
+  $("#saveFieldsBtn").on("click", function () {
+    let cardId = "{{ card_id }}"
+    console.log("cid", cardId)
+    const allFields = collectAllFields(cardId);
+
+    console.log("Payload:", {
+      csrId: "{{ search_result.id }}",
+      ...allFields,
+      csrfmiddlewaretoken: '{{ csrf_token }}'
+    });
+
+    $.ajax({
+      url: "/update_csr_fields/",
+      method: "POST",
+      data: {
+        csrId: "{{ search_result.id }}",
+        ...allFields,
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+      },
+      success: response => {
+        console.log("Saved:", response);
+        alert("Changes saved successfully.");
+      },
+      error: xhr => {
+        console.error("Save error:", xhr.responseText);
+        alert("Error saving changes.");
+      }
+    });
+  });
+});
+
+
+function collectAllFields(cardId) {
+  const allFields = {};
+  console.log(cardId)
+  // Text inputs
+  document.querySelectorAll(`input[type='text'][id$='-${cardId}']`).forEach(input => {
+    let name = input.name;
+    console.log(input.name)
+    const value = input.value;
+
+    if (name && name.endsWith("_m")) {
+      name = name.slice(0, -2);
+    }
+    if (name && name.endsWith(`-${cardId}`)) {
+      name = name.slice(0, -(`-${cardId}`.length));
+    }
+
+    if (name) {
+      allFields[name] = value;
+    }
+  });
+
+  // Checkboxes
+  document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
+    let name = checkbox.name;
+    const value = checkbox.checked
+
+    if (name && name.endsWith(`_${cardId}`)) {
+      name = name.slice(0, -(`_${cardId}`.length));
+    }
+
+    if (name) {
+      allFields[name] = value;
+    }
+  });
+
+  return allFields;
+}
+
+
+
+// Enable/disable field on checkbox toggle
+function handleOverrideToggle(fieldName, cardId) {
+  const checkbox = document.getElementById(`${fieldName}_is_manual-${cardId}`);
+  const input = document.getElementById(`field_${fieldName}-${cardId}`);
+
+  if (checkbox.checked) {
+    input.removeAttribute("disabled");
+  } else {
+    input.setAttribute("disabled", "disabled");
+    const defaultValue = input.getAttribute("data-default");
+    input.value = defaultValue || "-";
+  }
+}
+
+document.querySelectorAll(`input[type='text'][id^='title_to_be']`).forEach(input => {
+  handleManualInput(input); // Run once on init
+});
+
+function handleManualInput(fieldName, cardId) {
+  console.log(`handleManualInput called with field="${fieldName}", idx=${cardId}`);
+
+  const titleFieldId = `field_title_to_be-${cardId}`;
+  const thisFieldId = `${fieldName}-${cardId}`;
+  console.log("titleFieldId:", titleFieldId);
+  console.log("thisFieldId:", thisFieldId);
+
+  if (titleFieldId !== `field_${thisFieldId}`) {
+    const titleCheckbox = document.getElementById(`title_to_be_is_manual-${cardId}`);
+    const titleElement = document.getElementById(titleFieldId);
+
+    if (titleElement && !titleCheckbox.checked) {
+      // ⏳ Delay field collection until DOM updates
+      setTimeout(() => {
+        const fields = collectAllFields(cardId);
+        console.log("Collected fields:", fields);
+
+        // #this is a re-implementation of csr.build_title
+        const titleParts = [
+          fields.year,
+          fields.brand,
+          fields.subset,
+          fields.full_name,
+          fields.serial_number !="-" ? `${fields.serial_number}` : null,
+          fields.card_number != "-" ? `#${fields.card_number}` : null,
+          fields.city,
+          fields.team
+        ];
+
+      titleElement.value = titleParts
+        .filter(part => part && part.trim() !== '') // Remove null/empty/whitespace-only
+        .join(' ');
+
+        //titleElement.value = `${fields.year} ${fields.brand} ${fields.subset} ${fields.full_name} ${fields.serial_number} #${fields.card_number} ${fields.city} ${fields.team}`;
+
+      }, 0);
+    } else {
+      console.log("No title element or checkbox is checked.");
+    }
+  }
+}
+
+</script>
+
+
+<table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+<thead>
+    <tr style="background-color: #f0f0f0;">
+        <th style="padding: 8px;">Field</th>
+        <th style="padding: 8px;">Value</th>
+    </tr>
+</thead>
+<tbody>
+{% with card_counter=card_id %}
+    {% for field_name in search_result.display_fields %}
+        {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" %}
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px;">
+                {% if field_name in search_result.overrideable_fields %}
+                <input type="checkbox"
+                    id="{{ field_name }}_is_manual-{{ card_counter }}"
+                    name="{{ field_name }}_is_manual"
+                    {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                    onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+                {% else %}
+                <input type="checkbox"
+                    {% if not field_name in search_result.readonly_fields %}checked{% endif %}
+                    disabled
+                    style="cursor: not-allowed;">
+                {% endif %}
+                <span>{{ search_result|get_field_verbose:field_name }}</span>
+            </label>
+            </td>
+            <td style="padding: 6px; width: 300px;">
+            {% if field_name in search_result.overrideable_fields %}
+            {% with resolved_value=search_result|get_attribute:display_attr %}
+                <input type="text"
+                    id="field_{{ field_name }}-{{ card_counter }}"
+                    name="{{ field_name }}_m"
+                    value="{{ resolved_value|title|default:'-' }}"
+                    style="width: 100%; box-sizing: border-box;"
+                    data-default="{{ search_result|get_attribute:field_name|default:'-' }}"                   
+                    oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                    {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+            {% endwith %}
+            {% else %}
+            {% with resolved_value=search_result|get_attribute:field_name %}
+              <input type="text"
+                      id="field_{{ field_name }}-{{ card_counter }}"
+                      name="{{ field_name }}_m"
+                      value="{{ resolved_value|title|default:'-' }}"
+                      style="width: 100%; box-sizing: border-box;"
+                      data-default="{{ search_result|get_attribute:field_name|default:'-' }}"                   
+                      {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+            {% endwith %}
+            {% endif %}
+            </td>
+        </tr>
+        {% endwith %}
+    {% endfor %}
+{% endwith %}
+</tbody>
+</table>
+<div style="margin-top: 16px; text-align: right;">
+  <button id="saveFieldsBtn" style="padding: 8px 16px; font-size: 14px;">
+    Save
+  </button>
+</div>
+
+
+
+
+
+
+

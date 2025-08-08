@@ -1,0 +1,373 @@
+<!-- Cropper CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet"/>
+
+<div style="margin-top: 40px; padding: 20px; border-radius: 10px; background: #f9f9f9; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+  <div style="display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap;">
+    
+    <!-- Left side -->
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 20px; align-items: center;">
+
+      <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 20px;">
+  <!-- Original Image -->
+  <div style="text-align: center;">
+    <img src="{{ original_img }}" alt="Original" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Original</div>
+  </div>
+
+  <!-- Portrait Image -->
+  <div style="text-align: center;">
+    <img id="portrait-{{ forloop.counter }}" src="{{ portrait_img }}" alt="Portrait" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Portrait</div>
+  </div>
+
+  <!-- Cropped Image -->
+  <div style="text-align: center;">
+    <img id="cropped-{{ forloop.counter }}" src="{{ cropped_img }}" alt="Cropped" style="height: 240px; object-fit: contain; border-radius: 6px;" />
+    <div style="margin-top: 6px; font-size: 14px;">Cropped</div>
+  </div>
+</div>
+
+      <!-- Cropper Image Container -->
+      <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 480px;">
+        <img id="cropper-{{ forloop.counter }}" style="height: 520px; width: 480px;" />
+      </div>
+
+      <!-- Rotation Buttons (Upper Row) -->
+      <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <button id="rotate-cw-{{ forloop.counter }}">↻ Clockwise</button>
+        <button id="rotate-ccw-{{ forloop.counter }}">↺ Counterclockwise</button>
+        <button id="rotate-180-{{ forloop.counter }}">🔄 180°</button>
+      </div>
+
+      <!-- Crop Actions (Lower Row) -->
+      <div style="margin-top: 10px; display: flex; gap: 10px;">
+        <button id="lock-btn-{{ forloop.counter }}">🔒 Lock</button>
+        <button id="save-btn-{{ forloop.counter }}">💾 Save</button>
+        <button id="reset-btn-{{ forloop.counter }}">⟳ Reset</button>
+      </div>
+    </div>
+
+
+    <!-- Right side -->
+    <div style="flex: 1;">
+      <div id="contextMenu" style="
+        position: absolute;
+        display: none;
+        z-index: 9999;
+        background-color: white;
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+        border-radius: 6px;
+        min-width: 160px;
+        font-size: 14px;
+      ">
+        <div style="padding: 8px; font-weight: bold;">Register as...</div>
+        <div id="fieldList"></div>
+      </div>
+
+      <table style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+        <thead>
+          <tr style="background-color: #f0f0f0;">
+            <th style="padding: 8px;">Field</th>
+            <th style="padding: 8px;">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for label, value in search_fields %}
+          <tr style="border-bottom: 1px solid #eee;">
+            <td class="field-label" style="padding: 6px;">{{ label }}</td>
+            <td style="padding: 6px;">{{ value|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+  console.log("🧪 Plain script working?");
+
+  document.addEventListener("DOMContentLoaded", function () {
+    console.log("fuck")
+    const crop = JSON.parse('{{ crop_params|escapejs }}');
+    const imageUrl = "{{ original_img }}";
+    const canvasLeft = "{{ crop_canvas_left }}";
+    const canvasTop = "{{ crop_canvas_top }}";
+    console.log("wtf");
+    const cropped_preview = document.getElementById("cropped-{{ forloop.counter }}");
+    const portrait_preview = document.getElementById("portrait-{{ forloop.counter }}");
+    const cropperImage = document.getElementById("cropper-{{ forloop.counter }}");
+
+    const lockBtn = document.getElementById("lock-btn-{{ forloop.counter }}");
+    const saveBtn = document.getElementById("save-btn-{{ forloop.counter }}");
+    const resetBtn = document.getElementById("reset-btn-{{ forloop.counter }}");
+    const contextMenu = document.getElementById("contextMenu");
+    const fieldList = document.getElementById('fieldList');
+
+    console.log(fieldList)
+
+    let isLocked = false;
+    let savedData = null;
+    let savedCanvas = null;
+    let savedCropBox = null;
+
+    const img = new Image();
+    img.onload = () => {
+      cropperImage.src = "{{ portrait_img|safe }}";
+      cropperImage.style.display = "block";
+      cropperImage.width = img.width;
+      cropperImage.height = img.height;
+
+      // Initialize Cropper after image is ready...
+      const cropper = new Cropper(cropperImage, {
+        viewMode: 0,
+        autoCrop: true,
+        autoCropArea: 1.0,
+        responsive: true,
+        dragMode: 'none',
+        zoomable: false,
+
+        ready() {
+          const imageData = cropper.getImageData();
+          const containerData = cropper.getContainerData();
+          console.log("ready")
+          const scaleX = imageData.width / imageData.naturalWidth;
+          const scaleY = imageData.height / imageData.naturalHeight;
+
+          const cropCenterX = imageData.left + crop.x * scaleX + (crop.width * scaleX) / 2;
+          const cropCenterY = imageData.top + crop.y * scaleY + (crop.height * scaleY) / 2;
+          const canvasCenterX = containerData.width / 2;
+          const canvasCenterY = containerData.height / 2;
+
+          const offsetX = canvasCenterX - cropCenterX;
+          const offsetY = canvasCenterY - cropCenterY;
+          let currentRotation = 0;
+
+          const rotateCWBtn = document.getElementById("rotate-cw-{{ forloop.counter }}");
+          const rotateCCWBtn = document.getElementById("rotate-ccw-{{ forloop.counter }}");
+          const rotate180Btn = document.getElementById("rotate-180-{{ forloop.counter }}");
+
+          rotateCWBtn.addEventListener("click", function () {
+            currentRotation = (currentRotation + 90) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+
+          rotateCCWBtn.addEventListener("click", function () {
+            currentRotation = (currentRotation - 90 + 360) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+
+          rotate180Btn.addEventListener("click", function () {
+            currentRotation = (currentRotation + 180) % 360;
+            cropper.rotateTo(currentRotation);
+          });
+          const canvasBefore = {
+            left: imageData.left + offsetX,
+            top: imageData.top + offsetY,
+            width: imageData.width,
+            height: imageData.height
+          };
+          console.log("Canvas Before:", canvasBefore);
+        
+          cropper.setCanvasData(canvasBefore);
+          cropper.rotateTo(-crop.rotate);
+          const parsedLeft = parseFloat(canvasLeft);
+          const parsedTop = parseFloat(canvasTop);
+          console.log("Parsed Left:", parsedLeft, "Parsed Top:", parsedTop);
+          if (!isNaN(parsedLeft) && !isNaN(parsedTop)) {
+
+            //reset to original
+            cropper.setCanvasData({
+              left: parsedLeft,
+              top: parsedTop,
+              width: imageData.width,
+              height: imageData.height
+            });
+          } 
+        
+          function resetAndRotate(imgElement, angleDeg = 90, callback) {
+            console.log("Resetting and rotating image by", angleDeg, "degrees");
+            const radians = angleDeg * Math.PI / 180;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const w = imgElement.naturalWidth;
+            const h = imgElement.naturalHeight;
+
+            canvas.width = (angleDeg % 180 === 0) ? w : h;
+            canvas.height = (angleDeg % 180 === 0) ? h : w;
+
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(radians);
+            ctx.drawImage(imgElement, -w / 2, -h / 2);
+
+            return new Promise((resolve, reject) => {
+              canvas.toBlob(blob => {
+                if (blob) {
+                  resolve(blob);
+                } else {
+                  reject("❌ Blob creation failed.");
+                }
+              }, 'image/jpeg');
+            });
+          }
+
+          setTimeout(() => {
+            const canvasAfter = cropper.getCanvasData();
+            const deltaX = canvasAfter.left - canvasBefore.left;
+            const deltaY = canvasAfter.top - canvasBefore.top;
+            console.log("Canvas After:", canvasAfter);
+            const cropBoxData = {
+              left: crop.x * scaleX + imageData.left + offsetX + deltaX - parsedLeft,
+              top: crop.y * scaleY + imageData.top + offsetY + deltaY - parsedTop,
+              width: crop.width * scaleX,
+              height: crop.height * scaleY
+            };
+
+            cropper.setCanvasData(canvasAfter);
+            cropper.setCropBoxData(cropBoxData);
+          }, 100);
+        
+          lockBtn.addEventListener("click", function () {
+            isLocked = !isLocked;
+
+            if (isLocked) {
+              cropper.disable()
+              lockBtn.textContent = "🔓 Unlock";
+              lockBtn.style.backgroundColor = "#aaa";
+              resetBtn.disabled = true;
+              saveBtn.disabled = true;
+            } else {
+              cropper.enable();
+              lockBtn.textContent = "🔒 Lock";
+              lockBtn.style.backgroundColor = "";
+              resetBtn.disabled = false;
+              saveBtn.disabled = false;
+            }
+          });
+
+          saveBtn.addEventListener("click", function () {
+            console.log("Saving crop data...");
+            
+            if (saveBtn.disabled) {
+              console.warn("Save button is disabled, cannot save crop data.");
+              return;
+            }
+            savedData = cropper.getData();
+            savedCanvas = cropper.getCanvasData();
+            savedCropBox = cropper.getCropBoxData();
+
+            const imageData = cropper.getImageData();
+            const canvas = cropper.getCroppedCanvas();
+            const currentRotation = savedData.rotate || 0;
+
+            canvas.toBlob(function (blob) {
+              const formData = new FormData();
+              formData.append('cropped_image', blob, 'cropped.jpg');
+              console.log("1");
+              const scaleX = imageData.naturalWidth / imageData.width;
+              const scaleY = imageData.naturalHeight / imageData.height;
+              console.log("2");
+              const imageX = (savedCropBox.left - imageData.left) * scaleX;
+              const imageY = (savedCropBox.top - imageData.top) * scaleY;
+              const imageWidth = savedCropBox.width * scaleX;
+              const imageHeight = savedCropBox.height * scaleY;
+              console.log("3");
+              formData.append('card_id', "{{ card_id }}");
+              console.log("4");
+              formData.append('crop_left', imageX);
+              formData.append('crop_top', imageY);
+              formData.append('crop_width', imageWidth);
+              formData.append('crop_height', imageHeight);
+              formData.append('canvas_rotation', currentRotation);
+              console.log("5: ", currentRotation);
+              console.log(savedCanvas);
+              console.log("6");
+              formData.append('canvas_left', savedCanvas.left);
+              formData.append('canvas_top', savedCanvas.top);
+              console.log("7");
+
+              
+              cropped_preview.src = canvas.toDataURL();
+              
+              const easyRotation = (Math.round(currentRotation / 90) * 90) % 360;
+
+              resetAndRotate(portrait_preview, easyRotation).then(blob => {
+                portrait_preview.src = URL.createObjectURL(blob);
+                console.log("Portrait image updated with rotation:", easyRotation);
+                fetch('/upload-crop/', { 
+                method: 'POST',
+                body: formData
+              }).then(response => {
+                console.log("Saved successfully");
+              }).catch(error => {
+                console.error("Save error", error);
+              });
+              }).catch(err => {
+                console.error(err);
+              });
+            }, 'image/jpeg');
+          });
+        }
+      });  
+    }
+    document.addEventListener('contextmenu', function (e) {
+      console.log("here I am")
+      const cell = e.target.closest('td');
+      if (!cell) return;
+
+      e.preventDefault();
+      console.log("👋 Custom context menu fired!");
+    });
+    document.addEventListener('click', () => {
+      contextMenu.style.display = 'none';
+      console.log("fuck")
+    });
+  });
+</script>
+  
+
+
+
+
+      <!--/*const selectedText = window.getSelection().toString().trim();
+      if (!selectedText) return;
+      console.log("👀 Adding option for:", selectedText);
+      fieldList.innerHTML = ''; // Clear previous items
+      for (const [label, value] of Object.entries(search_fields)) {
+        const option = document.createElement('div');
+        option.textContent = `Register as ${label}`;
+        option.style.padding = '6px 10px';
+        option.style.cursor = 'pointer';
+        option.style.borderBottom = '1px solid #eee';
+        console.log("👀 Adding option for:", label);
+        option.addEventListener('click', () => {
+          fetch('/register-field/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+              field_name: label,
+              value: selectedText
+            })
+          }).then(res => res.json())
+            .then(data => {
+              console.log(`✅ Registered "${selectedText}" as "${label}"`);
+            }).catch(err => {
+              console.error("❌ Error:", err);
+            });
+
+          contextMenu.style.display = 'none';
+        });
+        console.log("here")
+        fieldList.appendChild(option);
+      }
+      
+      contextMenu.style.left = `${e.pageX}px`;
+      contextMenu.style.top = `${e.pageY}px`;
+      contextMenu.style.display = 'block';*/

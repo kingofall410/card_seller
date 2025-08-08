@@ -1,0 +1,76 @@
+{% load custom_tags %}
+<table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+<thead>
+    <tr style="background-color: #f0f0f0;">
+        <th style="padding: 8px;">Field</th>
+        <th style="padding: 8px;">Value</th>
+    </tr>
+</thead>
+<tbody>
+{% with card_counter=card_id %}
+    {% for field_name in search_result.display_fields %}
+        {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" %}
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px;">
+                {% if field_name in search_result.overrideable_fields %}
+                <input type="checkbox"
+                    id="{{ field_name }}_is_manual-{{ card_counter }}"
+                    name="{{ field_name }}_is_manual"
+                    {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                    onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+                {% else %}
+                <input type="checkbox"
+                    {% if not field_name in search_result.readonly_fields %}checked{% endif %}
+                    disabled
+                    style="cursor: not-allowed;">
+                {% endif %}
+                <span>{{ search_result|get_field_verbose:field_name }}</span>
+            </label>
+            </td>
+            <td style="padding: 6px;">
+            {% with resolved_value=search_result|get_attribute:display_attr %}
+            {% if field_name in search_result.overrideable_fields %}
+                <select id="resolved_{{ field_name }}-{{ card_counter }}"
+                        name="{{ field_name }}_m"
+                        style="width: 100%; box-sizing: border-box;"
+                        {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}
+                        {% if not field_name in search_result.calculated_fields %}
+                            data-default="{{ search_result|get_attribute:field_name|default:'-' }}"
+                        {% endif %}
+                        onchange="handleManualInput('{{ field_name }}', {{ card_counter }})">
+
+   
+                </select>
+
+            {% endif %}
+            {% endwith %}
+            </td>
+        </tr>
+        {% endwith %}
+    {% endfor %}
+{% endwith %}
+</tbody>
+</table>
+
+{% if field_name in search_result.overrideable_fields %}
+            <input type="text" style="width: 100%; box-sizing: border-box;"
+                    id="resolved_{{ field_name }}-{{ card_counter }}"
+                    name="{{ field_name }}_m"
+                    value="{{ resolved_value|default:'-' }}"
+                    color="#999999"
+                    {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}
+                    {% if not field_name in search_result.calculated_fields %}data-default="{{ search_result|get_attribute:field_name|default:'-' }}"{% endif %}
+                    oninput="handleManualInput('{{ field_name }}', {{ card_counter }})">
+            {% elif field_name in search_result.readonly_fields %}
+            <input type="text" style="width: 100%; box-sizing: border-box;"
+                    id="{{ field_name }}-{{ card_counter }}"
+                    color="#999999"
+                    value="{{ search_result|get_attribute:field_name|default:'-' }}"
+                    disabled>
+            {% else %}
+            <textarea rows="4"
+                        cols="30"
+                        style="width: 100%; resize: vertical; box-sizing: 
+                        border-box;">{{ search_result|get_attribute:field_name|default:'-' }}</textarea>
+            {% endif %}
