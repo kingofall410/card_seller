@@ -34,8 +34,13 @@ logs/
 *.sublime-workspace
 manage.py
 token.json
+<<<<<<< HEAD
 credentials.json
 service_acct.json
+=======
+credentials/
+
+>>>>>>> e9fd9b7... removing tokens
 
 # Environment variables
 .env
