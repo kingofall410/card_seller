@@ -2,7 +2,10 @@
     {% for listing in search_result.listings.all %}
     <div class="listing">
         <div class="listing">
-            <img src="{{ listing.thumb_url }}" alt="Product Listing" class="listing-thumb" />
+            <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
+                
+            <img src="{{ listing.thumb_url }}" alt="Product Listing" class="listing-thumb" title="{{ listing.title.title|default:'Listing' }}"
+/>          </a>
         </div>
     </div>
     {% empty %}

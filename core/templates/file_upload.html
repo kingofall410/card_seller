@@ -1,6 +1,8 @@
 {% comment %} file_upload_block.html {% endcomment %}
 <div class="custom-file-upload mb-3">
-  <button type="button" class="btn btn-primary" id="triggerUpload">Choose File</button>
+  <button type="button" class="btn btn-primary" id="triggerUpload-{{ field_key|default:'genericFile' }}">
+    Choose File
+  </button>
   <input
     type="file"
     name="file"
@@ -10,3 +12,46 @@
     required
   >
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const fieldKey = "{{ field_key|default:'genericFile' }}";
+    const trigger = document.getElementById(`triggerUpload-${fieldKey}`);
+    const fileInput = document.getElementById(fieldKey);
+
+    if (trigger && fileInput) {
+      trigger.addEventListener("click", () => {
+        console.log("Choose File clicked");
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (file) {
+          console.log("File selected:", file.name);
+          upload_settings_file(file, '{{ upload_url }}');
+        }
+      });
+    }
+  });
+
+  // Modular upload function
+  function upload_settings_file(file, endpoint) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    fetch(endpoint, {
+      method: "POST",
+      body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log("Upload successful:", data);
+      // Optional: update UI or notify user
+    })
+    .catch(error => {
+      console.error("Upload failed:", error);
+      // Optional: show error message
+    });
+  }
+</script>

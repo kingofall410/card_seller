@@ -1,7 +1,7 @@
 from django.db import models
 import re
 from core.models.Cropping import CropParams
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber
+from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition
 from collections import defaultdict, Counter
 
 
@@ -10,6 +10,7 @@ class OverrideableFieldsMixin(models.Model):
         abstract = True
 
     def set_ovr_attribute(self, field, value, is_manual):
+        print("setting over: ")
         field_to_set = f"{field}_m" if is_manual else field
         is_manual_fieldname = f"{field}_is_manual"
 
@@ -117,6 +118,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     serial_number_m = models.CharField(max_length=50, blank=True)
     serial_number_is_manual = models.BooleanField(default=False)
     
+    parallel = models.CharField(max_length=50, blank=True)
+    parallel_m = models.CharField(max_length=50, blank=True)
+    parallel_manual = models.BooleanField(default=False)
+    
     title_to_be = models.CharField(max_length=100, blank=True)
     title_to_be_m = models.CharField(max_length=100, blank=True)
     title_to_be_is_manual = models.BooleanField(default=False)
@@ -125,31 +130,31 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     unknown_words = models.TextField(blank=True)   
     collapsed_tokens = models.JSONField(default=dict, blank=True)
     response_count = models.IntegerField(default=0)
-
+    condition = models.CharField(max_length=100, blank=True)
     #maybe this should be a full CSR object?  Would you ever Search by back?  But that makes displayu easier
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
     reverse_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_reverse", null=True)
 
-    search_string = models.CharField(max_length=250, blank=True)
+    search_string = models.TextField(max_length=250, blank=True)
 
     #combine all this into field_definition
     readonly_fields = ["search_string", "response_count"]
 
     overrideable_fields = [
         "full_name", "first_name", "last_name",
-        "year", "brand", "subset",
-        "card_number", "team", "city", "serial_number", "title_to_be"
+        "year", "brand", "subset", 
+        "card_number", "team", "city", "serial_number", "title_to_be", "parallel"
     ]
 
     display_fields = [
-        "full_name", "first_name", "last_name",
-        "year", "brand", "subset",
-        "card_number", "team", "city", "serial_number", 
-        "attributes", "unknown_words", "title_to_be", "search_string", "response_count"
+        "year", "brand", "subset", "parallel", "full_name", 
+        "card_number", "city", "team", "serial_number", "condition", 
+        "attributes", "unknown_words"#"search_string", "response_count", "first_name", "last_name",
     ]
 
     calculated_fields = ["title_to_be"]
 
+    text_fields = ["attributes", "unknown_words", "condition"]
 
     listing_fields = ["full_name", "first_name", "last_name",
         "year", "brand", "subset",
@@ -203,12 +208,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return "full_name"
         elif key == "full_name":
             return "names"
+        elif key == "condition":
+            return "condition"
+        elif key == "parallel":
+            return "parallel"
         else:
             return "unknown_words"
 
     def get_latest_front(self):
         return self.parent_card.cropped_image.path()
     
+    def get_cardnr_options(self):
+        return [token[2] for token in self.collapsed_tokens.get("cardnr", [])]
+
     def get_latest_reverse(self):
         return self.parent_card.cropped_reverse.path()
 
@@ -248,16 +260,17 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 field = self._meta.get_field(field_name)
                 print(type(field), field_name, field)
 
-                if isinstance(field, models.TextField):
-                    final_value = ", ".join(x.title() for x in counter.keys())
+                if field_name in self.text_fields:
+                    final_value = ", ".join(x for x in counter.keys())
                 else:
                     most_common = counter.most_common(1)
                     if most_common:
                         final_value = most_common[0][0]
 
                 print(f"Setting {field_name} to value: {final_value}")
-                setattr(self, field_name, final_value.title())
+                setattr(self, field_name, final_value)
 
+        self.set_ovr_attribute("title_to_be", self.build_title(), False)
         self.save()  # persist changes after setting fields
         return summary
 
@@ -269,9 +282,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 continue
             
             if hasattr(self, field_name):
-                if field_name in self.overrideable_fields:                    
-                    self.set_ovr_attribute(field_name, field_value, all_field_data[f"{field_name}_is_manual"])
+                print("has attr", field_name, field_value, self.overrideable_fields)
+                if field_name in self.overrideable_fields:    
+                    print("over")
+                    #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
+                    is_manual = all_field_data.get(f"{field_name}_is_manual", True)
+                    self.set_ovr_attribute(field_name, field_value, is_manual)
                 else:
+                    print("setting", field_name, field_value)
                     setattr(self, field_name, field_value)
         self.save()
 
@@ -322,7 +340,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         subset = "" if subset == "-" else subset
         serial = "" if serial == "-" else serial
-        print (f"{year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
+        print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
         return f"{year} {brand} {subset} {name} {serial} #{nr} {city} {team}"
 
 
@@ -349,6 +367,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             
         return csr_fields
 
+    def retokenize(self):
+        applied_settings = Settings.get_default()
+        print(self)
+        for listing in self.listings.all():
+            print(listing.id)
+            listing.title.tokenize(applied_settings)
+        self.collapse_token_maps()
+
 
 class ProductListing(models.Model):
 
@@ -361,10 +387,11 @@ class ProductListing(models.Model):
 
     @classmethod
     def from_search_results(cls, item, parent_csr, tokenize=True):
+        print("my item", item)
         listing = cls()
         listing.item_id = item.get("itemId", "N/A")
         listing.listing_date = item.get("itemCreationDate")
-        listing.img_url = item.get("imageUrl", "No thumbnail")
+        listing.img_url = item.get("itemWebUrl", "No thumbnail")
         listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", "No thumbnail")
         listing.search_result = parent_csr
         listing.save()
@@ -372,10 +399,8 @@ class ProductListing(models.Model):
         
         #ultimately this will need to be updated to handle multiple settings objects
         if tokenize:
-            listing.title.tokenize(Settings.objects.all()[0])
+            listing.title.tokenize(Settings.get_default())
 
-    def __str__(self):
-        return str(self.item_id)+" "+str(self.title)
             
 
     
@@ -393,7 +418,7 @@ class ListingTitle(models.Model):
 
     def tokenize(self, applied_settings):
         tokens = {}
-        
+        print(self.id)
         #this logic relies on the fact that the "key" must match something defined by reading in settings.  Thus, don't change these
         temp_title, tokens = Season.match_extract(self.title, tokens, "season", applied_settings, return_first_match=False)
         print(temp_title)
@@ -408,6 +433,9 @@ class ListingTitle(models.Model):
         print(temp_title)
         print(tokens)
         temp_title, tokens = Team.match_extract(temp_title, tokens, "teams", applied_settings)
+        print(temp_title)
+        print(tokens)
+        temp_title, tokens = Condition.match_extract(temp_title, tokens, "condition", applied_settings, return_first_match=False)
         print(temp_title)
         print(tokens)
         temp_title, tokens = Subset.match_extract(temp_title, tokens, "subsets", applied_settings)
@@ -428,7 +456,7 @@ class ListingTitle(models.Model):
         unknown_tokens = re.findall(r'\b#?[a-z0-9]{2,}(?:-[a-z0-9]{2,})?\b', temp_title.lower())
         unknown_tokens = [self.normalize_word(t) for t in unknown_tokens if len(t) >= 3]
         tokens["unknown"] = unknown_tokens
-
+        print ("hi", self.id)
         self.tokens = tokens
         self.save()
 

@@ -5,7 +5,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('hello/', views.hello_world),
-    path('test/', views.test_view),
+    path('autocomplete/', views.autocomplete, name='autocomplete'),
+    path('test/', views.test_view, name="test_view"),
     path('crop_review/<int:card_id>', views.crop_review, name="crop_review"),
     path('save_and_next/<int:card_id>', views.save_and_next, name="save_and_next"),
     path('next/<int:card_id>', views.next, name="next"),    
@@ -13,6 +14,7 @@ urlpatterns = [
     path("upload_image/", views.upload_image_no_id, name="upload_image_no_id"),
     path("upload_image/<int:collection_id>", views.upload_image, name="upload_image"),    
     path('image_search/<int:card_id>/', views.image_search, name='image_search'),
+    path('retokenize/<int:csr_id>/', views.retokenize, name='retokenize'),
     path('image_search_collection/<int:collection_id>/', views.image_search_collection, name='image_search_collection'),
     path('text_search/<int:card_id>/', views.text_search, name='text_search'),
     path('text_search_collection/<int:collection_id>/', views.text_search_collection, name='text_search_collection'),

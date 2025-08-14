@@ -1,12 +1,15 @@
 <div style="margin-top: 20px; display: flex; gap: 10px;">
     <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔍 Image Search
+        🖼️ Image Search
     </button>
     <button id="text-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔎 Text Search
+        🔤 Text Search
     </button>
     <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    Export
+    🚀 Export
+    </button>
+    <button id="retokenize-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🔍 Retokenize
     </button>
     <a href="/export/{{ search_result.id }}/" download="card_collection.csv">Download CSV</a>
 </div>
@@ -14,6 +17,7 @@
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const imageSearchBtn = document.getElementById("image-search-btn-{{ card_id }}");
+        const retokenizeBtn = document.getElementById("retokenize-btn-{{ card_id }}");
         const textSearchBtn = document.getElementById("text-search-btn-{{ card_id }}");
         const exportBtn = document.getElementById("export-btn-{{ card_id }}");
         const searchResultId = "{{ search_result.id }}"
@@ -30,8 +34,18 @@
                 console.error("Save error", error);
             });
         });
+        retokenizeBtn.addEventListener('click', () => {
+            fetch(`/retokenize/${searchResultId}/`, { 
+                method: 'POST',
+            }).then(response => {
+                console.log("Successfully");
+                location.reload()
+            }).catch(error => {
+                console.error("Save error", error);
+            });
+        });
         exportBtn.addEventListener('click', () => {
-            console.log(`🖼️ Export triggered for ${exportBtn.id}`);
+            console.log(` Export triggered for ${exportBtn.id}`);
             console.log(searchResultId);
             location = `/export/${searchResultId}/`
         });

@@ -1,4 +1,10 @@
 {% load custom_tags %}
+{% get_overrideables as overrideables %}
+{% get_display as displayable %}
+{% get_calculated as calculated %}
+{% get_textonly as textonly %}
+
+
 <style>
   input:disabled {
     background-color: #f9f9f9;
@@ -12,13 +18,11 @@
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <script>
 $(document).ready(function () {
-  // 🔤 Title-case helper
-  function toTitleCase(str) {
-    return str.replace(/\w\S*/g, txt =>
-      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
-    );
-  }
-
+    
+  document.querySelectorAll(`input[type='text'][id^='title_to_be']`).forEach(input => {
+    handleManualInput(input); // Run once on init
+  });
+  
   // 🧩 Allow HTML in autocomplete labels
   $.ui.autocomplete.prototype._renderItem = function (ul, item) {
     return $("<li>").append(`<div>${item.label}</div>`).appendTo(ul);
@@ -41,62 +45,67 @@ $(document).ready(function () {
       savedValues[name].add(value);
     }
   });
+  //console.log("AC: Autocomplete options:", autocompleteOptions);
 
-  // 📦 Autocomplete options from backend
-  const autocompleteOptions = {
-    {% for field_name in search_result.display_fields %}
-      "{{ field_name|escapejs }}": [
-        {% with options=search_result.collapsed_tokens|dict_get:field_name %}
-          {% if options %}
-            {% for option in options %}
-              {
-                label: "{{ option.2|title|escapejs }} | (<strong>{{ option.1|escapejs }}%</strong>)",
-                value: "{{ option.2|title|escapejs }}"
-              }{% if not forloop.last %},{% endif %}
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-      ]{% if not forloop.last %},{% endif %}
-    {% endfor %}
-  };
-
-  // 🚀 Initialize autocomplete per field
-  Object.keys(autocompleteOptions).forEach(function (fieldName) {
+  {% for field_name in search_result.display_fields %}
+  (function () {
+    const fieldName = "{{ field_name|escapejs }}";
     const selector = `#field_${fieldName}-{{ card_id }}`;
-    const staticOptions = autocompleteOptions[fieldName];
-
+    const cardId = "{{ card_id }}";
+    const csrId = "{{ search_result.id }}";
+    let fields = collectAllFields(cardId);
+    console.log("Collected fields no?:", fields);
     $(selector).autocomplete({
-      minLength: 0,
+      minLength: 1,
       autoFocus: true,
       source: function (request, response) {
-        const term = request.term.toLowerCase();
-        const combined = [...staticOptions];
+        
+        fields = collectAllFields(cardId);
+        console.log("Collected fields ya?:", fields);
+        $.ajax({
+          url: "/autocomplete/",
+          type: "POST", // must be POST to send JSON body
+          data: JSON.stringify({
+            term: request.term,
+            field: fieldName,
+            allFields: { ...fields },
+            csrId: csrId
+          }),
+          contentType: "application/json", // correct header for JSON
+          success: function (data) {
+            const results = data.map(opt => ({
+              label: opt.label,
+              value: opt.value
+            }));
 
-        if (savedValues[fieldName]) {
-          savedValues[fieldName].forEach(val => {
-            if (!combined.some(opt => opt.value === val)) {
-              combined.unshift({ label: val, value: val });
+            if (results.length === 0) {
+              results.push({
+                label: `<em>Add '${request.term}'</em>`,
+                value: "__add__",
+                rawValue: request.term
+              });
             }
-          });
-        }
 
-        const filtered = combined.filter(opt =>
-          typeof opt.value === "string" && opt.value.toLowerCase().includes(term)
-        );
-
-        filtered.push({
-          label: `<em>Add '${request.term}'</em>`,
-          value: "__add__",
-          rawValue: request.term
+            response(results);
+          },
+          error: function (xhr) {
+            console.error("Autocomplete error:", xhr.responseText);
+            response([]);
+          }
         });
 
-        response(filtered);
       },
       select: function (event, ui) {
-        const idParts = this.id.split("_")[1].split("-");
-        const fieldName = idParts[0];
-        const cardId = idParts[1];
+        const match = this.id.match(/^field_(.+)-(\d+)$/);
+        if (!match) {
+          console.warn("Unexpected field ID format:", this.id);
+          return;
+        }
 
+        const fieldName = match[1];
+        const cardId = match[2];
+
+        console.log(cardId)
         if (ui.item.value === "__add__") {
           const inputValue = ui.item.rawValue;
           const allFields = collectAllFields(cardId);
@@ -108,14 +117,19 @@ $(document).ready(function () {
             savedValues[fieldName] = new Set();
           }
           savedValues[fieldName].add(inputValue);
-
+        
           $.ajax({
             url: "/add_token/",
             method: "POST",
-            data: {
-              ...allFields,
-              csrfmiddlewaretoken: '{{ csrf_token }}'
+            headers: {
+              'Content-Type': 'application/json',
             },
+            
+            data: JSON.stringify({
+              field_key: fieldName,
+              token: inputValue,
+              fields: allFields ,
+            }),
             success: response => console.log("Token added:", response),
             error: xhr => console.error("Error adding token:", xhr.responseText)
           });
@@ -130,15 +144,12 @@ $(document).ready(function () {
       }
     })
     .on("focus", function () {
-      console.log("fuckus")
-      $(this).autocomplete("search", "");
+      $(this).select();
+      $(this).autocomplete("search", $(this).val());
     })
     .on("blur", function () {
-      console.log("blur")
       const input = $(this);
       const rawValue = input.val();
-      const titleCasedValue = toTitleCase(rawValue);
-      input.val(titleCasedValue);
 
       const match = this.id.match(/^field_(.+)-(\d+)$/);
       if (!match) {
@@ -149,28 +160,26 @@ $(document).ready(function () {
       const fieldName = match[1];
       const cardId = match[2];
 
-      // Check if value is already known
       const knownValues = savedValues[fieldName] || new Set();
-      if (!knownValues.has(titleCasedValue)) {
-        console.log("Manual blur entry detected:", titleCasedValue);
+      if (!knownValues.has(rawValue)) {
+        console.log("Manual blur entry detected:", rawValue);
 
-        // Add to saved values
         if (!savedValues[fieldName]) {
           savedValues[fieldName] = new Set();
         }
-        savedValues[fieldName].add(titleCasedValue);
+        savedValues[fieldName].add(rawValue);
 
-        // Collect all fields
         const allFields = collectAllFields(cardId);
         allFields["new_field"] = fieldName;
-        allFields["new_value"] = titleCasedValue;
-        // Always call manual input handler
+        allFields["new_value"] = rawValue;
+
         handleManualInput(allFields, cardId);
       }
-
     });
+  })();
+{% endfor %}
 
-  });
+
 
   // 💾 Save button handler
   $("#saveFieldsBtn").on("click", function () {
@@ -204,15 +213,15 @@ $(document).ready(function () {
   });
 });
 
-
 function collectAllFields(cardId) {
   const allFields = {};
   console.log(cardId)
   // Text inputs
-  document.querySelectorAll(`input[type='text'][id$='-${cardId}']`).forEach(input => {
-    let name = input.name;
-    console.log(input.name)
-    const value = input.value;
+  document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
+
+    let name = el.name;
+    console.log(el.name)
+    const value = el.value;
 
     if (name && name.endsWith("_m")) {
       name = name.slice(0, -2);
@@ -259,9 +268,6 @@ function handleOverrideToggle(fieldName, cardId) {
   }
 }
 
-document.querySelectorAll(`input[type='text'][id^='title_to_be']`).forEach(input => {
-  handleManualInput(input); // Run once on init
-});
 
 function handleManualInput(fieldName, cardId) {
   console.log(`handleManualInput called with field="${fieldName}", idx=${cardId}`);
@@ -275,11 +281,11 @@ function handleManualInput(fieldName, cardId) {
     const titleCheckbox = document.getElementById(`title_to_be_is_manual-${cardId}`);
     const titleElement = document.getElementById(titleFieldId);
 
-    if (titleElement && !titleCheckbox.checked) {
+    if (titleElement) {// && !titleCheckbox.checked) {
       // ⏳ Delay field collection until DOM updates
       setTimeout(() => {
         const fields = collectAllFields(cardId);
-        console.log("Collected fields:", fields);
+        console.log("Collected fields2:", fields);
 
         // #this is a re-implementation of csr.build_title
         const titleParts = [
@@ -287,6 +293,7 @@ function handleManualInput(fieldName, cardId) {
           fields.brand,
           fields.subset,
           fields.full_name,
+          fields.parallel,
           fields.serial_number !="-" ? `${fields.serial_number}` : null,
           fields.card_number != "-" ? `#${fields.card_number}` : null,
           fields.city,
@@ -304,11 +311,10 @@ function handleManualInput(fieldName, cardId) {
       console.log("No title element or checkbox is checked.");
     }
   }
-}
-
+} 
 </script>
 
-
+{{ search_result.id }}
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
 <thead>
     <tr style="background-color: #f0f0f0;">
@@ -317,56 +323,85 @@ function handleManualInput(fieldName, cardId) {
     </tr>
 </thead>
 <tbody>
-{% with card_counter=card_id %}
+  {% with card_counter=card_id resolved_value=search_result|get_attribute:"title_to_be" %}
+    <!-- 🏷️ Title Row -->
+    <tr>
+      <td colspan="2" style="padding: 8px 6px; font-weight: bold; background-color: #f8f9fa;">
+        <input type="text"
+                id="field_title_to_be-{{ card_counter }}"
+                name="title_to_be_m"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}">
+      </td>
+    </tr>
+
     {% for field_name in search_result.display_fields %}
-        {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" %}
-        <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 6px;">
-            <label style="display: flex; align-items: center; gap: 6px;">
-                {% if field_name in search_result.overrideable_fields %}
-                <input type="checkbox"
-                    id="{{ field_name }}_is_manual-{{ card_counter }}"
-                    name="{{ field_name }}_is_manual"
-                    {% if search_result|get_attribute:manual_flag %}checked{% endif %}
-                    onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
-                {% else %}
-                <input type="checkbox"
-                    {% if not field_name in search_result.readonly_fields %}checked{% endif %}
-                    disabled
-                    style="cursor: not-allowed;">
-                {% endif %}
-                <span>{{ search_result|get_field_verbose:field_name }}</span>
-            </label>
-            </td>
-            <td style="padding: 6px; width: 300px;">
-            {% if field_name in search_result.overrideable_fields %}
-            {% with resolved_value=search_result|get_attribute:display_attr %}
-                <input type="text"
-                    id="field_{{ field_name }}-{{ card_counter }}"
-                    name="{{ field_name }}_m"
-                    value="{{ resolved_value|title|default:'-' }}"
-                    style="width: 100%; box-sizing: border-box;"
-                    data-default="{{ search_result|get_attribute:field_name|default:'-' }}"                   
-                    oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
-                    {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
-            {% endwith %}
-            {% else %}
-            {% with resolved_value=search_result|get_attribute:field_name %}
-              <input type="text"
-                      id="field_{{ field_name }}-{{ card_counter }}"
-                      name="{{ field_name }}_m"
-                      value="{{ resolved_value|title|default:'-' }}"
-                      style="width: 100%; box-sizing: border-box;"
-                      data-default="{{ search_result|get_attribute:field_name|default:'-' }}"                   
-                      {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
-            {% endwith %}
+      {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" resolved_value=search_result|get_attribute:field_name %}
+      <tr style="border-bottom: 1px solid #eee;">
+        <!-- 🟩 Label + Override Checkbox -->
+        <td style="padding: 6px;">
+          <label style="display: flex; align-items: center; gap: 6px;">
+            {% if field_name in overrideables or field_name in calculated %}
+              <input type="checkbox"
+                  id="{{ field_name }}_is_manual-{{ card_counter }}"
+                  name="{{ field_name }}_is_manual"
+                  {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                  onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+            {% elif field_name in textonly %}
+              <input type="checkbox"
+                  id="{{ field_name }}_is_manual-{{ card_counter }}"
+                  name="{{ field_name }}_is_manual"
+                  checked disabled
+                  onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
             {% endif %}
-            </td>
-        </tr>
-        {% endwith %}
+            <span>{{ search_result|get_field_verbose:field_name }}</span>
+          </label>
+        </td>
+
+        <!-- 🟦 Field Input -->
+        <td style="padding: 6px; width: 300px;">
+          {% if field_name in overrideables %}
+            <!-- A: Editable input -->
+            <input type="text"
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+          
+          {% elif field_name in calculated %}
+            <!-- B: Calculated input -->
+            <input type="text"
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+        
+          {% else %}
+            <!-- C: Fallback textarea -->
+            <textarea
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                rows="5"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+            >{{ resolved_value }}</textarea>
+          {% endif %}
+        </td>
+      </tr>
+      {% endwith %}
     {% endfor %}
-{% endwith %}
+  {% endwith %}
 </tbody>
+
+
 </table>
 <div style="margin-top: 16px; text-align: right;">
   <button id="saveFieldsBtn" style="padding: 8px 16px; font-size: 14px;">

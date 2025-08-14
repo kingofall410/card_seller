@@ -1,7 +1,7 @@
 from django import template
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Card import Collection
-from services.models import Brand, KnownName, Team, City,CardAttribute, Subset
+from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 
 register = template.Library()
 
@@ -43,7 +43,6 @@ def get_field_verbose(obj, field_name):
 @register.filter
 def dict_get(d, key):
     try:
-        print(key, CardSearchResult.stupid_map(key))
         options = d.get(CardSearchResult.stupid_map(key), None)
         return sorted(options, reverse=True)
     except (TypeError, AttributeError):
@@ -54,23 +53,42 @@ def get_collections():
     return Collection.objects.order_by('-id')
 
 @register.simple_tag
+def get_overrideables():
+    return CardSearchResult.overrideable_fields
+
+@register.simple_tag
+def get_display():
+    return CardSearchResult.display_fields
+
+@register.simple_tag
+def get_calculated():
+    return CardSearchResult.calculated_fields
+
+@register.simple_tag
+def get_textonly():
+    return CardSearchResult.text_fields
+
+@register.simple_tag
 def get_autocomplete_options(field_key):
-    print(field_key)
-    if field_key == "brands":
+
+    if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
         return [obj.raw_value for obj in Brand.objects.order_by("raw_value")]
-    elif field_key == "subsets":
+    elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
         return [(obj.parent_brand.raw_value, obj.raw_value) for obj in Subset.objects.order_by("raw_value")]
-    elif field_key == "names":
+    elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
         return [obj.raw_value for obj in KnownName.objects.order_by("raw_value")]
-    elif field_key == "teams":
+    elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
         return [obj.raw_value for obj in Team.objects.order_by("raw_value")]
-    elif field_key == "cities":
+    elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
         return [obj.raw_value for obj in City.objects.order_by("raw_value")]
-    elif field_key == "attribs":
+    elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
         return [obj.raw_value for obj in CardAttribute.objects.order_by("raw_value")]
+    elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
+        return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
+    elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+        return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
 
 @register.simple_tag(takes_context=True)
 def build_title(context, fields=None):
-    print("context:", context)
-    print(fields)
+    
     return context["card"][1].build_title(fields)

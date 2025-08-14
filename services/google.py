@@ -76,7 +76,8 @@ class GoogleDriveUploader:
         link = file.get('webViewLink')
         print(link)
         print(file_id)
-        return f"https://drive.usercontent.google.com/download?id={file_id}&authuser=0"
+        #return f"https://drive.usercontent.google.com/download?id={file_id}&authuser=0"
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
 
     def upload_and_share(self, file_path, name):
 

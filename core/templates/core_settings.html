@@ -20,22 +20,14 @@
   <div class="container mt-4">
     <h2>Settings</h2>
 
-    <div class="settings-block">
-      {% include "file_upload.html" with field_key="brands" upload_url="upload/brands/" %}<br>
-      {% include "settings_tokens.html" with primary_field_key="brands" secondary_field_key="subsets" primary_autocomplete_id="brands-autocomplete-data" secondary_autocomplete_id="subsets-autocomplete-data" %}<br><br>
-    </div><hr>
-    <div class="settings-block">
-      {% include "file_upload.html" with field_key="names" upload_url="upload/names/" %}<br>
-      {% include "settings_tokens.html" with primary_field_key="names" secondary_field_key="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br>
-    </div><hr>
-    <div class="settings-block">
-      {% include "file_upload.html" with field_key="cities" upload_url="upload/cities/" %}<br>
-      {% include "settings_tokens.html" with primary_field_key="cities" secondary_field_key="teams" primary_autocomplete_id="cities-autocomplete-data" secondary_autocomplete_id="teams-autocomplete-data" %}<br>
-    </div><hr>
-    <div class="settings-block">
-      {% include "file_upload.html" with field_key="attribs" upload_url="upload/attribs/" %}<br>
-      {% include "settings_tokens.html" with primary_field_key="attribs" secondary_field_key="" primary_autocomplete_id="attribs-autocomplete-data" secondary_autocomplete_id="" %}<br>
-    </div><hr>
+   
+    {% include "settings_block.html" with primary_field_key="brands" secondary_field_key="subsets" primary_upload_url="upload/brands/"  secondary_upload_url="upload/subsets/" primary_autocomplete_id="brands-autocomplete-data" secondary_autocomplete_id="subsets_autocomplete_data" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="names" secondary_field_key="" primary_upload_url="upload/names/"  secondary_upload_url="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="cities" secondary_field_key="" primary_upload_url="upload/cities/"  secondary_upload_url="" primary_autocomplete_id="cities-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="teams" secondary_field_key="" primary_upload_url="upload/teams/"  secondary_upload_url="" primary_autocomplete_id="teams-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="attribs" secondary_field_key="" primary_upload_url="upload/attribs/"  secondary_upload_url="" primary_autocomplete_id="attribs-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="condition" secondary_field_key="" primary_upload_url="upload/condition/"  secondary_upload_url="" primary_autocomplete_id="condition-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% include "settings_block.html" with primary_field_key="parallel" secondary_field_key="" primary_upload_url="upload/parallel/"  secondary_upload_url="" primary_autocomplete_id="parallel-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
 
     <form method="post" action="{% url 'update_settings' %}" style="margin-top: 24px;">
     {% csrf_token %}
@@ -56,3 +48,45 @@
     </button>
   </form>
   </div>
+<script>
+function handleQuickAdd(event, fieldKey) {
+  if (event.key === 'Enter') {
+    submitQuickAdd(fieldKey);
+  }
+}
+
+function submitQuickAdd(fieldKey) {
+  console.log("submit ", fieldKey);
+  const input = document.getElementById(`quick-add-${fieldKey}`);
+  const value = input.value.trim();
+  if (value) {
+    fetch('/add_token/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      field_key: fieldKey,
+      token: value
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      input.value = '';
+      window.location.reload();
+      
+    } else {
+      console.error('Server error:', data.error);
+    }
+  })
+  .catch(err => {
+    console.error('Request failed:', err);
+  });
+    (fieldKey, value);
+    input.value = ''; // Clear after adding
+  }
+}
+
+
+</script>

@@ -112,14 +112,15 @@
             <div class="card-block">
                 <div class="cropper-row">
                     <div class="cropper-column-left">
-                        {{card.0.id}}
-                        {% include "cropper_only.html" with card=card.0 card_id=card.0.id original_img=card.0.uploaded_image.url portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url search_results=card.1 crop_params=card.1.front_crop_params %}
-                        {% include "cropper_only.html" with card=card.0 card_id=card.0.reverse_id original_img=card.0.reverse_image.url portrait_img=card.0.portrait_reverse.url cropped_img=card.0.cropped_reverse.url reverse_img=card.0.cropped_image.url search_results=card.1 crop_params=card.1.reverse_crop_params %}
-                    </div>
-                    <div class="cropper-column-right">
                         {% include "search_results.html" with card_id=card.0.id search_result=card.1 %}
                         {% include "re_search_buttons.html" with card_id=card.0.id search_result=card.1%}
                         {% include "product_listings.html" with search_result=card.1%}
+                    </div>
+                    <div class="cropper-column-right">
+                        {{card.0.id}}
+                        {% include "cropper_only.html" with card=card.0 card_id=card.0.id original_img=card.0.uploaded_image.url portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url search_results=card.1 crop_params=card.1.front_crop_params %}
+                        {% include "cropper_only.html" with card=card.0 card_id=card.0.reverse_id original_img=card.0.reverse_image.url portrait_img=card.0.portrait_reverse.url cropped_img=card.0.cropped_reverse.url reverse_img=card.0.cropped_image.url search_results=card.1 crop_params=card.1.reverse_crop_params %}
+                        
                     </div>
                 </div>
 

@@ -1,0 +1,16 @@
+<div class="settings-block">
+    {% include "file_upload.html" with field_key=primary_field_key upload_url=primary_upload_url %}
+    <!-- 🆕 Quick Add Textbox -->
+    <input type="text"
+        id="quick-add-{{ primary_field_key }}"
+        placeholder="Quick Add..."
+        style="min-width: 180px; max-width: 400px 6px 10px; font-size: 14px;"
+        onkeydown="handleQuickAdd(event, '{{ primary_field_key }}')">
+    <button type="button"2
+        onclick="submitQuickAdd('{{ primary_field_key }}')"
+        style="padding: 6px 10px; font-size: 16px; cursor: pointer;">
+        +
+    </button>
+
+    {% include "settings_tokens.html" with primary_field_key=primary_field_key secondary_field_key=secondary_field_key primary_autocomplete_id=primary_autocomplete_id secondary_autocomplete_id=secondary_autocomplete_id %}<br><br>
+</div>

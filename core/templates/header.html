@@ -52,7 +52,7 @@
       {% get_collections as collections %}
       {% for collection in collections %}
       <a href="{% url 'collection' collection.id %}" class="nav-link">
-         🗃️ Collection {{ collection.id }}
+         🗃️ Collection {{ collection.id }} ({{ collection.get_size }})
       </a>
       {% endfor %}
 

@@ -58,13 +58,13 @@
 <div class="autocomplete-container">
   <!-- Primary Autocomplete -->
   <div class="autocomplete-box">
-    <input type="text" class="form-control" id="{{ primary_field_key }}-autocomplete" placeholder="Search primary..." autocomplete="off">
+    <input type="text" class="form-control" id="{{ primary_field_key }}-autocomplete" placeholder="Search {{ primary_field_key }}..." autocomplete="off">
     <ul id="{{ primary_field_key }}-autocomplete-results" class="list-group autocomplete-results"></ul>
   </div>
 
   <!-- Secondary Autocomplete -->
    <div class="autocomplete-box {% if not secondary_field_key or not secondary_autocomplete_id %}hidden{% endif %}">
-    <input type="text" class="form-control" id="{{ secondary_field_key }}-autocomplete" placeholder="Search secondary..." autocomplete="off">
+    <input type="text" class="form-control" id="{{ secondary_field_key }}-autocomplete" placeholder="Search {{ secondary_field_key }}..." autocomplete="off">
     <ul id="{{ secondary_field_key }}-autocomplete-results" class="list-group autocomplete-results"></ul>
 </div>
 
@@ -72,81 +72,100 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     const primaryId = "{{ primary_field_key }}";
-    const primaryInput = document.getElementById(`${primaryId}-autocomplete`);
-    const primaryResults = document.getElementById(`${primaryId}-autocomplete-results`);
-    const primaryOptions = JSON.parse(document.getElementById("{{ primary_autocomplete_id }}").textContent);
+    const secondaryId = "{{ secondary_field_key }}";
+    const primaryAutocompleteId = "{{ primary_autocomplete_id }}"
+    const secondaryAutocompleteId = "{{ secondary_autocomplete_id }}"
 
-    let selectedPrimary = null;
+    if ((primaryAutocompleteId != "") && (primaryId != "")) {
+      const primaryInput = document.getElementById(`${primaryId}-autocomplete`);
+      const primaryResults = document.getElementById(`${primaryId}-autocomplete-results`);
+      const primaryOptions = JSON.parse(document.getElementById(primaryAutocompleteId).textContent);
 
-    function renderList(container, inputEl, options, query = "") {
-        container.innerHTML = "";
+      console.log(primaryId, primaryAutocompleteId)
+      console.log(secondaryId, secondaryAutocompleteId)
+      let secondaryInput;
+      let secondaryResults;
+      let secondaryOptions;
+      //grab this info here so we have it for renderList in primary
+      if ((secondaryId != "") && (secondaryAutocompleteId != "")) {
+        // ✅ Secondary logic only runs if all required elements exist
+          secondaryInput = document.getElementById(`${secondaryId}-autocomplete`);
+          secondaryResults = document.getElementById(`${secondaryId}-autocomplete-results`);
+          secondaryOptions = JSON.parse(document.getElementById(secondaryAutocompleteId).textContent);
+      }
+          
+      let selectedPrimary = null;
 
-        const lowerQuery = query.toLowerCase();
-        let displayOptions = [...options].sort((a, b) => a.localeCompare(b));
-        const hasMatch = displayOptions.some(opt => opt.toLowerCase().includes(lowerQuery));
+      function renderList(container, inputEl, options, query = "") {
+          container.innerHTML = "";
+          
+          const lowerQuery = query.toLowerCase();
+          let displayOptions = [...options].sort((a, b) => a.localeCompare(b));
+          const hasMatch = displayOptions.some(opt => opt.toLowerCase().includes(lowerQuery));
 
-        if (query && !hasMatch) {
-        displayOptions.push(query);
-        displayOptions.sort((a, b) => a.localeCompare(b));
-        }
+          if (query && !hasMatch) {
+            displayOptions.push(query);
+            displayOptions.sort((a, b) => a.localeCompare(b));
+          }
 
-        displayOptions.forEach((opt) => {
-        const li = document.createElement("li");
-        li.textContent = opt;
-        li.className = "list-group-item list-group-item-action";
+          displayOptions.forEach((opt) => {
+          const li = document.createElement("li");
+          li.textContent = opt;
+          li.className = "list-group-item list-group-item-action";
 
-        li.addEventListener("click", () => {
-            inputEl.value = opt;
-            Array.from(container.children).forEach(el => el.classList.remove("selected"));
-            li.classList.add("selected");
+          li.addEventListener("click", () => {
+              inputEl.value = opt;
+              Array.from(container.children).forEach(el => el.classList.remove("selected"));
+              li.classList.add("selected");
 
-            if (inputEl === primaryInput) {
-            selectedPrimary = opt;
-            if (secondaryInput && secondaryResults && secondaryOptions) {
-                renderSecondary();
-            }
-            }
-        });
+              if (inputEl === primaryInput) {
+              selectedPrimary = opt;
+              if (secondaryInput && secondaryResults && secondaryOptions) {
+                  renderSecondary();
+              }
+              }
+          });
 
-        container.appendChild(li);
-        });
-    }
+          container.appendChild(li);
+          });
+      }
+      console.log("rl2:", primaryResults, primaryInput, primaryOptions)
+      renderList(primaryResults, primaryInput, primaryOptions);
 
-    renderList(primaryResults, primaryInput, primaryOptions);
-
-    primaryInput.addEventListener("input", function () {
-        const query = primaryInput.value.trim();
-        renderList(primaryResults, primaryInput, primaryOptions, query);
-    });
-
-    // ✅ Secondary logic only runs if all required elements exist
-    const secondaryId = "{{ secondary_field_key|default:'' }}";
-    const secondaryInput = document.getElementById(`${secondaryId}-autocomplete`);
-    const secondaryResults = document.getElementById(`${secondaryId}-autocomplete-results`);
-    const secondaryOptionsEl = document.getElementById("{{ secondary_autocomplete_id|default:'' }}");
-    const secondaryOptions = secondaryOptionsEl ? JSON.parse(secondaryOptionsEl.textContent) : null;
-
-    if (secondaryInput && secondaryResults && secondaryOptions) {
+      primaryInput.addEventListener("input", function () {
+          const query = primaryInput.value.trim();
+          console.log("rl3:", primaryResults, primaryInput, primaryOptions)
+          renderList(primaryResults, primaryInput, primaryOptions, query);
+      });
+      console.log(secondaryInput, secondaryResults, secondaryOptions)
+      if (secondaryInput && secondaryResults && secondaryOptions) {
         secondaryInput.addEventListener("input", renderSecondary);
-
+        renderSecondary();
+        
         function renderSecondary() {
-        if (!selectedPrimary) {
-            secondaryResults.innerHTML = "";
-            return;
-        }
+          console.log("rendering")
+          const query = secondaryInput.value.trim().toLowerCase();
 
-        const query = secondaryInput.value.trim().toLowerCase();
+          let filtered;
 
-        const filtered = secondaryOptions.filter(([supercat, subcat]) => {
-            return (
-            supercat === selectedPrimary &&
-            subcat.toLowerCase().includes(query)
+          if (selectedPrimary) {
+            // Filter by selected primary
+            filtered = secondaryOptions.filter(([supercat, subcat]) => {
+              return (
+                supercat === selectedPrimary &&
+                subcat.toLowerCase().includes(query)
+              );
+            });
+          } else {
+            // No primary selected — show all matching secondary options
+            filtered = secondaryOptions.filter(([_, subcat]) =>
+              subcat.toLowerCase().includes(query)
             );
-        });
-
-        renderList(secondaryResults, secondaryInput, filtered.map(([_, subcat]) => subcat), query);
+          }
+          renderList(secondaryResults, secondaryInput, filtered.map(([_, subcat]) => subcat), query);
         }
+      }
     }
-    });
+  });
 
 </script>

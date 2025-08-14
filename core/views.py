@@ -11,7 +11,7 @@ from django.db import models
 from services import settings_management as app_settings
 from services import text
 from services import photo_manip as photo
-from services.models import Brand, City, Team, CardAttribute, KnownName, Subset, Settings
+from services.models import Settings, Condition, Team, City, CardAttribute, Brand, Subset, KnownName, Parallel
 from core.models.Card import Card, Collection
 from core.models.CardSearchResult import CardSearchResult
 from django.contrib.auth.models import User
@@ -28,7 +28,9 @@ def hello_world(request):
     return render("success.html")
 
 def test_view(request):
-    pass
+    Condition.objects.all().delete()
+
+
 
 def crop_review(request, card_id):
     card = get_object_or_404(Card, id=card_id)
@@ -101,19 +103,69 @@ def view_card(request, card_id):
 
 @csrf_exempt
 def add_token(request):
-    print("add_token disabled")
-    if False:#request.method == 'POST':
+    #print(request.body)
+    if request.method == 'POST':
         data = json.loads(request.body)
         field_key = data.get("field_key")
-        new_value = data.get("token", "").lower()
+        new_value = data.get("token", "")
+        allFields = data.get("fields", {})
 
-        
+        #print(f"add_token: {field_key}: {new_value}")
+        #print(allFields)
 
-        print(f"add_token: {field_key}: {new_value}")
-
-        if app_settings.add_token(field_key, new_value, None):
+        if app_settings.add_token(CardSearchResult.stupid_map(field_key), new_value, allFields ):
             return JsonResponse({"success": True, "error": ""})
     return JsonResponse({"error": True, "error": "No results"})
+
+@csrf_exempt
+def autocomplete(request):
+    print(request.body)
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        term = data.get("term", "")
+        field_key = data.get("field", "")
+        csr_id = data.get("csrId", "")
+
+        filter_kwargs = {"raw_value__icontains": term}
+        #TODO: this is naive and replicates logic in custom_tags.py
+        #TODO: need to find a betyter way to differentiate between tokens and more complicated fields (#s)
+        if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
+            field_key = Brand.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #[obj.raw_value for obj in Brand.objects.order_by("raw_value")]
+        elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
+            options = Subset.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [(obj.parent_brand.raw_value, obj.raw_value) for obj in Subset.objects.order_by("raw_value")]
+        elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
+            options = KnownName.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in KnownName.objects.order_by("raw_value")]
+        elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
+            options = Team.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in Team.objects.order_by("raw_value")]
+        elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
+            options = City.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in City.objects.order_by("raw_value")]
+        elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
+            options = CardAttribute.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in CardAttribute.objects.order_by("raw_value")]
+        elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
+            options = Condition.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
+        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+            options = Parallel.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
+        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+            options = Parallel.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            #return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
+        elif field_key == "cardnr" or field_key == CardSearchResult.stupid_map("cardnr"):
+            options = CardSearchResult.objects.get(id=csr_id).get_cardnr_options()
+        if not field_key:
+            return JsonResponse([], safe=False)
+
+    return JsonResponse([{"label": opt, "value": opt} for opt in options], safe=False)
 
 @csrf_exempt
 def update_csr_fields(request):
@@ -171,6 +223,17 @@ def image_search_collection(request, collection_id):
     for card in collection.cards.all():
         lookup.single_image_lookup(card)
     
+    return JsonResponse({"success": True, "error": ""})
+
+@csrf_exempt
+def retokenize(request, csr_id):
+    print("retokenize")
+
+    if not csr_id or csr_id == 'undefined':
+        return JsonResponse({'error': 'CSR ID is required'}, status=400)
+    csr = CardSearchResult.objects.get(id=csr_id)
+    csr.retokenize()
+
     return JsonResponse({"success": True, "error": ""})
 
 
@@ -359,6 +422,7 @@ def collection_create(request):
     new_collection = Collection.objects.create()
     return redirect(reverse(f"upload_image/${new_collection.id}"))
 
+@csrf_exempt
 def settings_file_upload(request, file_type):
     uploaded_files = request.FILES.getlist("file")
     

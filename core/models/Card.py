@@ -10,12 +10,16 @@ class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
     
+       
     @classmethod
     def get_default(cls):
         return Collection.objects.first()
 
     def get_default_exports(self):
         return (card.active_search_results() for card in self.cards.all())
+    
+    def get_size(self):
+        return len(self.cards.all())
     
 
 class Card(models.Model):
@@ -463,6 +467,10 @@ class Card(models.Model):
         csr = CardSearchResult.from_search_results(self, items)
 
         return csr
+
+    def retokenize(self, csr_id):
+        csr = CardSearchResult.objects.get(id=csr_id)
+        return csr.retokenize()
 
     #obviously all needs to be cleaned up
     def update_crop(self, cropped_image, is_reverse, crop_x=0, crop_y=0, crop_width=0, crop_height=0, display_left_offset=0, display_top_offset=0, canvas_rotation=0.0):

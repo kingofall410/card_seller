@@ -36,26 +36,27 @@
 
   <!-- Thumbnails Panel -->
   <div id="thumb_panel-{{ card_id }}" class="thumb-container">
-    <div class="thumb-box">
-      <img id="original-{{ card_id }}" src="{{ original_img|safe }}" alt="Original" />
-      <div class="thumb-label">Original</div>
-    </div>
-    <div class="thumb-box">
+    
+    <!--<div class="thumb-box">
       <img id="portrait-{{ card_id }}" src="{{ portrait_img|safe }}" alt="Portrait" />
       <div class="thumb-label">Portrait</div>
-    </div>
+    </div>-->
     <div class="thumb-box">
       <img id="cropped-{{ card_id }}" src="{{ cropped_img|safe }}" alt="Cropped" />
       <div class="thumb-label">Cropped</div>
+    </div>
+    <div class="thumb-box">
+      <img id="original-{{ card_id }}" src="{{ original_img|safe }}" alt="Original" />
+      <div class="thumb-label">Original</div>
     </div>
   </div>
 
 
   <!-- Cropper Image Container -->
-  <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 720px;">
+  <div style="position: relative; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; max-width: 600px;">
     <img id="cropper-{{ card_id }}" src="{{ portrait_img }}" data-card-id="{{ card_id }}" 
         data-portrait="{{ portrait_img }}" 
-        data-bound="false"  class="cropper-target" style="height: 720px;" />
+        data-bound="false"  class="cropper-target" style="height: 600px;" />
   </div> 
   <!-- Crop Actions (Lower Row) -->
   <div style="margin-top: 10px; display: flex; gap: 10px;">

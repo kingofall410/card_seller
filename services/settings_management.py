@@ -1,5 +1,5 @@
 import io, csv
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, User
+from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel
 from django.shortcuts import render, redirect
     
 def load_settings_file(dj_file, file_type, user_settings=None):
@@ -13,7 +13,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
 
     if file_type == "brands":     
         
-        subset_set = set(((row[0]).strip().lower(), (row[1]).strip().lower()) for row in reader if row and len(row) > 1)
+        subset_set = set(((row[0]).strip(), (row[1]).strip()) for row in reader if row and len(row) > 1)
         print(subset_set)
         for subset_str, brand_str in subset_set:
             #print(subset_str, brand_str)
@@ -28,7 +28,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
 
     elif file_type == "teams":
         
-        name_city_set = set(((row[0]).strip().lower(), (row[1]).strip().lower()) for row in reader if row and len(row) > 1)
+        name_city_set = set(((row[0]).strip(), (row[1]).strip()) for row in reader if row and len(row) > 1)
         
         for team_name, city_name in name_city_set:
             
@@ -44,7 +44,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
 
     else:
         
-        keyword_set = set((row[0]).strip().lower() for row in reader if row and len(row) > 0)
+        keyword_set = set((row[0]).strip() for row in reader if row and len(row) > 0)
         #print(keyword_set)
         for keyword in keyword_set:
             #print(keyword)
@@ -53,6 +53,10 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                     KnownName.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
                 elif file_type == "attribs":
                     CardAttribute.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
+                elif file_type == "condition":
+                    Condition.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
+                elif file_type == "parallel":
+                    Parallel.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
                 else:#random filenames get read in as names
                     KnownName.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key="names")
 
@@ -70,7 +74,7 @@ def update_all_fields(all_field_data, user_settings=None):
             new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
 
         elif field_key == "subsets":
-            brand_obj = Brand.objects.get(raw_value=all_field_data["brands"].lower())
+            brand_obj = Brand.objects.get(raw_value=all_field_data["brands"])
             
             if brand_obj:
                 new_obj = Subset.create(value=value, settings=user_settings, field=field_key, brand=brand_obj)
@@ -79,7 +83,7 @@ def update_all_fields(all_field_data, user_settings=None):
         elif field_key == "cities":   
             new_obj = City.create(value=value, settings=user_settings, field=field_key)
         elif field_key == "teams":
-            city_obj = City.objects.get(raw_value=all_field_data["cities"].lower())
+            city_obj = City.objects.get(raw_value=all_field_data["cities"])
             
             if city_obj:
                 new_obj = Subset.create(value=value, settings=user_settings, field=field_key, city=city_obj)
@@ -88,6 +92,8 @@ def update_all_fields(all_field_data, user_settings=None):
             new_obj = KnownName.create(value=value, settings=user_settings, field=field_key)
         elif field_key == "attribs":
             new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
+        elif field_key == "condition":
+            new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
         
         return not (new_obj is None)
 
@@ -100,7 +106,7 @@ def add_token(field_key, value, all_field_data, user_settings=None):
         new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
 
     elif field_key == "subsets":
-        brand_obj = Brand.objects.get(raw_value=all_field_data["brands"].lower())
+        brand_obj = Brand.objects.get(raw_value=all_field_data["brand"])
         
         if brand_obj:
             new_obj = Subset.create(value=value, settings=user_settings, field=field_key, brand=brand_obj)
@@ -109,15 +115,17 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     elif field_key == "cities":   
         new_obj = City.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "teams":
-        city_obj = City.objects.get(raw_value=all_field_data["cities"].lower())
+        city_obj = City.objects.get(raw_value=all_field_data["city"])
         
         if city_obj:
-            new_obj = Subset.create(value=value, settings=user_settings, field=field_key, city=city_obj)
+            new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)
 
     elif field_key == "names":
         new_obj = KnownName.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "attribs":
         new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
+    elif field_key == "condition":
+        new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
     
     return not (new_obj is None)
 

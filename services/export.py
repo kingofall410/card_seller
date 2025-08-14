@@ -27,13 +27,13 @@ def export_zip(csrs):
     
     writer.writerow(ebay.singles_excel_fields.keys())
             
-    #uploader = GoogleDriveUploader()
+    uploader = GoogleDriveUploader()
    
     for csr in csrs:
-        #shareable_link_front = uploader.upload_and_share(csr.get_latest_front(), csr.title_to_be)
-        #shareable_link_reverse = uploader.upload_and_share(csr.get_latest_reverse(), csr.title_to_be)
+        shareable_link_front = uploader.upload_and_share(csr.get_latest_front(), csr.title_to_be)
+        shareable_link_reverse = uploader.upload_and_share(csr.get_latest_reverse(), csr.title_to_be)
         #print("🔗 Public link:", shareable_link_front)
         #print("🔗 Public link:", shareable_link_reverse)
-        writer.writerow(csr.export_to_csv(ebay.singles_excel_fields))#+[shareable_link_front, shareable_link_reverse])
-   
+        writer.writerow(csr.export_to_csv(ebay.singles_excel_fields) + [shareable_link_front, shareable_link_reverse])
+
     return response
