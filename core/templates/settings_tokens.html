@@ -1,6 +1,6 @@
 {% load custom_tags %}
-{% get_autocomplete_options primary_field_key as primary_options %}
-{% get_autocomplete_options secondary_field_key as secondary_options %}
+{% get_all_options primary_field_key as primary_options %}
+{% get_all_options secondary_field_key as secondary_options %}
 {{ primary_options|json_script:primary_autocomplete_id }}
 {{ secondary_options|json_script:secondary_autocomplete_id }}
 

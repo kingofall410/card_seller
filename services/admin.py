@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition
+from .models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName
 
 admin.site.register(Brand)
 admin.site.register(Subset)
@@ -14,3 +14,4 @@ admin.site.register(KnownName, KnownNameAdmin)
 admin.site.register(CardAttribute)
 admin.site.register(Condition)
 admin.site.register(Parallel)
+admin.site.register(CardName)

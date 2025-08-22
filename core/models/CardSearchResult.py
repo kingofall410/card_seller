@@ -1,7 +1,7 @@
 from django.db import models
 import re
 from core.models.Cropping import CropParams
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition
+from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 
 
@@ -81,14 +81,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     full_name = models.CharField(max_length=100, blank=True)
     full_name_m = models.CharField(max_length=100, blank=True)
     full_name_is_manual = models.BooleanField(default=False)
-
-    first_name = models.CharField(max_length=50, blank=True)
-    first_name_m = models.CharField(max_length=50, blank=True)
-    first_name_is_manual = models.BooleanField(default=False)
-
-    last_name = models.CharField(max_length=50, blank=True)
-    last_name_m = models.CharField(max_length=50, blank=True)
-    last_name_is_manual = models.BooleanField(default=False)
     
     year = models.CharField(max_length=20, blank=True)
     year_m = models.CharField(max_length=20, blank=True)
@@ -105,7 +97,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     card_number = models.CharField(max_length=50, blank=True)
     card_number_m = models.CharField(max_length=50, blank=True)
     card_number_is_manual = models.BooleanField(default=False)
-    
+
+    card_name = models.CharField(max_length=100, blank=True)
+    card_name_m = models.CharField(max_length=100, blank=True)
+    card_name_is_manual = models.BooleanField(default=False)
+
     team = models.CharField(max_length=100, blank=True)
     team_m = models.CharField(max_length=100, blank=True)
     team_is_manual = models.BooleanField(default=False)
@@ -143,12 +139,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     overrideable_fields = [
         "full_name", "first_name", "last_name",
         "year", "brand", "subset", 
-        "card_number", "team", "city", "serial_number", "title_to_be", "parallel"
+        "card_number", "team", "city", "serial_number", "title_to_be", "parallel", "card_name"
     ]
 
     display_fields = [
         "year", "brand", "subset", "parallel", "full_name", 
-        "card_number", "city", "team", "serial_number", "condition", 
+        "card_number", "card_name", "city", "team", "serial_number", "condition", 
         "attributes", "unknown_words"#"search_string", "response_count", "first_name", "last_name",
     ]
 
@@ -162,6 +158,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         "attributes", "unknown_words", "title_to_be"
     ]
 
+    checkbox_fields = ["attributes"]
+
     dynamic_listing_fields = ["front", "back"]
 
     def save(self, *args, **kwargs):
@@ -172,10 +170,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     @classmethod
     def stupid_map(cls, key):
         #get rid of this when you can
-        if key == "season":
+        if key == "year":
             return "year"
         elif key == "year":
-            return "season"
+            return "year"
         elif key == "subsets":
             return "subset"
         elif key == "subset":
@@ -212,38 +210,60 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return "condition"
         elif key == "parallel":
             return "parallel"
+        elif key == "card_name":
+            return "card_name"
         else:
             return "unknown_words"
 
     def get_latest_front(self):
         return self.parent_card.cropped_image.path()
     
-    def get_cardnr_options(self):
-        return [token[2] for token in self.collapsed_tokens.get("cardnr", [])]
+    def get_individual_options(self, field_key):
+        return [token[2] for token in self.collapsed_tokens.get(field_key, [])]
 
     def get_latest_reverse(self):
         return self.parent_card.cropped_reverse.path()
 
-    def collapse_token_maps(self):
+    def collapse_token_maps(self, listing_set=None):
         aggregate = defaultdict(Counter)  # key -> Counter of string values
+        if listing_set is None:
+            listing_set = self.listings.all()
 
         # Step 0: Aggregate token counts
-        for listing in self.listings.all():
-            raw_json = getattr(listing.title, "tokens", {})
-            if isinstance(raw_json, dict):
-                for field, values in raw_json.items():
-                    if isinstance(values, list) and all(isinstance(v, str) for v in values):
-                        for val in values:
-                            aggregate[field][val] += 1
+        for listing in listing_set:
+
+            token_list = list(listing.title.brand_tokens.all()) + list(listing.title.subset_tokens.all()) + \
+                list(listing.title.team_tokens.all()) + list(listing.title.city_tokens.all()) + \
+                list(listing.title.known_name_tokens.all()) + list(listing.title.card_attribute_tokens.all()) + \
+                list(listing.title.condition_tokens.all()) + list(listing.title.parallel_tokens.all()) + list(listing.title.card_name_tokens.all()) + \
+                listing.title.serial_number_tokens + listing.title.card_number_tokens + listing.title.season_tokens      
+
+            print("raw: ", token_list)
+            for token in token_list:
+                if token.primary_token:#tokens without primarytokens are garbage words
+                    aggregate[token.field_key][token.primary_token.raw_value] += 1
+
+            for token in listing.title.unknown_tokens:
+                aggregate["unknown_words"][token] += 1
 
         # Step 1: Build summary output with percentages
         summary = {}
+        total = self.response_count
         for key, counter in aggregate.items():
-            total = sum(counter.values())
             summary[key] = [
                 (count, round((count / total) * 100), val)
                 for val, count in counter.items()
             ]
+
+        # Flatten all unknown tokens across listings
+        unknown_tokens = [
+            token
+            for listing in listing_set
+            for token in listing.title.unknown_tokens
+        ]
+
+        # Add to summary as a single tuple
+        #summary["unknown_words"] = [(1, 100, ", ".join(unknown_tokens))]
 
         print("Aggregate with percentages:")
         for field, entries in summary.items():
@@ -269,10 +289,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
                 print(f"Setting {field_name} to value: {final_value}")
                 setattr(self, field_name, final_value)
-
+        
         self.set_ovr_attribute("title_to_be", self.build_title(), False)
-        self.save()  # persist changes after setting fields
+        self.save()
+        print("Final collapsed tokens:", self.collapsed_tokens)
         return summary
+
 
 
     def update_fields(self, all_field_data):
@@ -306,13 +328,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     @classmethod
     def from_search_results(cls, pcard, items=None, tokenize=True):
         csr = cls.create_empty(pcard)
-            
+        listing_set = []
         if not items is None:
             for idx, item in enumerate(items, 1): 
-                ProductListing.from_search_results(item, csr, tokenize)
-            csr.result_count = len(items)
+                listing = ProductListing.from_search_results(item, csr, tokenize)
+                listing_set.append(listing)
+            csr.response_count = len(items)
             if tokenize:
-                csr.collapsed_tokens = csr.collapse_token_maps()
+                #must pass the listings here to preserve the in memory attributes
+                csr.collapsed_tokens = csr.collapse_token_maps(listing_set)
                 print(csr.collapsed_tokens)
             csr.save()
         return csr
@@ -328,6 +352,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             nr = self.display_value("card_number")
             city = self.display_value("city")
             team = self.display_value("team")
+            isRC = "RC" if "RC" in self.display_value("attributes") else ""
         else:            
             year = fields["year"]
             brand = fields["brand"]
@@ -337,11 +362,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             nr = fields["nr"]
             city = fields["city"]
             team = fields["team"]
+            isRC = "RC" if "RC" in self.fields("attribs") else ""
 
         subset = "" if subset == "-" else subset
         serial = "" if serial == "-" else serial
         print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
-        return f"{year} {brand} {subset} {name} {serial} #{nr} {city} {team}"
+        return f"{year} {brand} {subset} {name} {isRC} {serial} #{nr} {city} {team}"
 
 
     def get_search_strings(self):
@@ -370,10 +396,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def retokenize(self):
         applied_settings = Settings.get_default()
         print(self)
-        for listing in self.listings.all():
-            print(listing.id)
+        listing_set = self.listings.all()
+        for listing in listing_set:
+            #title = listing.title
+            #print("title ID: ", listing.title.id)
             listing.title.tokenize(applied_settings)
-        self.collapse_token_maps()
+            #print("After tokenize:", listing.title.serial_number_tokens)
+
+        self.collapse_token_maps(listing_set)
 
 
 class ProductListing(models.Model):
@@ -397,19 +427,39 @@ class ProductListing(models.Model):
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
         
-        #ultimately this will need to be updated to handle multiple settings objects
+        #TODO:ultimately this will need to be updated to handle multiple settings objects
         if tokenize:
             listing.title.tokenize(Settings.get_default())
 
-            
+        return listing
 
-    
+            
+  
 class ListingTitle(models.Model):
     title = models.CharField(max_length=100, blank=True)
     tokens = models.JSONField(default=dict, blank=True)
+    
     parent_listing = models.OneToOneField(ProductListing, on_delete=models.CASCADE, default=1, related_name="title")  
     
-    #move this somewhere else
+    #TODO: needs condensing down in to a generic token reference at least
+    brand_tokens = models.ManyToManyField(Brand, blank=True, related_name="listing_titles")
+    subset_tokens = models.ManyToManyField(Subset, blank=True, related_name="listing_titles")
+    team_tokens = models.ManyToManyField(Team, blank=True, related_name="listing_titles")   
+    city_tokens = models.ManyToManyField(City, blank=True, related_name="listing_titles")
+    known_name_tokens = models.ManyToManyField(KnownName, blank=True, related_name="listing_titles")
+    card_attribute_tokens = models.ManyToManyField(CardAttribute, blank=True, related_name="listing_titles")
+    condition_tokens = models.ManyToManyField(Condition, blank=True, related_name="listing_titles")
+    parallel_tokens = models.ManyToManyField(Parallel, blank=True, related_name="listing_titles")
+    card_name_tokens = models.ManyToManyField(CardName, blank=True, related_name="listing_titles")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.serial_number_tokens = []
+        self.card_number_tokens = []
+        self.season_tokens = []
+        self.unknown_tokens = []
+
+    #TODO: move this somewhere else
     def normalize_word(self, word):
     # Strip leading "#" if it's a card number (e.g. "#23" → "23")
         if word.startswith("#") and any(char.isdigit() for char in word):
@@ -420,45 +470,79 @@ class ListingTitle(models.Model):
         tokens = {}
         print(self.id)
         #this logic relies on the fact that the "key" must match something defined by reading in settings.  Thus, don't change these
-        temp_title, tokens = Season.match_extract(self.title, tokens, "season", applied_settings, return_first_match=False)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = Brand.match_extract(temp_title, tokens, "brands", applied_settings)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = KnownName.match_extract(temp_title, tokens, "names", applied_settings)  
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = City.match_extract(temp_title, tokens, "cities", applied_settings)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = Team.match_extract(temp_title, tokens, "teams", applied_settings)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = Condition.match_extract(temp_title, tokens, "condition", applied_settings, return_first_match=False)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = Subset.match_extract(temp_title, tokens, "subsets", applied_settings)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = CardAttribute.match_extract(temp_title, tokens, "attribs", applied_settings, return_first_match=False)
-        print(temp_title)
-        print(tokens)
-
+        temp_title, tokens, self.season_tokens = Season.match_extract(self.title, tokens, "year", applied_settings, return_first_match=False)
+        print("New tokens: ", self.season_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = Brand.match_extract(temp_title, tokens, "brands", applied_settings)
+        self.brand_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = Parallel.match_extract(temp_title, tokens, "parallel", applied_settings)
+        self.parallel_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = KnownName.match_extract(temp_title, tokens, "names", applied_settings)
+        self.known_name_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = City.match_extract(temp_title, tokens, "cities", applied_settings)
+        self.city_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = Team.match_extract(temp_title, tokens, "teams", applied_settings)
+        self.team_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = Condition.match_extract(temp_title, tokens, "condition", applied_settings, return_first_match=True)
+        self.condition_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = Subset.match_extract(temp_title, tokens, "subsets", applied_settings)
+        self.subset_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = CardName.match_extract(temp_title, tokens, "card_name", applied_settings, return_first_match=True)
+        self.card_name_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, new_tokens = CardAttribute.match_extract(temp_title, tokens, "attribs", applied_settings, return_first_match=False)
+        self.card_attribute_tokens.set(new_tokens)
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
         #I think these can go anywhere without conflicting with anythign except each other
-        temp_title, tokens = CardNumber.match_extract(temp_title, tokens, "cardnr", applied_settings, return_first_match=False)
-        print(temp_title)
-        print(tokens)
-        temp_title, tokens = SerialNumber.match_extract(temp_title, tokens, "serial", applied_settings, return_first_match=False)
-        print(temp_title)
-        print(tokens)
+        temp_title, tokens, self.card_number_tokens = CardNumber.match_extract(temp_title, tokens, "cardnr", applied_settings, return_first_match=False)
+        
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
+        temp_title, tokens, self.serial_number_tokens = SerialNumber.match_extract(temp_title, tokens, "serial", applied_settings, return_first_match=False)
+         
+        print("New tokens: ", new_tokens)
+        print("old tokens: ", tokens)
+        print("Remaining Title: ", temp_title)
 
         unknown_tokens = re.findall(r'\b#?[a-z0-9]{2,}(?:-[a-z0-9]{2,})?\b', temp_title.lower())
         unknown_tokens = [self.normalize_word(t) for t in unknown_tokens if len(t) >= 3]
-        tokens["unknown"] = unknown_tokens
+        self.unknown_tokens = unknown_tokens
         print ("hi", self.id)
-        self.tokens = tokens
+        #self.tokens = tokens
+
         self.save()
+        
+        print(self.id)
+        print ("end tokenize: ", self.serial_number_tokens)
+        print ("end tokenize: ", self.card_number_tokens)
+        print ("end tokenize: ", self.season_tokens)
 
     def __str__(self):
         return self.title

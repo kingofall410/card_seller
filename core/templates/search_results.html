@@ -3,6 +3,7 @@
 {% get_display as displayable %}
 {% get_calculated as calculated %}
 {% get_textonly as textonly %}
+{% get_checkboxes as checkboxes %}
 
 
 <style>
@@ -11,6 +12,24 @@
     color: #999;
     cursor: not-allowed;
   }
+
+  .ui-menu-item.autocomplete-disabled.ui-state-active {
+  background-color: #ffe5e5 !important; /* light red background */
+  color: #d00 !important;               /* strong red text */
+  font-weight: bold;
+}
+
+  .autocomplete-disabled {
+    color: #999;
+    pointer-events: none;
+    cursor: default;
+  }
+
+.input-error {
+  border: 2px solid red;
+  background-color: #ffe5e5;
+}
+
 </style>
 
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
@@ -25,9 +44,19 @@ $(document).ready(function () {
   
   // 🧩 Allow HTML in autocomplete labels
   $.ui.autocomplete.prototype._renderItem = function (ul, item) {
-    return $("<li>").append(`<div>${item.label}</div>`).appendTo(ul);
-  };
+    if (item.isDivider) {
+      return $("<li>")
+        .addClass("autocomplete-divider")
+        .append("<hr style='margin:4px 0;'>")
+        .appendTo(ul);
+    }
 
+    const li = $("<li>")
+      .addClass(item.disabled ? "autocomplete-disabled" : "")
+      .append($("<div>").text(item.label));
+
+    return li.appendTo(ul);
+  };
   // 🗂️ Initialize saved values
   const savedValues = {};
   $("input[type='text']").each(function () {
@@ -54,16 +83,15 @@ $(document).ready(function () {
     const cardId = "{{ card_id }}";
     const csrId = "{{ search_result.id }}";
     let fields = collectAllFields(cardId);
-    console.log("Collected fields no?:", fields);
     $(selector).autocomplete({
-      minLength: 1,
+      minLength: 0,
       autoFocus: true,
       source: function (request, response) {
         
         fields = collectAllFields(cardId);
-        console.log("Collected fields ya?:", fields);
+        console.log("Collected fields:", fields);
         $.ajax({
-          url: "/autocomplete/",
+          url: "/get_dynamic_options/",
           type: "POST", // must be POST to send JSON body
           data: JSON.stringify({
             term: request.term,
@@ -73,20 +101,18 @@ $(document).ready(function () {
           }),
           contentType: "application/json", // correct header for JSON
           success: function (data) {
+            console.log(data)
             const results = data.map(opt => ({
               label: opt.label,
-              value: opt.value
+              value: opt.value,
+              isDivider: opt.is_divider || false,
+              disabled: opt.disabled || false
             }));
-
-            if (results.length === 0) {
-              results.push({
-                label: `<em>Add '${request.term}'</em>`,
-                value: "__add__",
-                rawValue: request.term
-              });
+            if (results.length > 1) {//filter out results with just HR
+              response(results);
+            } else {
+              response([]);
             }
-
-            response(results);
           },
           error: function (xhr) {
             console.error("Autocomplete error:", xhr.responseText);
@@ -96,52 +122,10 @@ $(document).ready(function () {
 
       },
       select: function (event, ui) {
-        const match = this.id.match(/^field_(.+)-(\d+)$/);
-        if (!match) {
-          console.warn("Unexpected field ID format:", this.id);
-          return;
-        }
+        handleSelect(selector, event, ui);
+        return false; // Prevent default behavior
+      },
 
-        const fieldName = match[1];
-        const cardId = match[2];
-
-        console.log(cardId)
-        if (ui.item.value === "__add__") {
-          const inputValue = ui.item.rawValue;
-          const allFields = collectAllFields(cardId);
-
-          allFields["new_field"] = fieldName;
-          allFields["new_value"] = inputValue;
-
-          if (!savedValues[fieldName]) {
-            savedValues[fieldName] = new Set();
-          }
-          savedValues[fieldName].add(inputValue);
-        
-          $.ajax({
-            url: "/add_token/",
-            method: "POST",
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            
-            data: JSON.stringify({
-              field_key: fieldName,
-              token: inputValue,
-              fields: allFields ,
-            }),
-            success: response => console.log("Token added:", response),
-            error: xhr => console.error("Error adding token:", xhr.responseText)
-          });
-
-          handleManualInput(fieldName, cardId);
-          return false;
-        } else {
-          $(this).val(ui.item.value);
-          handleManualInput(fieldName, cardId);
-          return false;
-        }
-      }
     })
     .on("focus", function () {
       $(this).select();
@@ -234,6 +218,16 @@ function collectAllFields(cardId) {
       allFields[name] = value;
     }
   });
+  document.querySelectorAll(".calculated-input").forEach(input => {
+    input.addEventListener("input", function () {
+      const maxLength = parseInt(this.dataset.maxlength, 10);
+      if (this.value.length > maxLength) {
+        this.classList.add("input-error");
+      } else {
+        this.classList.remove("input-error");
+      }
+    });
+  });
 
   // Checkboxes
   document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
@@ -252,6 +246,71 @@ function collectAllFields(cardId) {
   return allFields;
 }
 
+function handleSelect(selector, event, ui) {
+  const selectedValue = selector.value;
+  console.log("Selected value:", selector);
+  // You can add more logic here to handle the selected value
+  
+  console.log("Selected item:", ui.item);
+  const match = selector.match(/^#field_(.+)-(\d+)$/);
+  if (!match) {
+    console.warn("Unexpected field ID format:", selector);
+    return;
+  }
+
+  const fieldName = match[1];
+  const cardId = match[2];
+  console.log("fieldName", fieldName)
+  const inputValue = $(selector).val(); // current text box value
+
+  console.log(cardId);
+  console.log("dan", ui);
+    // If selected item is disabled, fallback to input value
+
+  if (ui.item.disabled) {
+    console.log("Disabled item selected, using input value:", inputValue);
+    ui.item.value = "__add__";
+    //handleManualInput(fieldName, cardId);
+    //return false;
+  }
+
+  if (ui.item.value && (ui.item.value === "__add__")) {
+    const rawValue = ui.item.rawValue || inputValue;
+    const allFields = collectAllFields(cardId);
+
+    allFields["new_field"] = fieldName;
+    allFields["new_value"] = rawValue;
+
+    /* this doesn't work since I moved it out of the block above
+    I don't think I care for now.
+    if (!savedValues[fieldName]) {
+      savedValues[fieldName] = new Set();
+    }
+    savedValues[fieldName].add(rawValue);
+*/
+    $.ajax({
+      url: "/add_token/",
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: JSON.stringify({
+        field_key: fieldName,
+        token: rawValue,
+        fields: allFields,
+      }),
+      success: response => console.log("Token added:", response),
+      error: xhr => console.error("Error adding token:", xhr.responseText)
+    });
+
+    handleManualInput(fieldName, cardId);
+    return false;
+  } else {
+    $(this).val(ui.item.value);
+    handleManualInput(fieldName, cardId);
+    return false;
+  }
+}
 
 
 // Enable/disable field on checkbox toggle
@@ -267,7 +326,6 @@ function handleOverrideToggle(fieldName, cardId) {
     input.value = defaultValue || "-";
   }
 }
-
 
 function handleManualInput(fieldName, cardId) {
   console.log(`handleManualInput called with field="${fieldName}", idx=${cardId}`);
@@ -291,10 +349,14 @@ function handleManualInput(fieldName, cardId) {
         const titleParts = [
           fields.year,
           fields.brand,
-          fields.subset,
+          fields.subset !=" " ? `${fields.subset}` : null,
           fields.full_name,
-          fields.parallel,
-          fields.serial_number !="-" ? `${fields.serial_number}` : null,
+          fields["1st"] ? "1st" : null,
+          fields.RC ? "RC" : null,
+          fields.HOF ? "HOF" : null,
+          fields.Auto ? "Auto" : null,
+          fields.parallel !=" " ? `${fields.parallel}` : null,
+          fields.serial_number !="-" ? `${fields.serial_number}` : null, 
           fields.card_number != "-" ? `#${fields.card_number}` : null,
           fields.city,
           fields.team
@@ -311,7 +373,27 @@ function handleManualInput(fieldName, cardId) {
       console.log("No title element or checkbox is checked.");
     }
   }
+  console.log("here")
+  const titleElement = document.getElementById(titleFieldId);
+  const maxLength = parseInt(titleElement.dataset.maxlength, 10);
+  if (titleElement.value.length > maxLength) {
+    console.log("add")
+    titleElement.classList.add("input-error");
+  } else {
+    titleElement.classList.remove("input-error");
+    console.log("remove")
+  }
 } 
+
+function handleEnterPress(fieldName, cardCounter) {
+  const inputId = `field_${fieldName}-${cardCounter}`;
+  const value = document.getElementById(inputId).value;
+  
+  // Your logic here
+  console.log(`Enter pressed in ${inputId}:`, value);
+  // You could trigger a save, validation, AJAX call, etc.
+}
+
 </script>
 
 {{ search_result.id }}
@@ -332,7 +414,9 @@ function handleManualInput(fieldName, cardId) {
                 name="title_to_be_m"
                 value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
-                data-default="{{ resolved_value }}">
+                data-default="{{ resolved_value }}"
+                data-maxlength="80"
+                oninput="handleManualInput('title_to_be', {{ card_counter }})">
       </td>
     </tr>
 
@@ -370,6 +454,7 @@ function handleManualInput(fieldName, cardId) {
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
                 oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})"
                 {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
           
           {% elif field_name in calculated %}
@@ -382,7 +467,35 @@ function handleManualInput(fieldName, cardId) {
                 data-default="{{ resolved_value }}"
                 oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
                 {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
-        
+            {% elif field_name in checkboxes %}
+              <!-- D: Checkbox group -->
+              <div style="display: flex; flex-direction: column;">
+              {% get_all_options field_name as options %}
+              {% for option in options %}
+                <label style="margin-bottom: 4px;">
+                  <input type="checkbox"
+                        id="field_{{ field_name }}-{{ option }}-{{ card_counter }}"
+                        name="{{ option }}"
+                        value="{{ option }}"
+                        {% if option in resolved_value %}checked{% endif %}
+                        onchange="handleManualInput('{{ field_name }}', {{ card_counter }})">
+                  {{ option }}
+                </label>
+              {% endfor %}
+          </div>
+          {% elif field_name in textonly %}
+            <!-- E: Textarea for text-only fields -->
+            <textarea
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                rows="5"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})">
+              {{ resolved_value }}
+            </textarea>
+
+
           {% else %}
             <!-- C: Fallback textarea -->
             <textarea

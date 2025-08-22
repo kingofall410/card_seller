@@ -19,6 +19,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
 from django.urls import reverse
+from django.db.models import F
+
 
 
 BASE_DIR = os.path.join(settings.BASE_DIR)  # example folder
@@ -28,8 +30,10 @@ def hello_world(request):
     return render("success.html")
 
 def test_view(request):
-    Condition.objects.all().delete()
 
+    for para in Parallel.objects.all():
+        para.primary_token = para
+        para.save()
 
 
 def crop_review(request, card_id):
@@ -103,23 +107,25 @@ def view_card(request, card_id):
 
 @csrf_exempt
 def add_token(request):
-    #print(request.body)
+    print("body", request.body)
     if request.method == 'POST':
         data = json.loads(request.body)
         field_key = data.get("field_key")
         new_value = data.get("token", "")
         allFields = data.get("fields", {})
 
-        #print(f"add_token: {field_key}: {new_value}")
-        #print(allFields)
+        print(f"add_token: {field_key}: {new_value}")
+        print(allFields)
 
-        if app_settings.add_token(CardSearchResult.stupid_map(field_key), new_value, allFields ):
+        if app_settings.add_token(field_key, new_value, allFields):
             return JsonResponse({"success": True, "error": ""})
-    return JsonResponse({"error": True, "error": "No results"})
+    return JsonResponse({"error": True, "error": "Failed to add token"})
 
 @csrf_exempt
-def autocomplete(request):
+def get_dynamic_options(request):
     print(request.body)
+    options = []
+    indie_options = []
     if request.method == 'POST':
         try:
             data = json.loads(request.body.decode('utf-8'))
@@ -133,39 +139,126 @@ def autocomplete(request):
         filter_kwargs = {"raw_value__icontains": term}
         #TODO: this is naive and replicates logic in custom_tags.py
         #TODO: need to find a betyter way to differentiate between tokens and more complicated fields (#s)
+        #TODO: ultimately I need to implement serialnr, year, etc
         if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
-            field_key = Brand.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                Brand.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
+
+            if csr_id:
+                indie_options = CardSearchResult.objects.get(id=csr_id).get_individual_options("brands")
             #[obj.raw_value for obj in Brand.objects.order_by("raw_value")]
         elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
-            options = Subset.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                Subset.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
+            if csr_id:
+                indie_options = CardSearchResult.objects.get(id=csr_id).get_individual_options("subsets")
             #return [(obj.parent_brand.raw_value, obj.raw_value) for obj in Subset.objects.order_by("raw_value")]
         elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
-            options = KnownName.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                KnownName.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
+            if csr_id:
+                indie_options = CardSearchResult.objects.get(id=csr_id).get_individual_options("names")
             #return [obj.raw_value for obj in KnownName.objects.order_by("raw_value")]
         elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
-            options = Team.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                Team.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
+            if csr_id:
+                indie_options = CardSearchResult.objects.get(id=csr_id).get_individual_options("teams")
             #return [obj.raw_value for obj in Team.objects.order_by("raw_value")]
         elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
-            options = City.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                City.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
+            if csr_id:
+                indie_options = CardSearchResult.objects.get(id=csr_id).get_individual_options("cities")
             #return [obj.raw_value for obj in City.objects.order_by("raw_value")]
         elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
-            options = CardAttribute.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                CardAttribute.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
             #return [obj.raw_value for obj in CardAttribute.objects.order_by("raw_value")]
         elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
-            options = Condition.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
-            #return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
+            options = list(
+                Condition.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
         elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
-            options = Parallel.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
-            #return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
-        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
-            options = Parallel.objects.filter(**filter_kwargs).values_list("raw_value", flat=True).distinct()[:50]
+            options = list(
+                Parallel.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                .values_list("raw_value", flat=True)
+                .distinct()[:50]
+            )
             #return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
         elif field_key == "cardnr" or field_key == CardSearchResult.stupid_map("cardnr"):
-            options = CardSearchResult.objects.get(id=csr_id).get_cardnr_options()
+            pass#no autocomplete for cardnr
+            #options = list(CardSearchResult.objects.get(id=csr_id).get_individual_options("cardnr"))
+        elif field_key == "serial_number" or field_key == CardSearchResult.stupid_map("serial_number"):
+            pass#no autocomplete for serial_number
+            #options = list(CardSearchResult.objects.get(id=csr_id).get_individual_options("serial_number"))
+        elif field_key == "year" or field_key == CardSearchResult.stupid_map("year"):
+            pass#no autocomplete for year
+           #options = list(CardSearchResult.objects.get(id=csr_id).get_individual_options("year"))
         if not field_key:
             return JsonResponse([], safe=False)
+        
+    seen = set()
+    ordered_options = []
 
-    return JsonResponse([{"label": opt, "value": opt} for opt in options], safe=False)
+    indie_set = set(indie_options)
+    seen = set()
+    ordered_options = []
+
+    # Add indie options first
+    for val in indie_options:
+        if val not in seen:
+            ordered_options.append({
+                "label": val,
+                "value": val,
+                "is_indie": True,
+                "disabled": not val.lower().startswith(term.lower())  # basic match logic
+            })
+            seen.add(val)
+
+    # Insert divider
+    ordered_options.append({
+        "label": "---",
+        "value": "__divider__",
+        "is_divider": True
+    })
+
+    # Add non-indie options
+    for val in options:
+        if val not in seen:
+            ordered_options.append({
+                "label": val,
+                "value": val,
+                "is_indie": False,
+                "disabled": False
+            })
+            seen.add(val)
+
+    return JsonResponse(ordered_options, safe=False)
+
+
+
+
 
 @csrf_exempt
 def update_csr_fields(request):
@@ -289,18 +382,21 @@ def upload_image_no_id(request):
     collection = Collection.get_default()
     return redirect(f"/upload_image/{collection.id}")
              
-def upload_image(request, collection_id):
-    match_back = True#should eventually be passed in from the html
+def upload_image(request):
 
-    print("collection_id2: ", collection_id)
-    if collection_id and collection_id != "" and collection_id != "None":
-        collection = Collection.objects.get(id=collection_id) 
-    else:
-        collection = Collection.get_default()
-    
-    print("collection_id2: ", collection.id)
+    collection_id = "__Add__"
     if request.method == 'POST':
+     
         uploaded_files = sorted(request.FILES.getlist('images'), key=lambda r: r.name)
+        collection_id = request.POST.get('collection_id')
+        
+        print("collection_id1: ", collection_id)
+        if collection_id == "__Add__":
+            collection = Collection.objects.create()
+            collection_id = collection.id
+        else:
+            collection = Collection.objects.get(id=collection_id)        
+        
         return_cards = []
         if len(uploaded_files) > 0:
             timestamp_folder = now().strftime("%Y%m%d_%H%M%S/")  # e.g., '20250701_125342'
@@ -330,7 +426,7 @@ def upload_image(request, collection_id):
 
             return redirect(f"/collection/{collection.id}")
                            
-    return render(request, "upload_image.html", {"collection_id":collection.id})
+    return render(request, "upload_image.html", {"collection_id":collection_id})
 
 def select_directory(request):
     if request.method == "POST":
@@ -412,15 +508,17 @@ def update_settings(request):
     if request.method == 'POST':
         nr_returned_listings = request.POST.get('nr_returned_listings')
         nr_collection_page_items = request.POST.get('nr_collection_page_items')
+        field_pct_threshold = request.POST.get('field_pct_threshold')
         settings = Settings.objects.first()  # or however you fetch it
         settings.nr_returned_listings = nr_returned_listings
         settings.nr_collection_page_items = nr_collection_page_items
+        settings.field_pct_threshold = field_pct_threshold
         settings.save()
     return redirect('settings')
 
 def collection_create(request):
     new_collection = Collection.objects.create()
-    return redirect(reverse(f"upload_image/${new_collection.id}"))
+    return redirect(reverse(f"upload_image/{new_collection.id}"))
 
 @csrf_exempt
 def settings_file_upload(request, file_type):

@@ -6,7 +6,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-TOKEN_PATH = 'token.json'  # Stores user's access/refresh token
+TOKEN_PATH = 'credentials/token.json'  # Stores user's access/refresh token
 CREDENTIALS_PATH = 'credentials/credentials.json'  # OAuth client credentials
 
 class GoogleDriveUploader:

@@ -2,8 +2,8 @@
   .settings-block {
     display: flex;
     flex-direction: column;
-    gap: 16px; /* consistent vertical spacing between file + autocomplete */
-    margin-bottom: 40px; /* spacing between blocks */
+    gap: 16px;
+    margin-bottom: 40px;
   }
 
   hr {
@@ -12,8 +12,21 @@
     margin: 32px 0;
   }
 
+  input {
+    /* No transition by default */
+  }
+
+  input.fading {
+    transition: background-color 2s ease, border-color 2s ease;
+  }
+
+  .error {
+    border: 2px solid red;
+    background-color: #ffe6e6;
+  }
 
 </style>
+
 {% include "header.html" %}
 {% load static %}
 {# Load Brand Configuration #}
@@ -43,6 +56,12 @@
     <input type="number" id="nr_collection_page_items" name="nr_collection_page_items"
       value="{{ settings.nr_collection_page_items }}" min="1" max="100"
       style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
+    <label for="field_pct_threshold" style="font-weight: bold; margin-right: 12px;">
+      % Threshold for Field Inclusion:
+    </label>
+    <input type="number" id="field_pct_threshold" name="field_pct_threshold"
+      value="{{ settings.field_pct_threshold }}" min="1" max="100"
+      style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
     <button type="submit" style="margin-left: 12px; padding: 6px 12px; background-color: #333; color: white; border: none; border-radius: 4px;">
       Save
     </button>
@@ -59,34 +78,42 @@ function submitQuickAdd(fieldKey) {
   console.log("submit ", fieldKey);
   const input = document.getElementById(`quick-add-${fieldKey}`);
   const value = input.value.trim();
+
+  // Clear any previous error state
+  input.classList.remove('error');
+
   if (value) {
     fetch('/add_token/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      field_key: fieldKey,
-      token: value
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        field_key: fieldKey,
+        token: value
+      })
     })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      input.value = '';
-      window.location.reload();
-      
-    } else {
-      console.error('Server error:', data.error);
-    }
-  })
-  .catch(err => {
-    console.error('Request failed:', err);
-  });
-    (fieldKey, value);
-    input.value = ''; // Clear after adding
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        input.value = '';
+        window.location.reload();
+      } else {
+        console.error('Server error:', data.error);
+        triggerErrorHighlight(input);
+      }
+    })
+    .catch(err => {
+      console.error('Request failed:', err);
+      triggerErrorHighlight(input);
+    });
   }
 }
 
-
+function triggerErrorHighlight(input) {
+  input.classList.add('error');
+  setTimeout(() => {
+    input.classList.remove('error');
+  }, 2000); // fade out after 2 seconds
+}
 </script>

@@ -102,7 +102,7 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     if not user_settings:
         user_settings = User.objects.first().active_settings.first()
     
-    if field_key == "brands": 
+    if field_key == "brands" or field_key == "brand": 
         new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
 
     elif field_key == "subsets":
@@ -120,8 +120,9 @@ def add_token(field_key, value, all_field_data, user_settings=None):
         if city_obj:
             new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)
 
-    elif field_key == "names":
-        new_obj = KnownName.create(value=value, settings=user_settings, field=field_key)
+    elif field_key == "names" or field_key == "full_name":
+        print("Creating KnownName with value:", value)
+        new_obj = KnownName.create(value=value, settings=user_settings, field="names")
     elif field_key == "attribs":
         new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "condition":

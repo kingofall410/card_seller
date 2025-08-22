@@ -35,6 +35,10 @@
     <!-- 📁 Collection Selector -->
     <label for="collection-select">Choose a Collection:</label>
     <select name="collection_id" id="collection-select">
+
+        <option value="__Add__" {% if collection_id == "__Add__" %}selected{% endif %}>
+            New Collection...
+        </option>
         {% for collection in collections %}
         <option value="{{ collection.id }}" {% if collection.id == collection_id %}selected{% endif %}>
             Collection #{{ collection.id }}
@@ -59,10 +63,10 @@
     input.addEventListener('change', () => {
         const files = input.files;
         if (files.length > 0) {
-        const names = Array.from(files).map(f => f.name).join(', ');
-        nameDisplay.textContent = `Selected ${files.length} image(s): ${names}`;
+            const names = Array.from(files).map(f => f.name).join(', ');
+            nameDisplay.textContent = `Selected ${files.length} image(s): ${names}`;
         } else {
-        nameDisplay.textContent = '';
+            nameDisplay.textContent = '';
         }
     });
     </script>

@@ -109,42 +109,42 @@ class Card(models.Model):
         if crop:
 
             cropped, portrait, crop_params = card.crop_and_align_card(filepath)            
+            if cropped and portrait and crop_params:
+                # Save cropped image and path
+                base, _ = os.path.splitext(os.path.basename(filepath))
+                cropped_filename = f"{base}_cropped.jpg"    
+                print(cropped_filename)
+                card.cropped_image = CroppedImage.create(save_to_filepath=cropped_filename, content=cropped, crop_params=crop_params)
 
-            # Save cropped image and path
-            base, _ = os.path.splitext(os.path.basename(filepath))
-            cropped_filename = f"{base}_cropped.jpg"    
-            print(cropped_filename)
-            card.cropped_image = CroppedImage.create(save_to_filepath=cropped_filename, content=cropped, crop_params=crop_params)
-
-            # Save portrait image and path
-            portrait_filename = f"{base}_portrait.jpg"    
-            card.portrait_image = CroppedImage.create(save_to_filepath=portrait_filename, content=portrait)
-            
-            card.save()
-            
-            if match_back and card.reverse_image:   
+                # Save portrait image and path
+                portrait_filename = f"{base}_portrait.jpg"    
+                card.portrait_image = CroppedImage.create(save_to_filepath=portrait_filename, content=portrait)
                 
-                 # Crop and save reverse 
-                cropped_back, portrait_back, crop_params_back = card.crop_and_align_card(card.reverse_image.img.path)
+                card.save()
                 
-                base, _ = os.path.splitext(os.path.basename(card.reverse_image.img.path))
-                cropped_back_filename = f"{base}_cropped.jpg"    
-                portrait_back_filename = f"{base}_portrait.jpg"
-                print(cropped_back_filename)
-                print(portrait_back_filename)
-                card.cropped_reverse = CroppedImage.create(save_to_filepath=cropped_back_filename, content=cropped_back, crop_params=crop_params_back)
-                card.save()
-                print(card.cropped_reverse.crop_params.first())
-                print("port-1: ", card.cropped_reverse.img.url)
-                # Save portrait back image and path
-                card.portrait_reverse = CroppedImage.create(save_to_filepath=portrait_back_filename, content=portrait_back)
-                card.save()
-        print("IDs: ", card.id, card.reverse_id)
+                if match_back and card.reverse_image:   
+                    
+                    # Crop and save reverse 
+                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card(card.reverse_image.img.path)
+                    if cropped_back and portrait_back and crop_params_back:
+                        base, _ = os.path.splitext(os.path.basename(card.reverse_image.img.path))
+                        cropped_back_filename = f"{base}_cropped.jpg"    
+                        portrait_back_filename = f"{base}_portrait.jpg"
+                        print(cropped_back_filename)
+                        print(portrait_back_filename)
+                        card.cropped_reverse = CroppedImage.create(save_to_filepath=cropped_back_filename, content=cropped_back, crop_params=crop_params_back)
+                        card.save()
+                        print(card.cropped_reverse.crop_params.first())
+                        print("port-1: ", card.cropped_reverse.img.url)
+                        # Save portrait back image and path
+                        card.portrait_reverse = CroppedImage.create(save_to_filepath=portrait_back_filename, content=portrait_back)
+                        card.save()
+        '''print("IDs: ", card.id, card.reverse_id)
         print("crop: ", card.cropped_image.url())
         print("rev port:", card.portrait_reverse.url() if card.portrait_reverse else "None")
         print("rev crop:", card.cropped_reverse.url() if card.cropped_reverse else "None")
         print("img: ", card.uploaded_image.url() if card.uploaded_image else "None")
-        print("rev:", card.reverse_image.url() if card.reverse_image else "None")
+        print("rev:", card.reverse_image.url() if card.reverse_image else "None")'''
 
         return card, match_back_success
     
@@ -352,10 +352,7 @@ class Card(models.Model):
 
         # Find all contours visible in the image
         contours, _ = cv2.findContours(edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            print("⚠️ No contours detected.")
-            return None, None
-
+        
         selected_contour = None
         max_box_area = 0
 
@@ -374,9 +371,17 @@ class Card(models.Model):
 
         # 🔁 Fallback to largest contour if nothing passes
         if selected_contour is None:
-            print("⚠️ No suitable contour met criteria — falling back to largest.")
-            selected_contour = max(contours, key=cv2.contourArea)
-
+            if len(contours) > 0:
+                print("⚠️ No suitable contour met criteria — falling back to largest.")
+                selected_contour = max(contours, key=cv2.contourArea)
+            else:
+                print("⚠️ No contours found — falling back to boundary.")
+                selected_contour = np.array([
+                    [[0, 0]],
+                    [[original_image_width - 1, 0]],
+                    [[original_image_width - 1, original_image_height - 1]],
+                    [[0, original_image_height - 1]]
+            ])
         
         rect = cv2.minAreaRect(selected_contour)
         bounding_box_points = cv2.boxPoints(rect)

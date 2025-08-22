@@ -2,6 +2,7 @@ from django import template
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Card import Collection
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
+from django.db.models import F
 
 register = template.Library()
 
@@ -61,6 +62,10 @@ def get_display():
     return CardSearchResult.display_fields
 
 @register.simple_tag
+def get_checkboxes():
+    return CardSearchResult.checkbox_fields
+
+@register.simple_tag
 def get_calculated():
     return CardSearchResult.calculated_fields
 
@@ -69,26 +74,42 @@ def get_textonly():
     return CardSearchResult.text_fields
 
 @register.simple_tag
-def get_autocomplete_options(field_key):
-
-    if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
-        return [obj.raw_value for obj in Brand.objects.order_by("raw_value")]
-    elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
-        return [(obj.parent_brand.raw_value, obj.raw_value) for obj in Subset.objects.order_by("raw_value")]
-    elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
-        return [obj.raw_value for obj in KnownName.objects.order_by("raw_value")]
-    elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
-        return [obj.raw_value for obj in Team.objects.order_by("raw_value")]
-    elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
-        return [obj.raw_value for obj in City.objects.order_by("raw_value")]
-    elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
-        return [obj.raw_value for obj in CardAttribute.objects.order_by("raw_value")]
-    elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
-        return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
-    elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
-        return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
-
-@register.simple_tag(takes_context=True)
-def build_title(context, fields=None):
-    
-    return context["card"][1].build_title(fields)
+def get_all_options(field_key, csrId=None):
+    if not csrId:
+        #if no specific CSR Is passed, we just return everything
+        if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
+            return [obj.raw_value for obj in Brand.objects.order_by("raw_value")]
+        elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
+            return [(obj.parent_brand.raw_value, obj.raw_value) for obj in Subset.objects.order_by("raw_value")]
+        elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
+            return [obj.raw_value for obj in KnownName.objects.order_by("raw_value")]
+        elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
+            return [obj.raw_value for obj in Team.objects.order_by("raw_value")]
+        elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
+            return [obj.raw_value for obj in City.objects.order_by("raw_value")]
+        elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
+            #TODO: move this into SettingsToken
+            return [obj.primary_token.raw_value for obj in CardAttribute.objects.filter(primary_token_id=F("id")).order_by("raw_value")]
+        elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
+            return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
+        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+            return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
+    else:
+        csr = CardSearchResult.objects.get(id=csrId)
+        if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
+            return [obj.raw_value for obj in csr.brands.all()]
+        elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
+            return [(obj.parent_brand.raw_value, obj.raw_value) for obj in csr.subsets.all()]
+        elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
+            return [obj.raw_value for obj in csr.names.all()]
+        elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
+            return [obj.raw_value for obj in csr.teams.all()]
+        elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
+            return [obj.raw_value for obj in csr.cities.all()]
+        elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
+            return [opt for opt in csr.get_individual_options("attribs")]
+        elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
+            print([obj.raw_value for obj in csr.condition.all()])
+            return [obj.raw_value for obj in csr.condition.all()]
+        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+            return [obj.raw_value for obj in csr.parallel.all()]
