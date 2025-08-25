@@ -5,12 +5,24 @@ import numpy as np
 import cv2
 from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult
-
+'''think about next steps: many require more ebay api work
+0.test expanding search results
+1. locking specific fields to improve search results
+    a. by setting attribute filters
+    b. by filtering based on title tokens
+2. text search
+3. pricing
+    a. ebay listing prices --> pulled regularly and stored for analytics
+    b market movers scrape, 120pt
+long term: market movers, 
+4. listing
+5. Long term selling analytics
+6. google trends'''
 class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
-    
-       
+    parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
+           
     @classmethod
     def get_default(cls):
         return Collection.objects.first()
@@ -20,7 +32,7 @@ class Collection(models.Model):
     
     def get_size(self):
         return len(self.cards.all())
-    
+
 
 class Card(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)
@@ -35,8 +47,7 @@ class Card(models.Model):
     reverse_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse", null=True)
     cropped_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_crop", null=True)
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
-
-    
+   
 
     def get_lookup_image(self):
         if self.cropped_image:

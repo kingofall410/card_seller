@@ -101,8 +101,11 @@ def view_collection(request, collection_id=None):
     return render(request, "collection.html", {"page_obj": page_obj, "collection_id":collection.id})
 
 @csrf_exempt    
-def view_card(request, card_id):        
-    pass#return view_collection(request, [Card.objects.get(id=card_id)])
+def view_card(request, card_id):
+    if card_id:
+        card = Card.objects.get(id=card_id)
+        
+    return render(request, "card.html", {"card": card, "search_results":card.active_search_results()})
 
 
 @csrf_exempt
@@ -258,7 +261,27 @@ def get_dynamic_options(request):
 
 
 
+@csrf_exempt
+def update_collection(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
 
+    collection_id = request.POST.get("collectionId")
+    if not collection_id or not collection_id.isdigit():
+        return JsonResponse({"error": True, "message": "Missing or invalid collectionId"}, status=400)
+
+    try:
+        collection = Collection.objects.get(id=int(collection_id))
+    except Collection.DoesNotExist:
+        return JsonResponse({"error": True, "message": f"Collection with id {collection_id} not found"}, status=404)
+
+    new_name = request.POST.get("name", "").strip()
+    if not new_name:
+        return JsonResponse({"error": True, "message": "Missing collection name"}, status=400)
+
+    collection.name = new_name
+    collection.save()
+    return JsonResponse({"success": True, "message": "Collection updated successfully"})
 
 @csrf_exempt
 def update_csr_fields(request):
@@ -292,6 +315,9 @@ def update_csr_fields(request):
         return JsonResponse({"error": True, "message": f"Update failed: {str(e)}"}, status=500)
 
 
+def manage_collection(request):
+    collections = Collection.objects.order_by('-id')
+    return render(request, "manage_collection.html", {"root_collections": collections})
 
 @csrf_exempt
 def image_search(request, card_id):
@@ -329,6 +355,29 @@ def retokenize(request, csr_id):
 
     return JsonResponse({"success": True, "error": ""})
 
+
+@csrf_exempt
+def delete(request):
+    print("delete", request)
+    if request.method == 'POST':
+        print("POST")
+        card_id = request.POST.get('card_id')
+        collection_id = request.POST.get('collection_id')
+        try:
+
+            if card_id:
+            
+                card = Card.objects.get(id=card_id)
+                card.delete()
+
+            if collection_id:
+                collection = Collection.objects.get(id=collection_id)
+                collection.delete()
+        except (Collection.DoesNotExist, Card.DoesNotExist):
+            return JsonResponse({'error': 'Card/Collection not found'}, status=404)
+            
+        
+    return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
 def export(request, csr_id):
@@ -377,19 +426,20 @@ def text_search_collection(request, collection_id):
         lookup.single_text_lookup(card)
     
     return JsonResponse({"success": True, "error": ""})
-
-def upload_image_no_id(request):
-    collection = Collection.get_default()
-    return redirect(f"/upload_image/{collection.id}")
              
-def upload_image(request):
+@csrf_exempt             
+def upload_image(request, collection_id=None):
+    if request.method == 'GET':
+        if collection_id:
+            collection = Collection.objects.get(id=collection_id)
+        else:
+            collection = Collection.objects.create()
 
-    collection_id = "__Add__"
     if request.method == 'POST':
      
         uploaded_files = sorted(request.FILES.getlist('images'), key=lambda r: r.name)
         collection_id = request.POST.get('collection_id')
-        
+        print(len(uploaded_files)," files")
         print("collection_id1: ", collection_id)
         if collection_id == "__Add__":
             collection = Collection.objects.create()
@@ -424,9 +474,9 @@ def upload_image(request):
                     lookup.single_image_lookup(source_card, "")
                     return_cards.insert(0, source_card)
 
-            return redirect(f"/collection/{collection.id}")
+            return JsonResponse({"success": True, "error": ""})
                            
-    return render(request, "upload_image.html", {"collection_id":collection_id})
+    return render(request, "upload_image.html", {"collection_id":collection.id})
 
 def select_directory(request):
     if request.method == "POST":
@@ -516,9 +566,18 @@ def update_settings(request):
         settings.save()
     return redirect('settings')
 
+@csrf_exempt
 def collection_create(request):
-    new_collection = Collection.objects.create()
-    return redirect(reverse(f"upload_image/{new_collection.id}"))
+
+    try:            
+        parent_collection_id = request.POST.get('collection_id')    
+        parent_collection = Collection.objects.get(id=parent_collection_id)
+        new_collection = Collection.objects.create(parent_collection=parent_collection)
+    
+    except Collection.DoesNotExist:
+        return JsonResponse({'error': 'Collection not found'}, status=404)
+
+    return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
 def settings_file_upload(request, file_type):

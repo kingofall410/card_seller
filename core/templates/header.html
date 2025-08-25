@@ -46,8 +46,8 @@
       min-width: 200px;
       z-index: 1000;
     ">
-      <a href="{% url 'collection_create' %}" class="nav-link">
-        ➕ Add new Collection
+      <a href="{% url 'manage_collection' %}" class="nav-link">
+        ➕ See All...
       </a>
       {% get_collections as collections %}
       {% for collection in collections %}

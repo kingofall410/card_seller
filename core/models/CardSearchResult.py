@@ -78,10 +78,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     full_name_m = models.CharField(max_length=100, blank=True)
     full_name_is_manual = models.BooleanField(default=False)
     
-    full_name = models.CharField(max_length=100, blank=True)
-    full_name_m = models.CharField(max_length=100, blank=True)
-    full_name_is_manual = models.BooleanField(default=False)
-    
     year = models.CharField(max_length=20, blank=True)
     year_m = models.CharField(max_length=20, blank=True)
     year_is_manual = models.BooleanField(default=False)
