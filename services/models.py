@@ -3,13 +3,22 @@ from django.contrib.auth.models import User
 from dataclasses import dataclass
 import re
 from django.db.models import Q
-
+from urllib.parse import unquote
 
 class Settings(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1, related_name="active_settings")    
     nr_returned_listings = models.IntegerField(default=10)
     nr_collection_page_items = models.IntegerField(default=10)
     field_pct_threshold = models.FloatField(default=0.3)
+    
+    #TODO: this should be broken into separate classes, especially now I need one for sandbox
+    ebay_user_auth_code = models.CharField(blank=True)
+    ebay_refresh_token = models.CharField(blank=True)
+    ebay_refresh_token_expiration = models.FloatField(default=0.0)
+    ebay_access_token = models.CharField(blank=True)
+    ebay_access_token_expiration = models.FloatField(default=0.0)
+    ebay_user_auth_consent = models.CharField(max_length=250, blank=True, null=True)
+    ebay_auth_code_unescaped = models.CharField(blank=True)
 
     def load_from_files(self, brand_path=None, team_path=None, name_path=None):
         if brand_path:

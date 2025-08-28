@@ -8,7 +8,7 @@ from core.models.CardSearchResult import CardSearchResult
 '''think about next steps: many require more ebay api work
 0.test expanding search results
 1. locking specific fields to improve search results
-    a. by setting attribute filters
+    a. by setting attribute filters --> don't seem to work
     b. by filtering based on title tokens
 2. text search
 3. pricing

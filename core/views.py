@@ -21,6 +21,7 @@ from django.core.paginator import Paginator
 from django.urls import reverse
 from django.db.models import F
 
+from urllib.parse import unquote
 
 
 BASE_DIR = os.path.join(settings.BASE_DIR)  # example folder
@@ -31,9 +32,7 @@ def hello_world(request):
 
 def test_view(request):
 
-    for para in Parallel.objects.all():
-        para.primary_token = para
-        para.save()
+    export_handler.test_create_ebay_location()
 
 
 def crop_review(request, card_id):
@@ -381,14 +380,16 @@ def delete(request):
 
 @csrf_exempt
 def export(request, csr_id):
-    print("export")
     settings = Settings.objects.first()
 
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
     csr = CardSearchResult.objects.get(id=csr_id)
     
-    return export_handler.export_zip([csr])
+    success = export_handler.export_to_ebay([csr])
+    if not success:
+        return JsonResponse({'error': 'Need auth', 'url':settings.ebay_user_auth_consent}, status=404)
+    return export_handler.export_to_ebay([csr])
 
 @csrf_exempt
 def export_collection(request, collection_id):
@@ -555,14 +556,21 @@ def load_file(request):
     return render(request, "load_file.html")
 
 def update_settings(request):
+    print(request.body)
     if request.method == 'POST':
+
         nr_returned_listings = request.POST.get('nr_returned_listings')
         nr_collection_page_items = request.POST.get('nr_collection_page_items')
         field_pct_threshold = request.POST.get('field_pct_threshold')
+        ebay_user_auth_consent = request.POST.get('ebay_user_auth_consent')
+        ebay_auth_code_unescaped = request.POST.get('ebay_auth_code_unescaped')
         settings = Settings.objects.first()  # or however you fetch it
         settings.nr_returned_listings = nr_returned_listings
         settings.nr_collection_page_items = nr_collection_page_items
         settings.field_pct_threshold = field_pct_threshold
+        settings.ebay_user_auth_consent = ebay_user_auth_consent
+        settings.ebay_auth_code_unescaped = ebay_auth_code_unescaped
+        settings.ebay_user_auth_code = unquote(ebay_auth_code_unescaped)
         settings.save()
     return redirect('settings')
 

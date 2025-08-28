@@ -47,7 +47,9 @@
         exportBtn.addEventListener('click', () => {
             console.log(` Export triggered for ${exportBtn.id}`);
             console.log(searchResultId);
-            location = `/export/${searchResultId}/`
+            fetch(`/export/${searchResultId}/`)
+                .then(res => res.json())
+                
         });
         
         textSearchBtn.addEventListener('click', () => {

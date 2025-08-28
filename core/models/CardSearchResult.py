@@ -3,7 +3,7 @@ import re
 from core.models.Cropping import CropParams
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
-
+import requests
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -129,6 +129,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     search_string = models.TextField(max_length=250, blank=True)
 
+    sport = models.CharField(max_length=100, blank=True)
+    league = models.CharField(max_length=100, blank=True)
+    full_set = models.CharField(max_length=100, blank=True)
+    full_team = models.CharField(max_length=100, blank=True)
+    features = models.CharField(max_length=100, blank=True)
     #combine all this into field_definition
     readonly_fields = ["search_string", "response_count"]
 
@@ -160,12 +165,17 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def save(self, *args, **kwargs):
         # Auto-generate title before saving
+        self.sport = ""
+        self.league = ""
+        self.full_set = self.build_full_set()
+        self.full_team = self.build_full_team()
+        self.features = self.attributes.replace(", ", "|").replace(",","|")
         #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
         super().save(*args, **kwargs)
 
     @classmethod
     def stupid_map(cls, key):
-        #get rid of this when you can
+        #TODO:get rid of this when you can
         if key == "year":
             return "year"
         elif key == "year":
@@ -365,10 +375,43 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
         return f"{year} {brand} {subset} {name} {isRC} {serial} #{nr} {city} {team}"
 
+    #TODO:these buildable fields should be configurable
+    def build_full_set(self, fields=None):
+        print("fields:", fields)
+        if not fields:
+            year = self.display_value("year")
+            brand = self.display_value("brand")
+            subset = self.display_value("subset")
+        else:            
+            year = fields["year"]
+            brand = fields["brand"]
+            subset = fields["subset"]
+
+        subset = "" if subset == "-" else subset
+        print (f"build_full_set: {year} {brand} {subset}")
+        return f"{year} {brand} {subset}".strip()
+    
+    #TODO:these buildable fields should be configurable
+    def build_full_team(self, fields=None):
+        print("fields:", fields)
+        if not fields:
+            city = self.display_value("city")
+            team = self.display_value("team")
+        else:            
+            city = fields["city"]
+            team = fields["team"]
+
+        print (f"build_full_team: {city} {team}")
+        return f"{city} {team}"
+    
+    def build_sku(self):
+        full_set = self.build_full_set()
+        return f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
 
     def get_search_strings(self):
         return self.display_value("title_to_be")
     
+    #TODO: This has grown enough now to condense
     def export_to_csv_string(self, field_map):
         csr_fields = ""
         for dest_field_name, my_field_name in field_map.items():
@@ -386,8 +429,77 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 csr_fields.append(self.display_value(my_field_name))
             else:
                 csr_fields.append("")
-            
+ 
         return csr_fields
+    
+    def export_to_template(self, sku, template, image_links):
+        
+        def resolve(value):
+            if isinstance(value, str) and value:
+                return getattr(self, value, value)
+            return value
+
+        def traverse(data):
+            if isinstance(data, dict):
+                return {k: traverse(resolve(v)) for k, v in data.items()}
+            elif isinstance(data, list):
+                return [traverse(resolve(item)) for item in data]
+            else:
+                return resolve(data)
+
+        #TODO: remove hardcoded fields
+        
+        filled_template = traverse(template)
+        filled_template["sku"] = sku
+        filled_template["product"]["aspects"]["Autographed"] = "Yes" if "Auto" in self.attributes else "No"
+        filled_template["condition"] = "USED_VERY_GOOD"
+        filled_template["product"]["aspects"]["Sport"] = "Baseball"
+        filled_template["product"]["aspects"]["League"] = "MLB"
+        filled_template["product"]["imageUrls"] = image_links
+
+        #need to backfill these all to lists
+        for field in filled_template["product"]["aspects"]:
+            filled_template["product"]["aspects"][field] = [filled_template["product"]["aspects"][field]]
+        filled_template["product"]["aspects"]["Condition"] = ["Near mint or better"]
+        #filled_template["product"]["aspects"]["conditionId"] = ["Ungraded"]
+        filled_template["product"]["aspects"]["Card Condition"] = [400010]
+        return filled_template
+
+    def check_inventory_item_exists(self, sku, token):
+        url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        print(response.text)
+        return response.status_code == 200
+
+    def check_category_metadata(self, id, token):
+            url = "https://api.ebay.com/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=261328"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            response = requests.get(url, headers=headers)
+            print("category:", response.text[:2000])
+            #print("jason:", response.json()["itemConditionPolicies"])
+            for policy in response.json()["itemConditionPolicies"]:#.get("itemConditionPolicies"):
+                if policy["categoryId"] == "261328":
+                    print(policy)
+                    
+                    return None
+
+            #print("det: ", response.json()["itemConditionPolicies"])
+
+    def get_offer(self, id, token):
+            url = f"https://api.ebay.com/sell/inventory/v1/offer/{id}"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            response = requests.get(url, headers=headers)
+            print("offer: ", response.text)
 
     def retokenize(self):
         applied_settings = Settings.get_default()
