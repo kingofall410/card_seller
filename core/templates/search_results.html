@@ -197,6 +197,8 @@ $(document).ready(function () {
   });
 });
 
+
+
 function collectAllFields(cardId) {
   const allFields = {};
   console.log(cardId)
@@ -398,53 +400,101 @@ function handleEnterPress(fieldName, cardCounter) {
 
 {{ search_result.id }}
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
-<thead>
-    <tr style="background-color: #f0f0f0;">
-        <th style="padding: 8px;">Field</th>
-        <th style="padding: 8px;">Value</th>
-    </tr>
-</thead>
+
 <tbody>
-  {% with card_counter=card_id resolved_value=search_result|get_attribute:"title_to_be" %}
+  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"title_to_be" ebay_listing_id=search_result|get_attribute:"title_to_be" %}
     <!-- 🏷️ Title Row -->
     <tr>
-      <td colspan="2" style="padding: 8px 6px; font-weight: bold; background-color: #f8f9fa;">
-        <input type="text"
+      <td colspan="4" style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;"> 
+        <label style="text-align: right; display: flex; align-items: right; gap: 6px;">Title</label>
+      <input type="text"
                 id="field_title_to_be-{{ card_counter }}"
                 name="title_to_be_m"
-                value="{{ resolved_value }}"
+                value="{{ title }}"
                 style="width: 100%; box-sizing: border-box;"
-                data-default="{{ resolved_value }}"
+                data-default="{{ title }}"
                 data-maxlength="80"
                 oninput="handleManualInput('title_to_be', {{ card_counter }})">
       </td>
     </tr>
-
+  {% endwith %}
+    <!-- 🏷️ SubTitle Row -->
+    <tr>
+      <td style="text-align: right; padding: 8px 6px; font-weight: bold; background-color: #4c96d7;">
+        <label style="text-align: right; display: flex; align-items: right; gap: 6px;">List Price</label>
+      </td>
+      <td style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;">
+        <input type="text"
+                id="field_list_price-{{ card_counter }}"
+                name="list_price"
+                value="{{ price }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ price }}"
+                data-maxlength="80" >
+      </td>
+      <td style="text-align: right; padding: 8px 6px; font-weight: bold; background-color: #4c96d7;">
+        <label style="text-align: right; display: flex; align-items: right; gap: 6px;">Ebay Listing ID</label>
+      </td>
+      <td style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;">
+        <input type="text"
+                id="field_ebay_listing_id{{ card_counter }}"
+                name="ebay_listing_id"
+                value="{{ ebay_listing_id }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ ebay_listing_id }}"
+                data-maxlength="80" disabled>
+      </td>
+    </tr><tr>
+      <td style="text-align: right; padding: 8px 6px 20px 6px;; font-weight: bold; background-color: #4c96d7;">
+        <label style="text-align: right; display: flex; align-items: right; gap: 6px;">SKU</label>
+      </td>
+      <td style="padding: 8px 6px 20px 6px;; font-weight: bold; background-color: #4c96d7;">
+        <input type="text"
+                id="field_sku{{ card_counter }}"
+                name="sku"
+                value="{{ sku }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ ebay_offer_id }}"
+                data-maxlength="80" disabled>
+      </td>
+      <td style="text-align: right; padding: 8px 6px 20px 6px; font-weight: bold; background-color: #4c96d7;">
+        <label style="display: flex; align-items: right; gap: 6px;">Ebay Offer ID</label>
+      </td>
+      <td style="padding: 8px 6px 20px 6px;; font-weight: bold; background-color: #4c96d7;">
+        <input type="text"
+                id="field_ebay_offer_id{{ card_counter }}"
+                name="ebay_offer_id"
+                value="{{ ebay_offer_id }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ ebay_offer_id }}"
+                data-maxlength="80" disabled>
+      </td>
+    </tr>
     {% for field_name in search_result.display_fields %}
       {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" resolved_value=search_result|get_attribute:field_name %}
-      <tr style="border-bottom: 1px solid #eee;">
+      <tr style="border-bottom: 3px solid #eee;">
         <!-- 🟩 Label + Override Checkbox -->
-        <td style="padding: 6px;">
+        <td colspan="2" style="padding: 6px;">
           <label style="display: flex; align-items: center; gap: 6px;">
-            {% if field_name in overrideables or field_name in calculated %}
-              <input type="checkbox"
-                  id="{{ field_name }}_is_manual-{{ card_counter }}"
-                  name="{{ field_name }}_is_manual"
-                  {% if search_result|get_attribute:manual_flag %}checked{% endif %}
-                  onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
-            {% elif field_name in textonly %}
-              <input type="checkbox"
-                  id="{{ field_name }}_is_manual-{{ card_counter }}"
-                  name="{{ field_name }}_is_manual"
-                  checked disabled
-                  onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+            {% if field_name in checkboxes %}
+            <input type="checkbox"
+                id="{{ field_name }}_is_manual-{{ card_counter }}"
+                name="{{ field_name }}_is_manual"
+                checked disabled
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+            {% else %}
+            <input type="checkbox"
+                id="{{ field_name }}_is_manual-{{ card_counter }}"
+                name="{{ field_name }}_is_manual"
+                {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
             {% endif %}
             <span>{{ search_result|get_field_verbose:field_name }}</span>
           </label>
         </td>
 
         <!-- 🟦 Field Input -->
-        <td style="padding: 6px; width: 300px;">
+        <td colspan="2" style="padding: 6px; width: 300px;">
           {% if field_name in overrideables %}
             <!-- A: Editable input -->
             <input type="text"
@@ -498,20 +548,19 @@ function handleEnterPress(fieldName, cardCounter) {
 
           {% else %}
             <!-- C: Fallback textarea -->
-            <textarea
+            <input type="text"
                 id="field_{{ field_name }}-{{ card_counter }}"
-                name="{{ field_name }}_m"
-                rows="5"
+                name="{{ field_name }}"
+                value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
                 oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
-            >{{ resolved_value }}</textarea>
+                onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})">
           {% endif %}
         </td>
       </tr>
       {% endwith %}
     {% endfor %}
-  {% endwith %}
 </tbody>
 
 

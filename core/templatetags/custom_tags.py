@@ -91,7 +91,7 @@ def get_all_options(field_key, csrId=None):
             #TODO: move this into SettingsToken
             return [obj.primary_token.raw_value for obj in CardAttribute.objects.filter(primary_token_id=F("id")).order_by("raw_value")]
         elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
-            return [obj.raw_value for obj in Condition.objects.order_by("raw_value")]
+            return [obj.raw_value for obj in Condition.objects.filter(primary_token_id=F("id")).order_by("raw_value")]
         elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
             return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
     else:

@@ -32,7 +32,9 @@ def hello_world(request):
 
 def test_view(request):
 
-    export_handler.test_create_ebay_location()
+    conditions = Condition.objects.all().delete()
+    
+
 
 
 def crop_review(request, card_id):
@@ -197,7 +199,9 @@ def get_dynamic_options(request):
             #return [obj.raw_value for obj in CardAttribute.objects.order_by("raw_value")]
         elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
             options = list(
-                Condition.objects.filter(primary_token_id=F("id"), **filter_kwargs)
+                Condition.objects.filter(
+                    ebay_id_value__isnull=False
+                ).exclude(ebay_id_value="").filter(**filter_kwargs)
                 .values_list("raw_value", flat=True)
                 .distinct()[:50]
             )

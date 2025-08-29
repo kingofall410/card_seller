@@ -345,6 +345,22 @@ class CardAttribute(SettingsToken):
 class Condition(SettingsToken):
     field_key = models.CharField(max_length=100, blank=False, default="condition")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="conditions", default=1)
+    ebay_id_value = models.CharField(max_length=50, blank=True)
+    ebay_string_value = models.CharField(max_length=50, blank=True)
+    
+    @classmethod
+    def create(cls, value, settings, field, primary_attrib="", eid="0", val_string="Unspecified"):
+        print("here")
+        condition_obj, _ = Condition.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, ebay_id_value=eid, ebay_string_value=val_string)
+        print(condition_obj)
+        #set this second since it could point to self
+        if primary_attrib == value:
+            condition_obj.primary_token = condition_obj
+        else:
+            condition_obj.primary_token= Condition.objects.get(raw_value=primary_attrib)
+        
+        condition_obj.save()
+        return condition_obj
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")

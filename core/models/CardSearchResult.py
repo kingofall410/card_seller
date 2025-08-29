@@ -4,6 +4,7 @@ from core.models.Cropping import CropParams
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 import requests
+from services import ebay
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -129,11 +130,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     search_string = models.TextField(max_length=250, blank=True)
 
+    #these are listing specific thus far
     sport = models.CharField(max_length=100, blank=True)
     league = models.CharField(max_length=100, blank=True)
     full_set = models.CharField(max_length=100, blank=True)
     full_team = models.CharField(max_length=100, blank=True)
     features = models.CharField(max_length=100, blank=True)
+    ebay_listing_id = models.CharField(max_length=50, blank=True)
+    ebay_item_id = models.CharField(max_length=50, blank=True)
+    ebay_offer_id = models.CharField(max_length=50, blank=True)
+    list_price = models.FloatField(default=0.0)
+
+
+
     #combine all this into field_definition
     readonly_fields = ["search_string", "response_count"]
 
@@ -151,7 +160,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     calculated_fields = ["title_to_be"]
 
-    text_fields = ["attributes", "unknown_words", "condition"]
+    text_fields = ["unknown_words"]
 
     listing_fields = ["full_name", "first_name", "last_name",
         "year", "brand", "subset",
@@ -160,6 +169,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ]
 
     checkbox_fields = ["attributes"]
+
 
     dynamic_listing_fields = ["front", "back"]
 
@@ -404,9 +414,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         print (f"build_full_team: {city} {team}")
         return f"{city} {team}"
     
+    #TODO:Too many saves
     def build_sku(self):
         full_set = self.build_full_set()
-        return f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+        self.sku = f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+        self.save()
+        return self.sku
 
     def get_search_strings(self):
         return self.display_value("title_to_be")
@@ -447,12 +460,23 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             else:
                 return resolve(data)
 
-        #TODO: remove hardcoded fields
+        #TODO: this is a fucking disaster
         
         filled_template = traverse(template)
         filled_template["sku"] = sku
         filled_template["product"]["aspects"]["Autographed"] = "Yes" if "Auto" in self.attributes else "No"
         filled_template["condition"] = "USED_VERY_GOOD"
+
+        #if self.condition
+        condition_token = Condition.objects.get(raw_value=self.condition)
+        condition_descriptor = [
+            {
+                "name": 40001,
+                "values": [int(condition_token.ebay_id_value)]
+            }
+        ]
+        filled_template["conditionDescriptors"] = condition_descriptor
+        filled_template["product"]["aspects"]["Card Condition"] = condition_token.ebay_string_value
         filled_template["product"]["aspects"]["Sport"] = "Baseball"
         filled_template["product"]["aspects"]["League"] = "MLB"
         filled_template["product"]["imageUrls"] = image_links
@@ -460,10 +484,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #need to backfill these all to lists
         for field in filled_template["product"]["aspects"]:
             filled_template["product"]["aspects"][field] = [filled_template["product"]["aspects"][field]]
-        filled_template["product"]["aspects"]["Condition"] = ["Near mint or better"]
-        #filled_template["product"]["aspects"]["conditionId"] = ["Ungraded"]
-        filled_template["product"]["aspects"]["Card Condition"] = [400010]
+        #filled_template["product"]["aspects"]["Condition"] = ["Ungraded"]        
         return filled_template
+    
+
 
     def check_inventory_item_exists(self, sku, token):
         url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"

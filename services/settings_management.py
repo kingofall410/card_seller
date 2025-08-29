@@ -41,7 +41,15 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                 Team.objects.get_or_create(raw_value=team_name, home_city=city_obj, parent_settings=user_settings, field_key=file_type)
             except Exception as e:
                 print(f"Error creating team '{team_name}':", e)
-
+    elif file_type == "condition":
+        
+        condition_primary_set = set(((row[0]).strip(), (row[1]).strip(), (row[2]).strip(), (row[3]).strip()) for row in reader if row and len(row) > 1)
+        print(condition_primary_set)
+        for condition,primary, id, val_string in condition_primary_set:
+            print(condition)
+            print(primary)
+            print(id, val_string)
+            Condition.create(condition, user_settings, file_type, primary_attrib=primary, eid=id, val_string=val_string)
     else:
         
         keyword_set = set((row[0]).strip() for row in reader if row and len(row) > 0)
@@ -53,8 +61,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                     KnownName.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
                 elif file_type == "attribs":
                     CardAttribute.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
-                elif file_type == "condition":
-                    Condition.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
+                
                 elif file_type == "parallel":
                     Parallel.objects.get_or_create(raw_value=keyword, parent_settings=user_settings, field_key=file_type)
                 else:#random filenames get read in as names
@@ -121,7 +128,6 @@ def add_token(field_key, value, all_field_data, user_settings=None):
             new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)
 
     elif field_key == "names" or field_key == "full_name":
-        print("Creating KnownName with value:", value)
         new_obj = KnownName.create(value=value, settings=user_settings, field="names")
     elif field_key == "attribs":
         new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)

@@ -74,6 +74,7 @@ def test_create_ebay_location():
         ebay.create_location(access_token)
 import random
 
+#TODO: This whole process is cobbled together.  needs to be fixed
 def export_to_ebay(csrs):
     
     print("ebay export")
@@ -124,11 +125,12 @@ def export_to_ebay(csrs):
         #create_ebay_location(access_token)
         #csr.check_category_metadata("261328",access_token)
         if ebay.create_inventory_item(sku, item_data, access_token):
-            print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
-            offer_id = ebay.create_offer(offer_data, access_token)
-            csr.get_offer(offer_id, access_token)
-            ebay.publish_offer(offer_id, access_token)
-            
+            #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
+            csr.ebay_offer_id = ebay.create_offer(offer_data, access_token)
+            #csr.get_offer(offer_id, access_token)
+
+            csr.ebay_listing_id = ebay.publish_offer(csr.ebay_offer_id, access_token)
+            csr.save()
         #print("asking for token ")
         #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #print(access_token)

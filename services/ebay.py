@@ -2,7 +2,6 @@ import requests, os, time, json, base64
 from requests.auth import HTTPBasicAuth
 from PIL import Image
 from pathlib import Path
-from core.models.Card import Card
 import time
 
 from services.models import Settings
@@ -28,18 +27,8 @@ category_id = None
 
 #TODO: ultimately need to get this from the taxonomy API or excel file upload
 
-condition_descriptor = [
-  {
-    #id: "40001",
-    "name": 40001,
-    "values": [400010]
-  }
-]
-
-
 ebay_item_data_template = {
     "condition":"Ungraded",
-    "conditionDescriptors": condition_descriptor,
     "availability": {
             "shipToLocationAvailability": {
                 "quantity": 1
@@ -308,7 +297,7 @@ def publish_offer(offer_id, access_token):
     url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}/publish"
     response = requests.post(url, headers=headers)
     print (response.text)
-    return response.json()
+    return response.json()["listingId"]
 
 
 def create_location(access_token, merchant_location_key="Freeport"):
