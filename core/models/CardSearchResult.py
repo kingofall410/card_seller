@@ -5,6 +5,7 @@ from services.models import Brand, Subset, Team, City, KnownName, CardAttribute,
 from collections import defaultdict, Counter
 import requests
 from services import ebay
+import statistics
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -40,14 +41,14 @@ class OverrideableFieldsMixin(models.Model):
             print(f"❌ Save failed: {e}")
     
     def __getattr__(self, name):
+        print("getattr", name)
         if name.startswith("display_"):
             field = name[len("display_"):]
             try:
                 return self.display_value(field)
             except AttributeError:
                 raise AttributeError(f"Override fields for '{field}' not found.")
-        
-        # 🔹 Fallback to regular attribute access
+            
         try:
             return super().__getattribute__(name)
         except AttributeError:
@@ -56,15 +57,18 @@ class OverrideableFieldsMixin(models.Model):
     
     def display_value(self, field, display_flag=None):
         flag = False
+        print("dsisplay val",  self, field, display_flag)
         if hasattr(self, f"{field}_is_manual"):
             flag = getattr(self, f"{field}_is_manual") if display_flag is None else display_flag
+        print("final disp", flag)
         return self.manual_value(field) if flag else self.default_value(field)
     
     def default_value(self, field):
-        print(self, field)
+        print("default val", self, field)
         return getattr(self, field)
     
     def manual_value(self, field):
+        print("manuel", self, field)
         return getattr(self, f"{field}_m")
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
@@ -113,17 +117,20 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     parallel = models.CharField(max_length=50, blank=True)
     parallel_m = models.CharField(max_length=50, blank=True)
-    parallel_manual = models.BooleanField(default=False)
+    parallel_is_manual = models.BooleanField(default=False)
     
     title_to_be = models.CharField(max_length=100, blank=True)
     title_to_be_m = models.CharField(max_length=100, blank=True)
     title_to_be_is_manual = models.BooleanField(default=False)
 
-    attributes = models.TextField(blank=True)    
+    attributes = models.TextField(blank=True)
     unknown_words = models.TextField(blank=True)   
     collapsed_tokens = models.JSONField(default=dict, blank=True)
     response_count = models.IntegerField(default=0)
     condition = models.CharField(max_length=100, blank=True)
+start here, figure out how to store attribs
+    atttribute_flags = models.JSONField(default=list)
+
     #maybe this should be a full CSR object?  Would you ever Search by back?  But that makes displayu easier
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
     reverse_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_reverse", null=True)
@@ -141,21 +148,27 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_offer_id = models.CharField(max_length=50, blank=True)
     list_price = models.FloatField(default=0.0)
 
+    ebay_mean_price = models.FloatField(default=0.0)
+    ebay_median_price = models.FloatField(default=0.0)
+    ebay_mode_price = models.FloatField(default=0.0)
+    ebay_low_price = models.FloatField(default=0.0)
+    ebay_high_price = models.FloatField(default=0.0)
 
 
     #combine all this into field_definition
-    readonly_fields = ["search_string", "response_count"]
+    readonly_fields = ["search_string", "response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
 
     overrideable_fields = [
         "full_name", "first_name", "last_name",
-        "year", "brand", "subset", 
-        "card_number", "team", "city", "serial_number", "title_to_be", "parallel", "card_name"
+        "year", "brand", "subset", "parallel",
+        "card_number", "team", "city", "serial_number", "title_to_be", "card_name"
     ]
 
     display_fields = [
         "year", "brand", "subset", "parallel", "full_name", 
         "card_number", "card_name", "city", "team", "serial_number", "condition", 
-        "attributes", "unknown_words"#"search_string", "response_count", "first_name", "last_name",
+        "attributes", "unknown_words", 
+        "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"search_string", "response_count", "first_name", "last_name",
     ]
 
     calculated_fields = ["title_to_be"]
@@ -179,7 +192,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.league = ""
         self.full_set = self.build_full_set()
         self.full_team = self.build_full_team()
-        self.features = self.attributes.replace(", ", "|").replace(",","|")
+        if self.attributes:
+            print(self.attributes)
+            self.features = self.attributes.replace(", ", "|").replace(",","|")
+            print(self.features)
         #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
         super().save(*args, **kwargs)
 
@@ -239,6 +255,17 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def get_latest_reverse(self):
         return self.parent_card.cropped_reverse.path()
+    
+    def aggregate_pricing_info(self):
+        
+        prices = [listing.ebay_price for listing in self.listings.all()]
+        self.ebay_mean_price = statistics.mean(prices)
+        self.ebay_median_price = statistics.median(prices)
+        self.ebay_mode_price = statistics.mode(prices)
+        self.ebay_low_price = min(prices)
+        self.ebay_high_price = max(prices)
+        self.save()
+
 
     def collapse_token_maps(self, listing_set=None):
         aggregate = defaultdict(Counter)  # key -> Counter of string values
@@ -329,7 +356,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 else:
                     print("setting", field_name, field_value)
                     setattr(self, field_name, field_value)
-        self.save()
+        #self.save()
 
     @classmethod
     def create_empty(cls, pcard):
@@ -353,6 +380,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             if tokenize:
                 #must pass the listings here to preserve the in memory attributes
                 csr.collapsed_tokens = csr.collapse_token_maps(listing_set)
+                csr.aggregate_pricing_info()
                 print(csr.collapsed_tokens)
             csr.save()
         return csr
@@ -383,7 +411,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         subset = "" if subset == "-" else subset
         serial = "" if serial == "-" else serial
         print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
-        return f"{year} {brand} {subset} {name} {isRC} {serial} #{nr} {city} {team}"
+        return f"{year} {brand} {subset} {name} {isRC} {serial} #{nr} {city} {team}".replace("  ", " ")
 
     #TODO:these buildable fields should be configurable
     def build_full_set(self, fields=None):
@@ -536,6 +564,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             #print("After tokenize:", listing.title.serial_number_tokens)
 
         self.collapse_token_maps(listing_set)
+        self.aggregate_pricing_info()
 
 
 class ProductListing(models.Model):
@@ -544,6 +573,7 @@ class ProductListing(models.Model):
     listing_date = models.DateTimeField(blank=False)
     img_url = models.CharField(max_length=250, blank=False)
     thumb_url = models.CharField(max_length=250, blank=False)    #title is declared above
+    ebay_price = models.FloatField(default=0.0)
 
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, default=1, related_name="listings")    
 
@@ -555,6 +585,7 @@ class ProductListing(models.Model):
         listing.listing_date = item.get("itemCreationDate")
         listing.img_url = item.get("itemWebUrl", "No thumbnail")
         listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", "No thumbnail")
+        listing.ebay_price = item.get("price", [{}]).get("value", "-1")
         listing.search_result = parent_csr
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)

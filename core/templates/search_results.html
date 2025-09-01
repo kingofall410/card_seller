@@ -322,6 +322,7 @@ function handleOverrideToggle(fieldName, cardId) {
 
   if (checkbox.checked) {
     input.removeAttribute("disabled");
+    input.value = ""
   } else {
     input.setAttribute("disabled", "disabled");
     const defaultValue = input.getAttribute("data-default");
@@ -402,7 +403,7 @@ function handleEnterPress(fieldName, cardCounter) {
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
 
 <tbody>
-  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"title_to_be" ebay_listing_id=search_result|get_attribute:"title_to_be" %}
+  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
     <!-- 🏷️ Title Row -->
     <tr>
       <td colspan="4" style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;"> 
@@ -414,10 +415,9 @@ function handleEnterPress(fieldName, cardCounter) {
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ title }}"
                 data-maxlength="80"
-                oninput="handleManualInput('title_to_be', {{ card_counter }})">
+                oninput="handleManualInput('title_to_be', {{ card_counter }3})">
       </td>
     </tr>
-  {% endwith %}
     <!-- 🏷️ SubTitle Row -->
     <tr>
       <td style="text-align: right; padding: 8px 6px; font-weight: bold; background-color: #4c96d7;">
@@ -493,6 +493,8 @@ function handleEnterPress(fieldName, cardCounter) {
           </label>
         </td>
 
+        {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual"%}
+        {% with resolved_value=search_result|get_attribute:display_attr %}
         <!-- 🟦 Field Input -->
         <td colspan="2" style="padding: 6px; width: 300px;">
           {% if field_name in overrideables %}
@@ -558,9 +560,13 @@ function handleEnterPress(fieldName, cardCounter) {
                 onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})">
           {% endif %}
         </td>
+        {% endwith %}
       </tr>
       {% endwith %}
+      {% endwith %}
     {% endfor %}
+    
+  {% endwith %}
 </tbody>
 
 

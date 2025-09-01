@@ -4,8 +4,6 @@ from PIL import Image
 from pathlib import Path
 import time
 
-from services.models import Settings
-
 CLIENT_ID = 'DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10'
 CLIENT_SECRET = 'PRD-a6d6e5b02d26-532c-4825-8507-5903'
 RUNAME = "Daniel_Crown-DanielCr-Latest-reqvvsrz"
@@ -126,16 +124,16 @@ def has_user_consent(settings):
 def get_access_token(settings, user_auth_code=None):
     now = time.time()
 
-
-    if now < settings.ebay_access_token_expiration:
-        print("Using existing access token...")
-        return settings.ebay_access_token
-    elif now < settings.ebay_refresh_token_expiration:#trade refresh token for access token
-        print("Refreshing access token for eBay...")
-        data = {'grant_type': 'refresh_token', 'refresh_token':settings.ebay_refresh_token}
-    elif settings.user_auth_code:#trade user auth code for access token
-        print("Trading user auth code...")
-        data = {'grant_type': 'authorization_code', "code":user_auth_code, "redirect_uri":RUNAME}
+    if user_auth_code:
+        if now < settings.ebay_access_token_expiration:
+            print("Using existing access token...")
+            return settings.ebay_access_token
+        elif now < settings.ebay_refresh_token_expiration:#trade refresh token for access token
+            print("Refreshing access token for eBay...")
+            data = {'grant_type': 'refresh_token', 'refresh_token':settings.ebay_refresh_token}
+        else:
+            print("Trading user auth code...")
+            data = {'grant_type': 'authorization_code', "code":user_auth_code, "redirect_uri":RUNAME}
     else:#user-less request
         data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
        
@@ -204,50 +202,51 @@ def get_dominant_category_id(payload):
     return '261328'
     
 
-def image_search(loaded_img, limit=10, use_category_id=True):
+def image_search(loaded_img, limit=10, settings=None):
     print("image_search: ", loaded_img.name)
     #if not auth_token:
-    get_access_token()
-    headers = {
-        "Authorization": f"Bearer {auth_token}",
-        "Content-Type": "application/json",
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
-    }
-    try:
-        encoded = base64.b64encode(loaded_img.read()).decode("utf-8")
-    except Exception as e:
-        print(f"❌ Failed to encode image: {e}")
-        return
-
-
-    payload = { 
-        "image": encoded
-    }
-
-    category_id = get_dominant_category_id(payload)
-    
-    limit_str = f"limit={limit}"
-
-    #TODO: these query params don't seem to have any effect; will have to do this manbually based on title results
-    #TODO: it's possible they only work on text search, haven't tried
-    category_str = f"category_ids={category_id}"
-    brands = "{Topps|Bowman}"
-    filter_str = f"aspect_filter=categoryId:{category_id},Team:San Diego Padres"
-
-    search_url = f"{IMG_SEARCH_URL}?{limit_str}&{category_str}"
-    print(search_url)
-    
-    response = requests.post(search_url, headers=headers, json=payload)
-    print("resp: ", response)
-    if response.status_code == 200:
-        #print(response.json())
-        items = response.json().get("itemSummaries", [])
-        if not items:
-            print("❌ No matches found.")
+    if has_user_consent(settings):
+        access_token = get_access_token(settings)
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+        }
+        try:
+            encoded = base64.b64encode(loaded_img.read()).decode("utf-8")
+        except Exception as e:
+            print(f"❌ Failed to encode image: {e}")
             return
-        else:
-            print(f"✅ Found {len(items)} matches for the input image.")
-            return items
+
+
+        payload = { 
+            "image": encoded
+        }
+
+        category_id = get_dominant_category_id(payload)
+        
+        limit_str = f"limit={limit}"
+
+        #TODO: these query params don't seem to have any effect; will have to do this manbually based on title results
+        #TODO: it's possible they only work on text search, haven't tried
+        category_str = f"category_ids={category_id}"
+        brands = "{Topps|Bowman}"
+        filter_str = f"aspect_filter=categoryId:{category_id},Team:San Diego Padres"
+
+        search_url = f"{IMG_SEARCH_URL}?{limit_str}&{category_str}"
+        print(search_url)
+        
+        response = requests.post(search_url, headers=headers, json=payload)
+        print("resp: ", response)
+        if response.status_code == 200:
+            #print(response.json())
+            items = response.json().get("itemSummaries", [])
+            if not items:
+                print("❌ No matches found.")
+                return
+            else:
+                print(f"✅ Found {len(items)} matches for the input image.")
+                return items
 
 
 #https://auth.ebay.com/oauth2/authorize?client_id=DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10&redirect_uri=Daniel_Crown-DanielCr-Latest-reqvvsrz&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory

@@ -313,6 +313,7 @@ def update_csr_fields(request):
 
     try:
         csr.update_fields(field_data)
+        print("okey dokey")
         return JsonResponse({"success": True})
     except Exception as e:
         return JsonResponse({"error": True, "message": f"Update failed: {str(e)}"}, status=500)
@@ -328,7 +329,8 @@ def image_search(request, card_id):
     if not card_id:
         return JsonResponse({'error': 'Card ID is required'}, status=400)
     card = Card.objects.get(id=card_id)
-    search_results = lookup.single_image_lookup(card)
+    settings = Settings.get_default()
+    search_results = lookup.single_image_lookup(card, settings)
     if search_results:
         return JsonResponse({"success": True, "error": ""})
     

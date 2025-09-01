@@ -2,11 +2,11 @@ from services import ebay
 from services.models import Settings
 
 
-def single_image_lookup(card, site="ebay"):
-    settings = Settings.objects.get()
+def single_image_lookup(card, settings, site="ebay"):
+    
     matches = {}
     if site == "ebay":
-        matches = ebay.image_search(card.get_lookup_image(), limit=settings.nr_returned_listings)
+        matches = ebay.image_search(card.get_lookup_image(), limit=settings.nr_returned_listings, settings=settings)
     return card.parse_and_tokenize_search_results(matches)
 
 def single_text_lookup(card, site="ebay"):
@@ -18,6 +18,6 @@ def retokenize(card):
     card.retokenize()
 
 
-def lookup_collection(collection, site="ebay"):
+def lookup_collection(collection, settings, site="ebay"):
     for card in collection.cards:
-        single_image_lookup(card, site)
+        single_image_lookup(card, settings, site)

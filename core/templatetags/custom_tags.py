@@ -8,7 +8,10 @@ register = template.Library()
 
 @register.filter
 def get_attribute(obj, attr):
-    return getattr(obj, attr, None)
+    print("customtags:", attr)
+    retval = getattr(obj, attr, None)
+    print("customtags2:", retval)
+    return retval
 
 @register.filter
 def crop_display_img(obj):
