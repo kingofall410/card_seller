@@ -29,8 +29,8 @@ class OverrideableFieldsMixin(models.Model):
         if isinstance(is_manual, str):
             is_manual = is_manual.lower() in ["true", "1", "yes"]
     
-        print("Setting:", field_to_set, "=", value)
-        print("Setting:", is_manual_fieldname, "=", is_manual)
+        #print("Setting:", field_to_set, "=", value)
+        #print("Setting:", is_manual_fieldname, "=", is_manual)
 
         setattr(self, field_to_set, value)
         setattr(self, is_manual_fieldname, is_manual)
@@ -41,7 +41,7 @@ class OverrideableFieldsMixin(models.Model):
             print(f"❌ Save failed: {e}")
     
     def __getattr__(self, name):
-        print("getattr", name)
+        #print("getattr", name)
         if name.startswith("display_"):
             field = name[len("display_"):]
             try:
@@ -57,18 +57,18 @@ class OverrideableFieldsMixin(models.Model):
     
     def display_value(self, field, display_flag=None):
         flag = False
-        print("dsisplay val",  self, field, display_flag)
+        #print("dsisplay val",  self, field, display_flag)
         if hasattr(self, f"{field}_is_manual"):
             flag = getattr(self, f"{field}_is_manual") if display_flag is None else display_flag
-        print("final disp", flag)
+        #print("final disp", flag)
         return self.manual_value(field) if flag else self.default_value(field)
     
     def default_value(self, field):
-        print("default val", self, field)
+        #print("default val", self, field)
         return getattr(self, field)
     
     def manual_value(self, field):
-        print("manuel", self, field)
+        #print("manuel", self, field)
         return getattr(self, f"{field}_m")
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
@@ -128,8 +128,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     collapsed_tokens = models.JSONField(default=dict, blank=True)
     response_count = models.IntegerField(default=0)
     condition = models.CharField(max_length=100, blank=True)
-start here, figure out how to store attribs
-    atttribute_flags = models.JSONField(default=list)
+
+    attribute_flags = models.JSONField(default=list)
 
     #maybe this should be a full CSR object?  Would you ever Search by back?  But that makes displayu easier
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
@@ -181,6 +181,7 @@ start here, figure out how to store attribs
         "attributes", "unknown_words", "title_to_be"
     ]
 
+    #TODO: read this 
     checkbox_fields = ["attributes"]
 
 
@@ -194,7 +195,8 @@ start here, figure out how to store attribs
         self.full_team = self.build_full_team()
         if self.attributes:
             print(self.attributes)
-            self.features = self.attributes.replace(", ", "|").replace(",","|")
+            print(self.attribute_flags)
+            self.features = " | ".join(key for key in self.attribute_flags.keys())
             print(self.features)
         #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
         super().save(*args, **kwargs)
@@ -325,6 +327,11 @@ start here, figure out how to store attribs
 
                 if field_name in self.text_fields:
                     final_value = ", ".join(x for x in counter.keys())
+                elif field_name in self.checkbox_fields:
+                    print(counter)
+                    #TODO obviously remove this hardcode; the value 5 should be a % based on occurrence count/total listings
+                    final_value = {key[0]: True for key in counter.items() if key[1] > 5}
+                    field_name = "attribute_flags"#TODO obviously remove this hardcode
                 else:
                     most_common = counter.most_common(1)
                     if most_common:
@@ -346,17 +353,30 @@ start here, figure out how to store attribs
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
             
-            if hasattr(self, field_name):
-                print("has attr", field_name, field_value, self.overrideable_fields)
+            #check for compound names (checkbox groups, etc)
+            if hasattr(self, field_name) or hasattr(self, field_name[:field_name.find('.')]):
+                #print("has attr", field_name, field_value, self.overrideable_fields)
                 if field_name in self.overrideable_fields:    
-                    print("over")
+                    #print("over")
                     #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
                     is_manual = all_field_data.get(f"{field_name}_is_manual", True)
                     self.set_ovr_attribute(field_name, field_value, is_manual)
+                elif field_name.find('.') > 0:#checkbox groups
+                    group_name, field_name = field_name.split('.')                     
+                    #print(group_name, field_name)
+                    #TODO: need to make this more generic to handle additional checkhbox fields
+                    if group_name == 'attributes':
+                        print('checkboxes')
+                        print(field_name, type(field_value), field_value)
+                        #if field_name in self.attribute_flags:
+                        self.attribute_flags[field_name] = (field_value.lower() == 'true')
+                        #else:
+                        print(self.attribute_flags)
+
                 else:
-                    print("setting", field_name, field_value)
+                    #print("setting", field_name, field_value)
                     setattr(self, field_name, field_value)
-        #self.save()
+        self.save()
 
     @classmethod
     def create_empty(cls, pcard):

@@ -8,9 +8,7 @@ register = template.Library()
 
 @register.filter
 def get_attribute(obj, attr):
-    print("customtags:", attr)
     retval = getattr(obj, attr, None)
-    print("customtags2:", retval)
     return retval
 
 @register.filter
@@ -46,10 +44,12 @@ def get_field_verbose(obj, field_name):
     
 @register.filter
 def dict_get(d, key):
+    print("fck", d, key)
     try:
-        options = d.get(CardSearchResult.stupid_map(key), None)
-        return sorted(options, reverse=True)
+        options = d.get(key, False)
+        return options
     except (TypeError, AttributeError):
+        print ("f")
         return None
 
 @register.simple_tag

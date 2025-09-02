@@ -304,7 +304,7 @@ def update_csr_fields(request):
     field_data = request.POST.dict()
     field_data.pop("csrId", None)  # Remove csrId from field data
     field_data.pop("csrfmiddlewaretoken", None)  # Remove CSRF token
-
+    print("caesar: ", field_data)
     # Coerce boolean fields
     for key, value in field_data.items():
         field = csr._meta.get_field(key) if key in [f.name for f in csr._meta.fields] else None

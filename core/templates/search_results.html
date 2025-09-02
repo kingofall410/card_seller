@@ -89,7 +89,7 @@ $(document).ready(function () {
       source: function (request, response) {
         
         fields = collectAllFields(cardId);
-        console.log("Collected fields:", fields);
+        //console.log("Collected fields:", fields);
         $.ajax({
           url: "/get_dynamic_options/",
           type: "POST", // must be POST to send JSON body
@@ -376,15 +376,13 @@ function handleManualInput(fieldName, cardId) {
       console.log("No title element or checkbox is checked.");
     }
   }
-  console.log("here")
+  
   const titleElement = document.getElementById(titleFieldId);
   const maxLength = parseInt(titleElement.dataset.maxlength, 10);
   if (titleElement.value.length > maxLength) {
-    console.log("add")
     titleElement.classList.add("input-error");
   } else {
     titleElement.classList.remove("input-error");
-    console.log("remove")
   }
 } 
 
@@ -527,9 +525,9 @@ function handleEnterPress(fieldName, cardCounter) {
                 <label style="margin-bottom: 4px;">
                   <input type="checkbox"
                         id="field_{{ field_name }}-{{ option }}-{{ card_counter }}"
-                        name="{{ option }}"
-                        value="{{ option }}"
-                        {% if option in resolved_value %}checked{% endif %}
+                        name="{{ field_name }}.{{ option }}"
+                        value="true"
+                        {% if search_result.attribute_flags|dict_get:option == True %}checked{% endif %}
                         onchange="handleManualInput('{{ field_name }}', {{ card_counter }})">
                   {{ option }}
                 </label>
@@ -569,7 +567,7 @@ function handleEnterPress(fieldName, cardCounter) {
   {% endwith %}
 </tbody>
 
-
+start here, need to figure out how to save attributes
 </table>
 <div style="margin-top: 16px; text-align: right;">
   <button id="saveFieldsBtn" style="padding: 8px 16px; font-size: 14px;">
