@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult
+
 '''think about next steps: many require more ebay api work
 0.test expanding search results
 1. locking specific fields to improve search results
@@ -23,6 +24,7 @@ class Collection(models.Model):
     name = models.CharField(max_length=100, blank=True)
     parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
            
+    
     @classmethod
     def get_default(cls):
         return Collection.objects.first()
@@ -30,9 +32,9 @@ class Collection(models.Model):
     def get_default_exports(self):
         return (card.active_search_results() for card in self.cards.all())
     
+    @property
     def get_size(self):
         return len(self.cards.all())
-
 
 class Card(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)

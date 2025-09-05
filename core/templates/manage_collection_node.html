@@ -150,6 +150,14 @@
   background-color: #f0f0f0;
 }
 
+.card-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  min-height: 20px;           /* Ensures vertical space is reserved */
+  visibility: visible;     
+}
 
 
 </style>
@@ -157,8 +165,12 @@
 <div id="collection-{{ collection.id }}" class="collection">
 <div class="collection-node" data-id="{{ collection.id }}">
   <div class="collection-header">
-    <div class="collection-title" data-id="{{ collection.id }}">
-        <h2>{{collection.id}}. {{collection.name}}</h2><h4>({{collection.create_date}})</h4></div><br><br>
+    
+    <div class="collection-title-{{ collection.id }}">
+    <h2 id="collection-title-{{ collection.id }}">
+        {{ collection.id }}. {{ collection.name }} (<span id="card-count-{{ collection.id }}">{{ collection.cards.count }}</span>)
+    </h2>
+
     <button onclick="addCard({{ collection.id }})">➕</button>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="saveTitle({{ collection.id }})">💾</button>
@@ -171,17 +183,39 @@
        placeholder="Change collection name..."
        onchange="saveTitle({{ collection.id }})">
   </div>
+  <div class="card-sort-controls">
+    <select onchange="sortCardsInModule(this)">
+      <option value="year">Year</option>
+      <option value="brand">Brand</option>
+      <option value="subset">Subset</option>
+      <option value="name">Name</option>
+      <option value="id">Default</option>
+    </select>
+  </div>
 
-    <div class="card-list">
+ <div class="card-list">
     {% for card in collection.cards.all %}
+    {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
+    {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
     <div id="card-{{ card.id }}" class="card">
-    <div class="card-item" data-id="{{ card.id }}">
+    <div class="card-item"
+     data-id="{{ card.id }}"
+     data-year="{{ display_year|default:'' }}"
+     data-brand="{{ display_brand|default:'' }}"
+     data-subset="{{ display_subset|default:'' }}"
+     data-name="{{ display_name|default:'' }}">
+        
+        <div class="card-meta">
+            {{ display_year }} {{ display_brand }} {{ display_subset }}
+        </div>
+        <div class="card-meta">
+            {{ display_name }}
+        </div>
+
         <div class="image-wrapper">
             <a href="../card/{{ card.id }}"><img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
             <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover"></a>
         </div>
-        {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
-        {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
         <div class="card-actions">
             <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
                 <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
@@ -208,7 +242,12 @@
     {% endfor %}
     {% for subcollection in collection.subcollections.all %}
     
-    <div class="card-item">
+    <div class="card-item"
+     data-year="{{ display_year }}"
+     data-brand="{{ display_brand }}"
+     data-subset="{{ display_subset }}"
+     data-search_count="{{ card.search_count }}">
+
         <div class="image-wrapper">
             <img src="/static/images/missing_collection.png" alt="{{ subcollection.id }}" class="thumbnail default">
             <img src="/static/images/missing_collection_reverse.png" alt="{{ subcollection.id }} hover" class="thumbnail hover">
@@ -236,6 +275,47 @@
 </div>
 
 <script>
+function sortCardsInModule(selectEl) {
+  // Traverse up to the nearest .collection container
+  const container = selectEl.closest('.collection');
+  if (!container) {
+    console.warn('No collection container found for sorting');
+    return;
+  }
+
+  const cardList = container.querySelector('.card-list');
+  if (!cardList) {
+    console.warn('No card list found in collection');
+    return;
+  }
+
+  const cards = Array.from(cardList.querySelectorAll('.card'));
+
+  // Exclude the last item (e.g. add-controls)
+  const lastItem = cardList.lastElementChild;
+  const sortableCards = cards.filter(card => card !== lastItem);
+
+  const key = selectEl.value;
+  sortableCards.sort((a, b) => {
+    const aData = a.querySelector('.card-item')?.dataset || {};
+    const bData = b.querySelector('.card-item')?.dataset || {};
+
+    const aVal = aData[key] || '';
+    const bVal = bData[key] || '';
+
+    if (key === 'search_count') {
+      return parseInt(bVal) - parseInt(aVal);
+    }
+    return aVal.localeCompare(bVal);
+  });
+
+  // Reflow sorted cards
+  sortableCards.forEach(card => cardList.appendChild(card));
+  if (lastItem) cardList.appendChild(lastItem); // Preserve final control
+}
+
+
+
 
 function triggerFileUpload(collectionId) {
   document.getElementById("fileInput_" + collectionId).click();
@@ -312,6 +392,23 @@ function toggleMoveDropdown(button) {
   const dropdown = button.nextElementSibling.nextElementSibling.nextElementSibling; // Adjust if DOM changes
   dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
 }
+
+function refreshCollectionCount(collectionId) {
+  const container = document.querySelector(`#collection-${collectionId}`);
+  const cardList = container?.querySelector('.card-list');
+  if (!cardList) return;
+
+  const count = Array.from(cardList.children).filter(child =>
+    child.classList.contains('card')
+  ).length;
+
+  const countSpan = document.querySelector(`#card-count-${collectionId}`);
+  if (countSpan) {
+    countSpan.textContent = count;
+  }
+}
+
+
 function moveCardToCollection(cardId, collectionId) {
   fetch(`/move_to_collection/${cardId}/${collectionId}`, {
     method: 'POST',
@@ -320,20 +417,42 @@ function moveCardToCollection(cardId, collectionId) {
   })
   .then(response => {
     if (!response.ok) throw new Error('Move failed');
-    return response.json(); // Optional: get updated card data
+    return response.json();
   })
   .then(data => {
     const cardElement = document.querySelector(`#card-${cardId}`);
-    const targetContainer = document.querySelector(`#collection-${collectionId}`);
-    if (cardElement && targetContainer) {
-      targetContainer.appendChild(cardElement);
+    const oldContainer = cardElement?.closest('.collection');
+    const newContainer = document.querySelector(`#collection-${collectionId}`);
+
+    if (cardElement && newContainer) {
+      const oldId = oldContainer?.dataset?.id;
+
+      // 🔒 Close the dropdown before moving
+      const dropdown = cardElement.querySelector('.move-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+
+      // 🧹 Remove the card before updating counts
+      cardElement.remove();
+
+      // 📦 Insert into new container (second-to-last)
+      const cardList = newContainer.querySelector('.card-list');
+      const children = cardList?.children || [];
+      const insertBeforeTarget = children.length > 1 ? children[children.length - 1] : null;
+      cardList?.insertBefore(cardElement, insertBeforeTarget);
+
+      // 🔄 Refresh counts
+      if (oldId) refreshCollectionCount(oldId);
+      refreshCollectionCount(collectionId);
     }
   })
   .catch(error => {
     console.error('Error moving card:', error);
-    // Optionally show a toast or alert
   });
 }
+
+
+
+
 
 function removeCollection(collectionId) {
   // AJAX call to delete card
