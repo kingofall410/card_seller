@@ -44,7 +44,6 @@ def get_field_verbose(obj, field_name):
     
 @register.filter
 def dict_get(d, key):
-    print("fck", d, key)
     try:
         options = d.get(key, False)
         return options

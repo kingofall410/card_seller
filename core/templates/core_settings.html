@@ -54,6 +54,12 @@
     </label>
     <input type="float" id="field_pct_threshold" name="field_pct_threshold"
       value="{{ settings.field_pct_threshold }}" min="0" max="1"
+      style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>   
+    <label for="nr_std_devs" style="font-weight: bold; margin-right: 12px;">
+      Price Chart cutoff (Std Devs)
+    </label>
+    <input type="float" id="nr_std_devs" name="nr_std_devs"
+      value="{{ settings.nr_std_devs }}" min="0" max="1"
       style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
     <button onclick="handleConsentPage()">
       Authorize
@@ -72,14 +78,17 @@
       </button>
     </form>
 
-  {% include "settings_block.html" with primary_field_key="brands" secondary_field_key="subsets" primary_upload_url="upload/brands/"  secondary_upload_url="upload/subsets/" primary_autocomplete_id="brands-autocomplete-data" secondary_autocomplete_id="subsets_autocomplete_data" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="names" secondary_field_key="" primary_upload_url="upload/names/"  secondary_upload_url="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="cities" secondary_field_key="" primary_upload_url="upload/cities/"  secondary_upload_url="" primary_autocomplete_id="cities-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="teams" secondary_field_key="" primary_upload_url="upload/teams/"  secondary_upload_url="" primary_autocomplete_id="teams-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="attribs" secondary_field_key="" primary_upload_url="upload/attribs/"  secondary_upload_url="" primary_autocomplete_id="attribs-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="condition" secondary_field_key="" primary_upload_url="upload/condition/"  secondary_upload_url="" primary_autocomplete_id="condition-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
-    {% include "settings_block.html" with primary_field_key="parallel" secondary_field_key="" primary_upload_url="upload/parallel/"  secondary_upload_url="" primary_autocomplete_id="parallel-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+    {% comment %}
 
+      {% include "settings_block.html" with primary_field_key="brands" secondary_field_key="subsets" primary_upload_url="upload/brands/"  secondary_upload_url="upload/subsets/" primary_autocomplete_id="brands-autocomplete-data" secondary_autocomplete_id="subsets_autocomplete_data" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="names" secondary_field_key="" primary_upload_url="upload/names/"  secondary_upload_url="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="cities" secondary_field_key="" primary_upload_url="upload/cities/"  secondary_upload_url="" primary_autocomplete_id="cities-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="teams" secondary_field_key="" primary_upload_url="upload/teams/"  secondary_upload_url="" primary_autocomplete_id="teams-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="attribs" secondary_field_key="" primary_upload_url="upload/attribs/"  secondary_upload_url="" primary_autocomplete_id="attribs-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="condition" secondary_field_key="" primary_upload_url="upload/condition/"  secondary_upload_url="" primary_autocomplete_id="condition-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      {% include "settings_block.html" with primary_field_key="parallel" secondary_field_key="" primary_upload_url="upload/parallel/"  secondary_upload_url="" primary_autocomplete_id="parallel-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      
+    {% endcomment %}
   </div>
 <script>
 function handleConsentPage() {

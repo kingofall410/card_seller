@@ -39,7 +39,11 @@
 $(document).ready(function () {
     
   document.querySelectorAll(`input[type='text'][id^='title_to_be']`).forEach(input => {
-    handleManualInput(input); // Run once on init
+    csrState = `{{ search_result.status }}`
+    console.log("stat: ",csrState)
+    if (csrState == "new") 
+      console.log("new csr")
+      handleManualInput(input); // Run once on init
   });
   
   // 🧩 Allow HTML in autocomplete labels
@@ -354,15 +358,18 @@ function handleManualInput(fieldName, cardId) {
           fields.brand,
           fields.subset !=" " ? `${fields.subset}` : null,
           fields.full_name,
-          fields["1st"] ? "1st" : null,
-          fields.RC ? "RC" : null,
-          fields.HOF ? "HOF" : null,
-          fields.Auto ? "Auto" : null,
+          fields["attributes.1st"] ? "1st" : null,
+          fields["attributes.RC"] ? "RC" : null,
+          fields["attributes.HOF"] ? "HOF" : null,
+          fields["attributes.Auto"] ? "Auto" : null,
+          fields["attributes.All-Star"] ? "All-Star" : null,
           fields.parallel !=" " ? `${fields.parallel}` : null,
           fields.serial_number !="-" ? `${fields.serial_number}` : null, 
-          fields.card_number != "-" ? `#${fields.card_number}` : null,
+          fields.card_number != "" ? `#${fields.card_number}` : null,
           fields.city,
-          fields.team
+          fields.team,
+          fields.condition,
+          fields["attributes.Oddball"] ? "Oddball" : null
         ];
 
       titleElement.value = titleParts
@@ -413,7 +420,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ title }}"
                 data-maxlength="80"
-                oninput="handleManualInput('title_to_be', {{ card_counter }3})">
+                oninput="handleManualInput('title_to_be', {{ card_counter }})">
       </td>
     </tr>
     <!-- 🏷️ SubTitle Row -->
@@ -567,7 +574,6 @@ function handleEnterPress(fieldName, cardCounter) {
   {% endwith %}
 </tbody>
 
-start here, need to figure out how to save attributes
 </table>
 <div style="margin-top: 16px; text-align: right;">
   <button id="saveFieldsBtn" style="padding: 8px 16px; font-size: 14px;">

@@ -20,6 +20,8 @@ class Settings(models.Model):
     ebay_user_auth_consent = models.CharField(max_length=250, blank=True, null=True)
     ebay_auth_code_unescaped = models.CharField(blank=True)
 
+    nr_std_devs = models.FloatField(default=2.0)
+
     def load_from_files(self, brand_path=None, team_path=None, name_path=None):
         if brand_path:
             with open(brand_path, "r") as f:

@@ -1,4 +1,4 @@
-import os, json
+import os, json, statistics
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.conf import settings
@@ -21,6 +21,7 @@ from django.core.paginator import Paginator
 from django.urls import reverse
 from django.db.models import F
 
+
 from urllib.parse import unquote
 
 
@@ -30,12 +31,21 @@ def hello_world(request):
     
     return render("success.html")
 
-def test_view(request):
+def test_view(request, csr=851):
+    # Example: fetched from eBay API or scraping logic
+    csr = CardSearchResult.objects.get(id=csr)
+    prices = csr.get_prices()
+    print(prices)
+    #mean = statistics.mean(prices)
+    #std_dev = statistics.stdev(prices)
 
-    conditions = Condition.objects.all().delete()
-    
+    context = {
+        "prices": json.dumps(csr.get_prices()),
+        "mean": 0,
+        "std_dev": 0
+    }
 
-
+    return render(request, "price_chart.html", context)
 
 def crop_review(request, card_id):
     card = get_object_or_404(Card, id=card_id)
@@ -92,8 +102,17 @@ def view_collection(request, collection_id=None):
         cards = Card.objects.order_by('-id')
 
     settings = Settings.objects.first()  # or however you fetch it
+    prices = [json.dumps(card.active_search_results().get_prices()) for card in cards]
+    print(prices)
+    for element in prices:
+        if isinstance(element, list) and len(element) == 3:
+            _, title, _ = element
+            assert isinstance(title, str)
+            assert '"' not in title
+            assert "'" not in title
+            assert '\\' not in title
     
-    cards = [(card, card.active_search_results()) for card in cards]
+    cards = [(card, card.active_search_results(), json.dumps(card.active_search_results().get_prices())) for card in cards]
     paginator = Paginator(cards, settings.nr_collection_page_items)
     
     page_number = request.GET.get('page')
@@ -304,7 +323,7 @@ def update_csr_fields(request):
     field_data = request.POST.dict()
     field_data.pop("csrId", None)  # Remove csrId from field data
     field_data.pop("csrfmiddlewaretoken", None)  # Remove CSRF token
-    print("caesar: ", field_data)
+    #print("caesar: ", field_data)
     # Coerce boolean fields
     for key, value in field_data.items():
         field = csr._meta.get_field(key) if key in [f.name for f in csr._meta.fields] else None
@@ -313,7 +332,6 @@ def update_csr_fields(request):
 
     try:
         csr.update_fields(field_data)
-        print("okey dokey")
         return JsonResponse({"success": True})
     except Exception as e:
         return JsonResponse({"error": True, "message": f"Update failed: {str(e)}"}, status=500)
@@ -570,10 +588,12 @@ def update_settings(request):
         field_pct_threshold = request.POST.get('field_pct_threshold')
         ebay_user_auth_consent = request.POST.get('ebay_user_auth_consent')
         ebay_auth_code_unescaped = request.POST.get('ebay_auth_code_unescaped')
+        nr_std_devs = request.POST.get('nr_std_devs')
         settings = Settings.objects.first()  # or however you fetch it
         settings.nr_returned_listings = nr_returned_listings
         settings.nr_collection_page_items = nr_collection_page_items
         settings.field_pct_threshold = field_pct_threshold
+        settings.nr_std_devs = nr_std_devs
         settings.ebay_user_auth_consent = ebay_user_auth_consent
         settings.ebay_auth_code_unescaped = ebay_auth_code_unescaped
         settings.ebay_user_auth_code = unquote(ebay_auth_code_unescaped)

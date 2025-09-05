@@ -1,0 +1,289 @@
+<style>
+  
+.card-list {
+  display: flex;
+  flex-wrap: wrap; /* allows wrapping to next line if needed */
+  gap: 12px;        /* spacing between cards */
+  padding: 8px 0;
+}
+
+.card-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  text-align: center;
+}
+
+.image-wrapper {
+  position: relative;
+  width: 100px;
+  height: 150px; /* or match your image height */
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.thumbnail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  transition: opacity 0.3s ease;
+}
+
+.thumbnail.hover {
+  opacity: 0;
+  z-index: 2;
+}
+
+.image-wrapper:hover .thumbnail.hover {
+  opacity: 1;
+}
+
+.image-wrapper:hover .thumbnail.default {
+  opacity: 0;
+}
+
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-wrapper::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%; /* above the button */
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 0.75em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.tooltip-wrapper:hover::after {
+  opacity: 1;
+}
+.add-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100px;
+  height: 150px;
+  padding: 8px;
+  border: 2px dashed #aaa;
+  border-radius: 6px;
+  background-color: #f0f0f0;
+}
+
+.add-button {
+  width: 100%;
+  padding: 6px 0;
+  font-size: 0.9em;
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.add-button:hover {
+  background-color: #d0d0d0;
+}
+
+
+</style>
+{% load custom_tags %}
+<div class="collection-node" data-id="{{ collection.id }}">
+  <div class="collection-header">
+    <div class="collection-title" data-id="{{ collection.id }}">
+        <h2>{{collection.id}}. {{collection.name}}</h2><h4>({{collection.create_date}})</h4></div><br><br>
+    <button onclick="addCard({{ collection.id }})">➕</button>
+    <button onclick="removeCollection({{ collection.id }})">🗑️</button>
+    <button onclick="saveTitle({{ collection.id }})">💾</button>
+    <input type="text"
+       name="collection_name_{{ collection.id }}"
+       value="{{ collection.name }}"
+       style="width: 50%; box-sizing: border-box;"
+       data-id="{{ collection.id }}"
+       placeholder="Change collection name..."
+       onchange="saveTitle({{ collection.id }})">
+  </div>
+
+    <div class="card-list">
+    {% for card in collection.cards.all %}
+    
+    <div class="card-item" data-id="{{ card.id }}">
+        <div class="image-wrapper">
+            <a href="../card/{{ card.id }}"><img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
+            <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover"></a>
+        </div>
+        {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
+        {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
+        <div class="card-actions">
+            <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
+                <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
+            </div>
+            <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
+            <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
+        </div>
+        {% endwith %}
+        {% endwith %}
+        
+    </div>
+    {% endfor %}
+    {% for subcollection in collection.subcollections.all %}
+    
+    <div class="card-item">
+        <div class="image-wrapper">
+            <img src="/static/images/missing_collection.png" alt="{{ subcollection.id }}" class="thumbnail default">
+            <img src="/static/images/missing_collection_reverse.png" alt="{{ subcollection.id }} hover" class="thumbnail hover">
+        </div>
+        <div class="card-actions">
+            <div class="tooltip-wrapper" data-tooltip="{{ subcollection.id }}">
+                <button onclick="editCard({{ subcollection.id }})">✏️</button>
+            </div>
+            <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
+            <button onclick="removeCard({{ subcollection.id }})" title="Delete">🗑️</button>
+        </div>
+        
+    </div>
+    {% endfor %}
+    
+    <div class="card-item add-controls">
+        <button class="add-button" onclick="triggerFileUpload({{ collection.id }})" title="Add Card">➕ Card</button>
+        <button class="add-button" onclick="addSubcollection({{ collection.id }})" title="Add Subcollection">📁 Subcollection</button>
+        <input type="file" id="fileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadImage({{ collection.id }}, this.files)" multiple>
+
+    </div>
+
+    </div>
+</div>
+
+<script>
+
+function triggerFileUpload(collectionId) {
+  document.getElementById("fileInput_" + collectionId).click();
+}
+
+function uploadImage(collectionId, files) {
+  if (!files || files.length === 0) return;
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("images", files[i]); // Django expects 'images' as a list
+  }
+  formData.append("collection_id", collectionId);
+
+  fetch("/upload_image/", {
+    method: "POST",
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload(); // or dynamically insert new cards
+    } else {
+      alert("Upload failed: " + data.message);
+    }
+  });
+}
+
+
+function getCSRFToken() {
+  return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+function toggleChildren(el) {
+  const node = el.closest('.collection-node');
+  const subs = node.querySelector('.subcollections');
+  subs.style.display = subs.style.display === 'none' ? 'block' : 'none';
+  el.textContent = subs.style.display === 'none' ? '▶' : '▼';
+}
+
+function addCard(collectionId) {
+  // AJAX call to Django view to create a new card
+  console.log("Add card to collection:", collectionId)
+  window.location.href = "/upload_image/" + collectionId;
+}
+
+function addSubcollection(parentId) {
+  // AJAX call to create nested collection
+  $.post("/collection_create/", {
+        collection_id: parentId
+    }, function(response) {
+        if (response.error) {
+            alert("Error: " + response.message);
+        } else {
+            location.reload()
+        }
+    });
+}
+
+function removeCard(cardId) {
+  // AJAX call to delete card
+  $.post("/delete/", {
+        card_id: cardId,
+    }, function(response) {
+        if (response.error) {
+            alert("Error: " + response.message);
+        } else {
+            location.reload()
+        }
+    });
+}
+
+function removeCollection(collectionId) {
+  // AJAX call to delete card
+  $.post("/delete/", {
+        collection_id: collectionId,
+    }, function(response) {
+        if (response.error) {
+            alert("Error: " + response.message);
+        } else {
+            location.reload()
+        }
+    });
+}
+
+function saveTitle(collectionId) {
+  const $input = $("input[name='collection_name_" + collectionId + "']");
+  const newName = $input.val();
+
+  console.log("Save title:", collectionId);
+
+  $.post("/update_collection/", {
+    collectionId: collectionId,
+    name: newName
+  }, function(response) {
+    if (response.error) {
+      alert("Error: " + response.message);
+    } else {
+      // Update visible title (assuming there's an element with class .collection-title)
+      $(".collection-title[data-id='" + collectionId + "'] h2").text(collectionId + ". " + newName);
+
+      // Clear the input field
+      $input.val("");
+    }
+  });
+}
+
+function cropCard(collectionId, cardId) {
+    window.location.href = "/collection/"+collectionId
+}
+
+</script>

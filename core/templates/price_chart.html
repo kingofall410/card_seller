@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>eBay Price Distribution</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    #chart-container {
+      width: 800px;
+      margin: 40px auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="chart-container">
+
+    <canvas id="priceChart"></canvas>
+  </div>
+</body>
+</html>
+
+<script>
+  // Sample price data from eBay
+  const priceData = JSON.parse(`{{ prices | safe }}`);
+
+  // Extract raw prices
+  const prices = priceData.map(p => p[0]);
+
+  // Compute mean and standard deviation
+  function getMean(arr) {
+    const sum = arr.reduce((acc, val) => acc + val, 0);
+    return sum / arr.length;
+  }
+
+  function getStdDev(arr, mean) {
+    const variance = arr.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / arr.length;
+    return Math.sqrt(variance);
+  }
+
+  const mean = getMean(prices);
+  const stdDev = getStdDev(prices, mean);
+  const cutoff = 2; // ⬅️ Change this to adjust filtering threshold
+
+  // Filter out prices beyond ±cutoff * stdDev
+  const filteredPriceData = priceData.filter(([price]) => {
+    return Math.abs(price - mean) <= cutoff * stdDev;
+  });
+
+  const filteredPrices = filteredPriceData.map(p => p[0]);
+
+  // Bin setup: $1-wide bins labeled as "42.99"
+  const binSize = 1;
+  const minPrice = Math.floor(Math.min(...filteredPrices));
+  const maxPrice = Math.ceil(Math.max(...filteredPrices));
+
+  const bins = {};
+  for (let i = minPrice; i <= maxPrice; i++) {
+    const binLabel = `${(i + 0.99).toFixed(2)}`;
+    bins[binLabel] = 0;
+  }
+
+  // Assign prices to bins
+  filteredPriceData.forEach(([price, title]) => {
+    const binFloor = Math.floor(price);
+    const binLabel = `${(binFloor + 0.99).toFixed(2)}`;
+    if (bins[binLabel] !== undefined) {
+      bins[binLabel] += 1;
+    }
+  });
+
+  const histogramLabels = Object.keys(bins);
+  const histogramData = Object.values(bins);
+
+  // Scatter plot: each price aligned to its bin label
+  const scatterData = filteredPriceData.map(([price, title, thumb]) => ({
+    x: `${Math.floor(price) + 0.99}`,
+    y: price,
+    title: title,
+    thumb: thumb
+  }));
+
+  // Chart.js setup
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: histogramLabels,
+      datasets: [
+        {
+          label: 'Item Count per Price Bin',
+          data: histogramData,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Actual Prices',
+          data: scatterData,
+          type: 'scatter',
+          backgroundColor: 'rgba(255, 206, 86, 0.8)',
+          pointRadius: 4,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      scales: {
+        x: {
+          type: 'category',
+          position: 'bottom',
+          title: {
+            display: true,
+            text: 'Price Bins ($)'
+          },
+          ticks: {
+            autoSkip: false,
+            maxRotation: 45,
+            minRotation: 45
+          }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: {
+            display: true,
+            text: 'Item Count'
+          },
+          beginAtZero: true,
+          min: 0
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          title: {
+            display: true,
+            text: 'Actual Price ($)'
+          },
+          grid: {
+            drawOnChartArea: false
+          },
+          min: Math.max(0, Math.min(...filteredPrices) - 5),
+          max: Math.max(...filteredPrices) + 2
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const point = context.raw;
+              if (point.y) {//if point doesn't have a y it's a bin:
+                console.log("ctx:", context)
+                console.log("ctx:", point)
+                return [`Price: $${point.y.toFixed(2)}`, `Item: ${point.title}`, `url: ${point.thumb}`];
+              }
+            },
+            title: function(context) {
+              return `Bin: ${context[0].label}`;
+            }
+          }
+        }
+      }
+    }
+  });
+</script>
+

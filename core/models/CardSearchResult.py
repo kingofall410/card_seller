@@ -6,6 +6,13 @@ from collections import defaultdict, Counter
 import requests
 from services import ebay
 import statistics
+from enum import Enum
+
+class ResultStatus(models.TextChoices):
+    NEW="new", "New"
+    REVIEWED="revwiewed", "Reviewed"
+    SAVED="saved", "Saved"
+
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -154,6 +161,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_low_price = models.FloatField(default=0.0)
     ebay_high_price = models.FloatField(default=0.0)
 
+    status = models.CharField(max_length=20, choices=ResultStatus.choices,default=ResultStatus.NEW)
 
     #combine all this into field_definition
     readonly_fields = ["search_string", "response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
@@ -183,21 +191,27 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     #TODO: read this 
     checkbox_fields = ["attributes"]
-
-
+    
     dynamic_listing_fields = ["front", "back"]
 
     def save(self, *args, **kwargs):
-        # Auto-generate title before saving
+        
+        if self._state.adding:
+            self.status == ResultStatus.NEW
+        elif self.status == ResultStatus.NEW:
+            self.status = ResultStatus.SAVED    
+
+        if self.title_to_be_m:
+            self.title_to_be = self.title_to_be_m
         self.sport = ""
         self.league = ""
         self.full_set = self.build_full_set()
         self.full_team = self.build_full_team()
         if self.attributes:
-            print(self.attributes)
-            print(self.attribute_flags)
+            #print(self.attributes)
+            #print(self.attribute_flags)
             self.features = " | ".join(key for key in self.attribute_flags.keys())
-            print(self.features)
+            #print(self.features)
         #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
         super().save(*args, **kwargs)
 
@@ -323,12 +337,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
             if hasattr(self, field_name):
                 field = self._meta.get_field(field_name)
-                print(type(field), field_name, field)
+                #print(type(field), field_name, field)
 
                 if field_name in self.text_fields:
                     final_value = ", ".join(x for x in counter.keys())
                 elif field_name in self.checkbox_fields:
-                    print(counter)
+                    #print(counter)
                     #TODO obviously remove this hardcode; the value 5 should be a % based on occurrence count/total listings
                     final_value = {key[0]: True for key in counter.items() if key[1] > 5}
                     field_name = "attribute_flags"#TODO obviously remove this hardcode
@@ -342,13 +356,33 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         
         self.set_ovr_attribute("title_to_be", self.build_title(), False)
         self.save()
-        print("Final collapsed tokens:", self.collapsed_tokens)
+        #print("Final collapsed tokens:", self.collapsed_tokens)
         return summary
+    
+    def clean_text(self, text):
+        return (
+            text.replace('\\', '')      # remove backslashes
+                .replace('`', '')       # remove backticks
+                .replace('"', "")      # replace double quotes with single quotes
+                .replace("'", "")      # replace double quotes with single quotes
+                .replace('\n', ' ')     # flatten newlines
+                .replace('/', '-')     # flatten newlines
+                .replace('(', '_')     # flatten newlines.strip()
+                .replace(')', '_')     # flatten newlines
+                .strip()
+        )
 
 
+    def get_prices(self):
+        for listing in self.listings.all():
+            #print(listing.title.title)
+            clean = self.clean_text(listing.title.title)
+            #print(clean)
+
+        return [[listing.ebay_price, self.clean_text(listing.title.title), listing.thumb_url] for listing in self.listings.all()]
 
     def update_fields(self, all_field_data):
-        print("afd", all_field_data)
+        #print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
@@ -366,7 +400,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     #print(group_name, field_name)
                     #TODO: need to make this more generic to handle additional checkhbox fields
                     if group_name == 'attributes':
-                        print('checkboxes')
+                        #print('checkboxes')
                         print(field_name, type(field_value), field_value)
                         #if field_name in self.attribute_flags:
                         self.attribute_flags[field_name] = (field_value.lower() == 'true')
@@ -413,10 +447,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             subset = self.display_value("subset")
             name = self.display_value("full_name")
             serial = self.display_value("serial_number")
-            nr = self.display_value("card_number")
+            cardnr = self.display_value("card_number")
+            nr = f"#{cardnr}" if cardnr else ""
             city = self.display_value("city")
             team = self.display_value("team")
-            isRC = "RC" if "RC" in self.display_value("attributes") else ""
+
+            isRC = "RC" if self.attribute_flags.get("RC") else ""
+            isAuto = "Auto" if self.attribute_flags.get("Auto") else ""
+            is1st = "1st" if self.attribute_flags.get("1st") else ""
+            isHOF = "HOF" if self.attribute_flags.get("HOF") else ""
+            isAS = "All-Star" if self.attribute_flags.get("All-Star") else ""
+            isOddball = "Oddball" if self.attribute_flags.get("Oddball") else ""
+            condition = self.display_value("condition")
+        
         else:            
             year = fields["year"]
             brand = fields["brand"]
@@ -426,12 +469,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             nr = fields["nr"]
             city = fields["city"]
             team = fields["team"]
-            isRC = "RC" if "RC" in self.fields("attribs") else ""
+            isRC = "RC" if fields["attributes.RC"] else ""
+            isAuto = "Auto" if fields["attributes.Auto"] else ""
+            is1st = "1st" if fields["attributes.1st"] else ""
+            isHOF = "HOF" if fields["attributes.HOF"] else ""
+            isAS = "All-Star" if fields["attributes.All-Star"] else ""
+            isOddball = "Oddball" if fields["attributes.Oddball"] else ""
+            condition = fields["condition"]
 
         subset = "" if subset == "-" else subset
         serial = "" if serial == "-" else serial
-        print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
-        return f"{year} {brand} {subset} {name} {isRC} {serial} #{nr} {city} {team}".replace("  ", " ")
+
+        #print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
+        return f"{year} {brand} {subset} {name} {isRC} {isHOF} {is1st} {isAuto} {isAS} {serial} #{nr} {city} {team} {condition} {isOddball}".replace("  ", " ")
 
     #TODO:these buildable fields should be configurable
     def build_full_set(self, fields=None):

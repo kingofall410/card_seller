@@ -1,0 +1,84 @@
+<html>
+<head>
+    <title>Card Overview</title>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+    <style>
+    .portrait-image {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .csr-fields {
+      flex: 1;
+      max-width: 600px;
+    }
+
+    .image-wrapper {
+      position: relative;
+      width: 500px;
+      height: 700px;
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+
+    .thumbnail {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      transition: opacity 0.3s ease;
+    }
+
+    .thumbnail.hover {
+      opacity: 0;
+      z-index: 2;
+    }
+
+    .image-wrapper:hover .thumbnail.hover {
+      opacity: 1;
+    }
+
+    .image-wrapper:hover .thumbnail.default {
+      opacity: 0;
+    }
+
+    .overview-wrapper {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 16px;
+}
+
+    </style>
+</head>
+
+<body>
+{% load static %}
+{% include "header.html" %}
+
+<div class="overview-wrapper">
+  <div class="portrait-image">
+    <div class="image-wrapper">
+      <img src="{{ card.cropped_image.url }}"
+           alt="{{ card.id }}"
+           onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';"
+           class="thumbnail default">
+      <img src="{{ card.cropped_reverse.url }}"
+           alt="{{ card.id }} hover"
+           onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
+           class="thumbnail hover">
+    </div>
+  </div>
+
+  <div class="csr-fields">
+    {% include "search_results.html" with card_id=card.id search_result=search_results %}
+  </div>
+</div>
+</body>
+</html>
