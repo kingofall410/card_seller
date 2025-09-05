@@ -97,27 +97,30 @@
   </style>
 </head>
 <body>
-  <h2>Crop Image for Card {{ card_id }}</h2>
-  <div class="cropper-nav-wrapper">
-  <div class="cropper-nav-row">
-    <!-- Left Navigation -->
-    <div class="cropper-nav-left">
-      <a href="{% url 'next' card.id %}" class="nav-arrow">⬅ Previous</a>
+  {% for card in page_obj %}
+    <h2>Crop Image for Card {{ card.id }}</h2>
+    <div class="cropper-nav-wrapper">
+      <div class="cropper-nav-row">
+        <!-- Cropper -->
+        <div class="cropper-nav-center">
+          {% include "cropper_only.html" with card=card.0 card_id=card.0.id original_img=card.0.uploaded_image.url portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url crop_params=card.1.front_crop_params %}
+        </div>
+      </div>
     </div>
+  {% endfor %}
+  
+    <div class="pagination-wrapper">
+      <div class="pagination-controls">
+        {% if page_obj.has_previous %}
+          <a href="?page={{ page_obj.previous_page_number }}" class="page-link">⬅ Prev Page</a>
+        {% endif %}
 
-    <!-- Cropper -->
-    <div class="cropper-nav-center">
-      {% include "cropper_only.html" with card=card card_id=card.id original_img=card.uploaded_image.url portrait_img=card.portrait_image.url cropped_img=card.cropped_image.url reverse_img=card.cropped_reverse.url search_results=search_results crop_params=search_results.front_crop_params %}
-      {% include "cropper_only.html" with card=card card_id=card.reverse_id original_img=card.reverse_image.url portrait_img=card.portrait_reverse.url cropped_img=card.cropped_reverse.url reverse_img=card.cropped_image.url search_results=card crop_params=card.reverse_crop_params %}
-    </div>
+        <span class="page-info">
+          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
 
-    <!-- Right Navigation -->
-    <div class="cropper-nav-right">
-      <form method="post" action="{% url 'save_and_next' card.id %}" onsubmit=getCropDataForSave(card.id) style="display:inline;">
-        {% csrf_token %}
-        <button type="submit" class="nav-arrow">✅ Save & Next ➡</button>
-      </form>
-      <a href="{% url 'next' card.id %}" class="nav-arrow">➡ Next (Don’t Save!)</a>
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next Page ➡</a>
+        {% endif %}
+      </div>
     </div>
-  </div>
-</div>

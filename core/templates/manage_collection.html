@@ -11,7 +11,7 @@
 <div id="collection-tree">
   {% for collection in root_collections %}
     <HR>
-    {% include "manage_collection_node.html" with collection=collection %}
+    {% include "manage_collection_node.html" with collection=collection settings=settings collections=root_collections%}
   {% endfor %}
 </div>
 

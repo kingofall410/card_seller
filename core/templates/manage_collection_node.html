@@ -11,31 +11,44 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100px;
-  padding: 8px;
+  width: 150px;
+  padding: 6px;
   border: 1px solid #ccc;
   border-radius: 6px;
   background-color: #f9f9f9;
   text-align: center;
+  position: relative;
+}
+
+.card-count {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-weight: bold;
+  font-size: 0.85em;
+  background-color: rgba(255, 255, 255, 0.8); /* optional: subtle background */
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .image-wrapper {
   position: relative;
-  width: 100px;
-  height: 150px; /* or match your image height */
-  margin-bottom: 6px;
+  width: 150px;
+  height: 210px; /* or match your image height */
   overflow: hidden;
+  margin-bottom: 6px;
 }
 
 .thumbnail {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+  top: 4px;
+  left: 4px;
+  width: calc(100% - 8px); /* ⬅️ account for padding */
   height: auto;
   border-radius: 4px;
   transition: opacity 0.3s ease;
 }
+
 
 .thumbnail.hover {
   opacity: 0;
@@ -82,8 +95,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100px;
-  height: 150px;
+  width: 144px;
+  height: 234px;
   padding: 8px;
   border: 2px dashed #aaa;
   border-radius: 6px;
@@ -105,9 +118,43 @@
   background-color: #d0d0d0;
 }
 
+.move-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 9999;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  width: 200px; /* Adjust as needed */
+  padding: 4px 0;
+  display: none;
+  font-family: sans-serif;
+}
+
+.move-dropdown ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.move-dropdown li {
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.move-dropdown li:hover {
+  background-color: #f0f0f0;
+}
+
+
 
 </style>
 {% load custom_tags %}
+<div id="collection-{{ collection.id }}" class="collection">
 <div class="collection-node" data-id="{{ collection.id }}">
   <div class="collection-header">
     <div class="collection-title" data-id="{{ collection.id }}">
@@ -115,6 +162,7 @@
     <button onclick="addCard({{ collection.id }})">➕</button>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="saveTitle({{ collection.id }})">💾</button>
+    
     <input type="text"
        name="collection_name_{{ collection.id }}"
        value="{{ collection.name }}"
@@ -126,7 +174,7 @@
 
     <div class="card-list">
     {% for card in collection.cards.all %}
-    
+    <div id="card-{{ card.id }}" class="card">
     <div class="card-item" data-id="{{ card.id }}">
         <div class="image-wrapper">
             <a href="../card/{{ card.id }}"><img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
@@ -140,10 +188,22 @@
             </div>
             <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
             <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
+            <div class="card-count">{{ card.search_count }}</div>
+            <div class="move-dropdown" style="display: none;">
+            <ul>
+                {% for collection in collections %}
+                <li onclick="moveCardToCollection({{ card.id }}, '{{ collection.id }}')">
+                    {{collection.id}}. {{collection.name}}
+                </li>
+                {% endfor %}
+            </ul>
+            </div>
+
         </div>
         {% endwith %}
         {% endwith %}
         
+    </div>
     </div>
     {% endfor %}
     {% for subcollection in collection.subcollections.all %}
@@ -172,6 +232,7 @@
     </div>
 
     </div>
+</div>
 </div>
 
 <script>
@@ -245,6 +306,33 @@ function removeCard(cardId) {
             location.reload()
         }
     });
+}
+
+function toggleMoveDropdown(button) {
+  const dropdown = button.nextElementSibling.nextElementSibling.nextElementSibling; // Adjust if DOM changes
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+function moveCardToCollection(cardId, collectionId) {
+  fetch(`/move_to_collection/${cardId}/${collectionId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ collection_id: collectionId })
+  })
+  .then(response => {
+    if (!response.ok) throw new Error('Move failed');
+    return response.json(); // Optional: get updated card data
+  })
+  .then(data => {
+    const cardElement = document.querySelector(`#card-${cardId}`);
+    const targetContainer = document.querySelector(`#collection-${collectionId}`);
+    if (cardElement && targetContainer) {
+      targetContainer.appendChild(cardElement);
+    }
+  })
+  .catch(error => {
+    console.error('Error moving card:', error);
+    // Optionally show a toast or alert
+  });
 }
 
 function removeCollection(collectionId) {

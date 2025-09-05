@@ -31,25 +31,29 @@ def hello_world(request):
     
     return render("success.html")
 
-def test_view(request, csr=851):
-    # Example: fetched from eBay API or scraping logic
-    csr = CardSearchResult.objects.get(id=csr)
-    prices = csr.get_prices()
-    print(prices)
-    #mean = statistics.mean(prices)
-    #std_dev = statistics.stdev(prices)
-
-    context = {
-        "prices": json.dumps(csr.get_prices()),
-        "mean": 0,
-        "std_dev": 0
-    }
+def test_view(request):
+    return crop_review(request, 739)
+    
 
     return render(request, "price_chart.html", context)
 
-def crop_review(request, card_id):
-    card = get_object_or_404(Card, id=card_id)
-    return render(request, "crop_review.html", {"card": card, "search_results":card.active_search_results()})
+def crop_review(request, collection_id):
+    
+    collection = get_object_or_404(Collection, id=collection_id)
+    card_id = request.GET.get('card_id')
+    cards = collection.cards.all()
+    settings = Settings.get_default()
+
+    page_number = 0
+    if card_id:
+        position = list(cards.values_list('id', flat=True)).index(card_id) + 1    
+        page_number = (position - 1) // settings.nr_collection_page_items + 1
+    else:
+        page_number = request.GET.get('page')
+    card_tuples = [(card, card.active_search_results()) for card in cards]
+    paginator = Paginator(card_tuples, settings.nr_collection_page_items)
+    page_obj = paginator.get_page(page_number)
+    return render(request, "crop_review.html", {"page_obj": page_obj})
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -339,7 +343,16 @@ def update_csr_fields(request):
 
 def manage_collection(request):
     collections = Collection.objects.order_by('-id')
-    return render(request, "manage_collection.html", {"root_collections": collections})
+    settings = Settings.get_default()    
+    return render(request, "manage_collection.html", {"root_collections": collections, "settings": settings})
+
+@csrf_exempt
+def move_to_collection(request, card_id, collection_id):
+    collection = Collection.objects.get(id=collection_id)
+    card = Card.objects.get(id=card_id)
+    card.collection = collection
+    card.save()
+    return JsonResponse({"success": True})
 
 @csrf_exempt
 def image_search(request, card_id):

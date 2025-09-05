@@ -60,6 +60,10 @@ class Card(models.Model):
         
     def active_search_results(self):
         return self.search_results.last()
+
+    @property
+    def search_count(self):
+        return len(self.search_results.all())
     
     @classmethod
     def find_back_by_alpha(cls, front_filepath):

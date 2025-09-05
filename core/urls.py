@@ -8,7 +8,7 @@ urlpatterns = [
     path('get_dynamic_options/', views.get_dynamic_options, name='get_dynamic_options'),
     path('test/', views.test_view, name="test_view"),
     path('delete/', views.delete, name="delete"),
-    path('crop_review/<int:card_id>', views.crop_review, name="crop_review"),
+    path('crop_review/<int:collection_id>', views.crop_review, name="crop_review"),
     path('save_and_next/<int:card_id>', views.save_and_next, name="save_and_next"),
     path('next/<int:card_id>', views.next, name="next"),    
     path("select-directory/", views.upload_folder_and_redirect, name="select_directory"),
@@ -37,5 +37,6 @@ urlpatterns = [
     path('export/<int:csr_id>/', views.export, name='export'),
     path('export_collection/<int:collection_id>/', views.export_collection, name='export_collection'),
     path('manage/', views.manage_collection, name='manage_collection'),
+    path('move_to_collection/<int:card_id>/<int:collection_id>', views.move_to_collection, name="move_to_collection")
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
