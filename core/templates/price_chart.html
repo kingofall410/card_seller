@@ -40,7 +40,7 @@
 
   const mean = getMean(prices);
   const stdDev = getStdDev(prices, mean);
-  const cutoff = 2; // ⬅️ Change this to adjust filtering threshold
+  const cutoff = `{{ settings.nr_std_devs }}`; // ⬅️ Change this to adjust filtering threshold
 
   // Filter out prices beyond ±cutoff * stdDev
   const filteredPriceData = priceData.filter(([price]) => {

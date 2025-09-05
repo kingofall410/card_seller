@@ -114,7 +114,7 @@
                     <div class="cropper-column-left">
                         {% include "search_results.html" with card_id=card.0.id search_result=card.1 %}
                         {% include "re_search_buttons.html" with card_id=card.0.id search_result=card.1%}
-                        {% include "price_chart.html" with prices=card.2 listings=card.1%}
+                        {% include "price_chart.html" with prices=card.2 listings=card.1 settings=settings%}
                         {% include "product_listings.html" with search_result=card.1%}
                     </div>
                     <div class="cropper-column-right">

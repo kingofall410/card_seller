@@ -118,7 +118,7 @@ def view_collection(request, collection_id=None):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    return render(request, "collection.html", {"page_obj": page_obj, "collection_id":collection.id})
+    return render(request, "collection.html", {"page_obj": page_obj, "collection_id":collection.id, "settings":settings})
 
 @csrf_exempt    
 def view_card(request, card_id):
