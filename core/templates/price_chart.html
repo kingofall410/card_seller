@@ -82,6 +82,56 @@
 
   // Chart.js setup
   const ctx = document.getElementById('priceChart').getContext('2d');
+  
+
+    const externalTooltipHandler = (context) => {
+    const { chart, tooltip } = context;
+
+    // Remove any existing tooltip
+    let tooltipEl = document.getElementById('chartjs-tooltip');
+    if (tooltipEl) tooltipEl.remove();
+
+    if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) return;
+
+    const point = tooltip.dataPoints[0].raw;
+    const canvasRect = chart.canvas.getBoundingClientRect();
+
+    // Create tooltip container
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'chartjs-tooltip';
+    tooltipEl.style.position = 'absolute';
+    tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
+    tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
+    tooltipEl.style.background = '#fff';
+    tooltipEl.style.border = '1px solid #ccc';
+    tooltipEl.style.borderRadius = '6px';
+    tooltipEl.style.padding = '8px';
+    tooltipEl.style.pointerEvents = 'none';
+    tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+    tooltipEl.style.fontSize = '12px';
+    tooltipEl.style.zIndex = 1000;
+    tooltipEl.style.maxWidth = '300px';
+
+    // Build table layout
+    tooltipEl.innerHTML = `
+      <div style="font-weight:bold; margin-bottom:6px;">Bin: ${tooltip.title[0]}</div>
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <td style="width:60px; vertical-align:top;">
+            <img src="${point.thumb}" style="width:60px; height:auto; border-radius:4px;" />
+          </td>
+          <td style="padding-left:8px; vertical-align:top;">
+            <div><strong>Price:</strong> $${point.y.toFixed(2)}</div>
+            <div><strong>Item:</strong> ${point.title}</div>
+          </td>
+        </tr>
+      </table>
+    `;
+
+    document.body.appendChild(tooltipEl);
+  };
+
+
   new Chart(ctx, {
     type: 'bar',
     data: {
@@ -146,21 +196,11 @@
       },
       plugins: {
         tooltip: {
-          callbacks: {
-            label: function(context) {
-              const point = context.raw;
-              if (point.y) {//if point doesn't have a y it's a bin:
-                console.log("ctx:", context)
-                console.log("ctx:", point)
-                return [`Price: $${point.y.toFixed(2)}`, `Item: ${point.title}`, `url: ${point.thumb}`];
-              }
-            },
-            title: function(context) {
-              return `Bin: ${context[0].label}`;
-            }
-          }
+          enabled: false, // ⛔ disables built-in tooltip
+          external: externalTooltipHandler // ⬅️ use custom handler
         }
       }
+
     }
   });
 </script>
