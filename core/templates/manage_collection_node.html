@@ -96,11 +96,15 @@
   justify-content: center;
   gap: 6px;
   width: 144px;
-  height: 234px;
+  height: 274px;
   padding: 8px;
   border: 2px dashed #aaa;
   border-radius: 6px;
   background-color: #f0f0f0;
+}
+
+.card-sort-controls {
+    margin-top: 6px;
 }
 
 .add-button {
@@ -158,7 +162,24 @@
   min-height: 20px;           /* Ensures vertical space is reserved */
   visibility: visible;     
 }
+.card-item.status-cropped {
+  background-color: #fff1f0; /* soft red */
+  border-color: #ffa39e
+}
 
+.card-item.status-searched {
+  background-color: #fffbe6; /* soft yellow */
+  border-color: #ffe58f;
+}
+
+.card-item.status-saved {
+  background-color: #f6ffed; /* soft green */
+  border-color: #b7eb8f;
+}
+.card-item.status-listed {
+  background-color: #e6f7ff; /* soft blue */
+  border-color: #91d5ff;
+}
 
 </style>
 {% load custom_tags %}
@@ -187,7 +208,6 @@
     <select onchange="sortCardsInModule(this)">
       <option value="year">Year</option>
       <option value="brand">Brand</option>
-      <option value="subset">Subset</option>
       <option value="name">Name</option>
       <option value="id">Default</option>
     </select>
@@ -197,8 +217,8 @@
     {% for card in collection.cards.all %}
     {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
     {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
-    <div id="card-{{ card.id }}" class="card">
-    <div class="card-item"
+    <div id="card-{{ card.id }}" class="card">    
+    <div class="card-item status-{{ card.active_search_results.status|lower }}"
      data-id="{{ card.id }}"
      data-year="{{ display_year|default:'' }}"
      data-brand="{{ display_brand|default:'' }}"
@@ -242,7 +262,7 @@
     {% endfor %}
     {% for subcollection in collection.subcollections.all %}
     
-    <div class="card-item"
+    <div class="card-item" 
      data-year="{{ display_year }}"
      data-brand="{{ display_brand }}"
      data-subset="{{ display_subset }}"

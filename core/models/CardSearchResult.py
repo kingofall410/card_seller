@@ -10,8 +10,22 @@ from enum import Enum
 
 class ResultStatus(models.TextChoices):
     NEW="new", "New"
-    REVIEWED="revwiewed", "Reviewed"
+    CROPPED="cropped", "Cropped"
+    SEARCHED="searched","Searched"
     SAVED="saved", "Saved"
+    LISTED="listed", "Listed"
+
+    @classmethod
+    def get_color(cls, value):
+        return {
+            cls.NEW: {'color': ''},
+            cls.CROPPED: {'color': 'red'},
+            cls.SEARCHED: {'color': 'yellow'},
+            cls.SAVED: {'color': 'green'},
+            cls.LISTED: {'color': 'blue'},
+
+        }.get(value, {})
+
 
 
 class OverrideableFieldsMixin(models.Model):
@@ -195,11 +209,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     dynamic_listing_fields = ["front", "back"]
 
     def save(self, *args, **kwargs):
-        
-        if self._state.adding:
-            self.status == ResultStatus.NEW
-        elif self.status == ResultStatus.NEW:
-            self.status = ResultStatus.SAVED    
 
         if self.title_to_be_m:
             self.title_to_be = self.title_to_be_m
@@ -435,7 +444,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 #must pass the listings here to preserve the in memory attributes
                 csr.collapsed_tokens = csr.collapse_token_maps(listing_set)
                 csr.aggregate_pricing_info()
-                print(csr.collapsed_tokens)
+                csr.status = ResultStatus.SEARCHED
             csr.save()
         return csr
         

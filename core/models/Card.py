@@ -4,7 +4,7 @@ from core.models.Cropping import CropParams, CroppedImage
 import numpy as np
 import cv2
 from django.core.files.base import ContentFile
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ResultStatus
 
 '''think about next steps: many require more ebay api work
 0.test expanding search results
@@ -169,7 +169,7 @@ class Card(models.Model):
         return self.id < other.id
 
     def __eq__(self, other):
-        return self.id == other.id
+        return other and self.id == other.id
     
     def __hash__(self):
         return hash(self.id)
@@ -517,6 +517,9 @@ class Card(models.Model):
             target_image = self.cropped_image
             portrait_image = self.portrait_image
 
+        last_csr.status = ResultStatus.CROPPED
+        last_csr.save()
+
         crop_params.x = crop_x
         crop_params.y = crop_y
         crop_params.width = crop_width
@@ -525,7 +528,7 @@ class Card(models.Model):
         crop_params.display_top_offset = display_top_offset
         crop_params.rotate = remainder_rotation
         crop_params.save()
-        print("Daniel", crop_params)
+        #print("Daniel", crop_params)
         #print(last_csr.crop_params)
         target_image.update(content=cropped_image, crop_params=crop_params)
         
