@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         saveBtn.addEventListener("click", function () {
             
-            save(cropper, cardId)
+            save(cropper, cardId, saveBtn)
         });
         if (img.complete && img.naturalWidth !== 0) {
             console.log(`✅ Image already loaded: ${cardId}`);
@@ -171,55 +171,59 @@ document.addEventListener("DOMContentLoaded", () => {
     })
 
 });
-
-function save(cropper, cardId) {
+//TODO: probably want to make this a multi call at some point
+async function save(cropper, cardId, btn) {
     console.log("Saving crop data...", cropper);
-    
-    const savedData = cropper.getData();
-    const savedCanvas = cropper.getCanvasData();
-    const savedCropBox = cropper.getCropBoxData();
-    const imageData = cropper.getImageData();
 
     const canvas = cropper.getCroppedCanvas();
+    if (!canvas) {
+        console.error("❌ No canvas available for cropping.");
+    return;
+    }
 
-    canvas.toBlob(function (blob) {
-        const formData = new FormData();
-        formData.append('cropped_image', blob, 'cropped.jpg');
-        const scaleX = imageData.naturalWidth / imageData.width;
-        const scaleY = imageData.naturalHeight / imageData.height;
-        
-        const imageX = (savedCropBox.left - imageData.left) * scaleX;
-        const imageY = (savedCropBox.top - imageData.top) * scaleY;
-        const imageWidth = savedCropBox.width * scaleX;
-        const imageHeight = savedCropBox.height * scaleY;  
-        
-        formData.append('card_id', cardId);
-        formData.append('crop_left', imageX);
-        formData.append('crop_top', imageY);
-        formData.append('crop_width', imageWidth);
-        formData.append('crop_height', imageHeight);
-        formData.append('canvas_rotation', -imageData.rotate);
-        formData.append('canvas_left', savedCanvas.left);
-        formData.append('canvas_top', savedCanvas.top);
-        
-        //const portraitPreview = document.getElementById(`portrait-${cardId}`);
-        //const croppedPreview = document.getElementById(`cropped-${cardId}`);
-        //croppedPreview.src = canvas.toDataURL();
-        
-        
-        //alert(-imageData.rotate)
-        /*not needed if we're doing a page refresh
-        resetAndRotate(portraitPreview, easyRotation).then(blob => {
-            //portraitPreview.src = URL.createObjectURL(blob);
-            console.log("Portrait image updated with rotation:", easyRotation);*/                    
-        fetch('/upload_crop/', { 
-            method: 'POST',
-            body: formData
-        }).then(response => {
-            console.log("Saved successfully");
-            location.reload()
-        }).catch(error => {
-            console.error("Save error", error);
-        });
-    }, 'image/jpeg');
+    btn.classList.add("button-waiting");
+
+    try {
+    const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg")
+    );
+    if (!blob) throw new Error("Failed to generate blob from canvas.");
+
+    const imageData = cropper.getImageData();
+    const savedCanvas = cropper.getCanvasData();
+    const savedCropBox = cropper.getCropBoxData();
+
+    const scaleX = imageData.naturalWidth / imageData.width;
+    const scaleY = imageData.naturalHeight / imageData.height;
+
+    const formData = new FormData();
+    formData.append("cropped_image", blob, "cropped.jpg");
+    formData.append("card_id", cardId);
+    formData.append("crop_left", (savedCropBox.left - imageData.left) * scaleX);
+    formData.append("crop_top", (savedCropBox.top - imageData.top) * scaleY);
+    formData.append("crop_width", savedCropBox.width * scaleX);
+    formData.append("crop_height", savedCropBox.height * scaleY);
+    formData.append("canvas_rotation", -imageData.rotate);
+    formData.append("canvas_left", savedCanvas.left);
+    formData.append("canvas_top", savedCanvas.top);
+
+    const response = await fetch("/upload_crop/", {
+        method: "POST",
+        body: formData,
+    });
+
+    const data = await response.json();
+    const croppedPreview = document.getElementById(`cropped-${cardId}`);
+
+    if (data.status === "saved" && data.url && croppedPreview) {
+        console.log("✅ Saved successfully");
+        croppedPreview.src = data.url;
+    } else {
+        console.warn("⚠️ Unexpected response:", data);
+    }
+    } catch (error) {
+        console.error("❌ Save error:", error);
+    } finally {
+        btn.classList.remove("button-waiting");
+    }
 }

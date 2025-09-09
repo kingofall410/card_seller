@@ -16,13 +16,13 @@ class ResultStatus(models.TextChoices):
     LISTED="listed", "Listed"
 
     @classmethod
-    def get_color(cls, value):
+    def get_icon(cls, value):
         return {
-            cls.NEW: {'color': ''},
-            cls.CROPPED: {'color': 'red'},
-            cls.SEARCHED: {'color': 'yellow'},
-            cls.SAVED: {'color': 'green'},
-            cls.LISTED: {'color': 'blue'},
+            cls.NEW: {'color': '', 'icon': '⭐'},
+            cls.CROPPED: {'color': 'red', 'icon': '🖼'},
+            cls.SEARCHED: {'color': 'yellow', 'icon': '🔎'},
+            cls.SAVED: {'color': 'green', 'icon': '✔'},
+            cls.LISTED: {'color': 'blue', 'icon': '💲'},
 
         }.get(value, {})
 
@@ -189,8 +189,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     display_fields = [
         "year", "brand", "subset", "parallel", "full_name", 
         "card_number", "card_name", "city", "team", "serial_number", "condition", 
-        "attributes", "unknown_words", 
-        "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"search_string", "response_count", "first_name", "last_name",
+        "attributes", 
+        #below only needed for expanded --> TBD
+        # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"search_string", "response_count", "first_name", "last_name",
+        # "unknown_words", 
     ]
 
     calculated_fields = ["title_to_be"]
@@ -216,7 +218,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.league = ""
         self.full_set = self.build_full_set()
         self.full_team = self.build_full_team()
-        if self.attributes:
+        if self.attribute_flags:
             #print(self.attributes)
             #print(self.attribute_flags)
             self.features = " | ".join(key for key in self.attribute_flags.keys())
@@ -419,6 +421,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 else:
                     #print("setting", field_name, field_value)
                     setattr(self, field_name, field_value)
+        self.status = ResultStatus.SAVED
         self.save()
 
     @classmethod

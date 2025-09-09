@@ -2,7 +2,7 @@
 {% load static %}
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"> 
 <head>
   <meta charset="UTF-8">
   <title>Cropper Interface</title>
@@ -11,7 +11,7 @@
     body {
       font-family: sans-serif;
       padding: 20px;
-      max-width: 960px;
+      max-width: 95%;
       margin: auto;
     }
 
@@ -94,20 +94,67 @@
     justify-content: center;
     }
 
-  </style>
+    .cropper-horizontal-wrapper {
+  display: flex;
+  flex-wrap: wrap; /* or wrap if you want it to break lines */
+  gap: 16px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding-bottom: 20px;
+  width:100%;  
+  overflow-x: auto;
+
+}
+
+.cropper-block {
+  position: relative;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* optional subtle depth */
+  background-color: #fff; /* optional for contrast */
+}
+
+.collection-controls {
+  padding: 10px;
+  bottom-margin: 20px;
+}
+
+.status-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+</style>
 </head>
 <body>
-  {% for card in page_obj %}
-    <h2>Crop Image for Card {{ card.id }}</h2>
-    <div class="cropper-nav-wrapper">
-      <div class="cropper-nav-row">
-        <!-- Cropper -->
-        <div class="cropper-nav-center">
-          {% include "cropper_only.html" with card=card.0 card_id=card.0.id original_img=card.0.uploaded_image.url portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url crop_params=card.1.front_crop_params %}
+  {% include "header.html" %}
+  <div id="title-block">
+    <div class="title">
+      <h2>Collection {{ collection_id }} - Crop Review</h2>
+    </div>
+    <div class="collection-controls">
+    </div>
+  </div>
+  <div class="cropper-horizontal-wrapper">
+    {% for card in page_obj %}
+      {% with meta=card.0.active_search_results.status|status_icon_meta %}
+        <div class="cropper-block">
+          <div class="status-icon">{{ meta.icon }}</div>
+          <h3>Card {{ card.0.id }}</h3>
+      {% endwith %}
+        <div class="cropper-nav-wrapper">
+          <div class="cropper-nav-row">
+            <div class="cropper-nav-center">
+              {% include "cropper_only.html" with card=card.0 card_id=card.0.id portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url crop_params=card.1.front_crop_params hide_portrait_thumbnail=true%}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  {% endfor %}
+    {% endfor %}
+  </div>
+
   
     <div class="pagination-wrapper">
       <div class="pagination-controls">

@@ -1,0 +1,531 @@
+{% load custom_tags %}
+{% get_overrideables as overrideables %}
+{% get_display as displayable %}
+{% get_calculated as calculated %}
+{% get_textonly as textonly %}
+{% get_checkboxes as checkboxes %}
+
+
+<style>
+  input:disabled {
+    background-color: #f9f9f9;
+    color: #999;
+    cursor: not-allowed;
+  }
+
+  .ui-menu-item.autocomplete-disabled.ui-state-active {
+  background-color: #ffe5e5 !important; /* light red background */
+  color: #d00 !important;               /* strong red text */
+  font-weight: bold;
+}
+
+  .autocomplete-disabled {
+    color: #999;
+    pointer-events: none;
+    cursor: default;
+  }
+
+.input-error {
+  border: 2px solid red;
+  background-color: #ffe5e5;
+}
+
+</style>
+
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script>
+$(document).ready(function () {
+    
+  document.querySelectorAll(`input[type='text'][id^='title_to_be']`).forEach(input => {
+    csrState = `{{ search_result.status }}`
+    console.log("stat: ",csrState)
+    if (csrState == "new") 
+      console.log("new csr")
+      handleManualInput(input); // Run once on init
+  });
+  
+  // 🧩 Allow HTML in autocomplete labels
+  $.ui.autocomplete.prototype._renderItem = function (ul, item) {
+    if (item.isDivider) {
+      return $("<li>")
+        .addClass("autocomplete-divider")
+        .append("<hr style='margin:4px 0;'>")
+        .appendTo(ul);
+    }
+
+    const li = $("<li>")
+      .addClass(item.disabled ? "autocomplete-disabled" : "")
+      .append($("<div>").text(item.label));
+
+    return li.appendTo(ul);
+  };
+  // 🗂️ Initialize saved values
+  const savedValues = {};
+  $("input[type='text']").each(function () {
+    let name = $(this).attr("name");
+    const value = $(this).val();
+
+    if (name && name.endsWith("_m")) {
+      name = name.slice(0, -2);
+    }
+
+    if (name) {
+      if (!savedValues[name]) {
+        savedValues[name] = new Set();
+      }
+      savedValues[name].add(value);
+    }
+  });
+  //console.log("AC: Autocomplete options:", autocompleteOptions);
+
+  {% for field_name in search_result.display_fields %}
+  (function () {
+    const fieldName = "{{ field_name|escapejs }}";
+    const selector = `#field_${fieldName}-{{ card_id }}`;
+    const cardId = "{{ card_id }}";
+    const csrId = "{{ search_result.id }}";
+    let fields = collectAllFields(cardId);
+    $(selector).autocomplete({
+      minLength: 0,
+      autoFocus: true,
+      source: function (request, response) {
+        
+        fields = collectAllFields(cardId);
+        //console.log("Collected fields:", fields);
+        $.ajax({
+          url: "/get_dynamic_options/",
+          type: "POST", // must be POST to send JSON body
+          data: JSON.stringify({
+            term: request.term,
+            field: fieldName,
+            allFields: { ...fields },
+            csrId: csrId
+          }),
+          contentType: "application/json", // correct header for JSON
+          success: function (data) {
+            console.log(data)
+            const results = data.map(opt => ({
+              label: opt.label,
+              value: opt.value,
+              isDivider: opt.is_divider || false,
+              disabled: opt.disabled || false
+            }));
+            if (results.length > 1) {//filter out results with just HR
+              response(results);
+            } else {
+              response([]);
+            }
+          },
+          error: function (xhr) {
+            console.error("Autocomplete error:", xhr.responseText);
+            response([]);
+          }
+        });
+
+      },
+      select: function (event, ui) {
+        handleSelect(selector, event, ui);
+        return false; // Prevent default behavior
+      },
+
+    })
+    .on("focus", function () {
+      $(this).select();
+      $(this).autocomplete("search", $(this).val());
+    })
+    .on("blur", function () {
+      const input = $(this);
+      const rawValue = input.val();
+
+      const match = this.id.match(/^field_(.+)-(\d+)$/);
+      if (!match) {
+        console.warn("Unexpected field ID format on blur:", this.id);
+        return;
+      }
+
+      const fieldName = match[1];
+      const cardId = match[2];
+
+      const knownValues = savedValues[fieldName] || new Set();
+      if (!knownValues.has(rawValue)) {
+        console.log("Manual blur entry detected:", rawValue);
+
+        if (!savedValues[fieldName]) {
+          savedValues[fieldName] = new Set();
+        }
+        savedValues[fieldName].add(rawValue);
+
+        const allFields = collectAllFields(cardId);
+        allFields["new_field"] = fieldName;
+        allFields["new_value"] = rawValue;
+
+        handleManualInput(allFields, cardId);
+      }
+    });
+  })();
+{% endfor %}
+
+
+
+  // 💾 Save button handler
+  $("#saveFieldsBtn").on("click", function () {
+    let cardId = "{{ card_id }}"
+    console.log("cid", cardId)
+    const allFields = collectAllFields(cardId);
+
+    console.log("Payload:", {
+      csrId: "{{ search_result.id }}",
+      ...allFields,
+      csrfmiddlewaretoken: '{{ csrf_token }}'
+    });
+
+    $.ajax({
+      url: "/update_csr_fields/",
+      method: "POST",
+      data: {
+        csrId: "{{ search_result.id }}",
+        ...allFields,
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+      },
+      success: response => {
+        console.log("Saved:", response);
+        alert("Changes saved successfully.");
+      },
+      error: xhr => {
+        console.error("Save error:", xhr.responseText);
+        alert("Error saving changes.");
+      }
+    });
+  });
+});
+
+
+
+function collectAllFields(cardId) {
+  const allFields = {};
+  console.log(cardId)
+  // Text inputs
+  document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
+
+    let name = el.name;
+    console.log(el.name)
+    const value = el.value;
+
+    if (name && name.endsWith("_m")) {
+      name = name.slice(0, -2);
+    }
+    if (name && name.endsWith(`-${cardId}`)) {
+      name = name.slice(0, -(`-${cardId}`.length));
+    }
+
+    if (name) {
+      allFields[name] = value;
+    }
+  });
+  document.querySelectorAll(".calculated-input").forEach(input => {
+    input.addEventListener("input", function () {
+      const maxLength = parseInt(this.dataset.maxlength, 10);
+      if (this.value.length > maxLength) {
+        this.classList.add("input-error");
+      } else {
+        this.classList.remove("input-error");
+      }
+    });
+  });
+
+  // Checkboxes
+  document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
+    let name = checkbox.name;
+    const value = checkbox.checked
+
+    if (name && name.endsWith(`_${cardId}`)) {
+      name = name.slice(0, -(`_${cardId}`.length));
+    }
+
+    if (name) {
+      allFields[name] = value;
+    }
+  });
+
+  return allFields;
+}
+
+function handleSelect(selector, event, ui) {
+  const selectedValue = selector.value;
+  console.log("Selected value:", selector);
+  // You can add more logic here to handle the selected value
+  
+  console.log("Selected item:", ui.item);
+  const match = selector.match(/^#field_(.+)-(\d+)$/);
+  if (!match) {
+    console.warn("Unexpected field ID format:", selector);
+    return;
+  }
+
+  const fieldName = match[1];
+  const cardId = match[2];
+  console.log("fieldName", fieldName)
+  const inputValue = $(selector).val(); // current text box value
+
+  console.log(cardId);
+  console.log("dan", ui);
+    // If selected item is disabled, fallback to input value
+
+  if (ui.item.disabled) {
+    console.log("Disabled item selected, using input value:", inputValue);
+    ui.item.value = "__add__";
+    //handleManualInput(fieldName, cardId);
+    //return false;
+  }
+
+  if (ui.item.value && (ui.item.value === "__add__")) {
+    const rawValue = ui.item.rawValue || inputValue;
+    const allFields = collectAllFields(cardId);
+
+    allFields["new_field"] = fieldName;
+    allFields["new_value"] = rawValue;
+
+    /* this doesn't work since I moved it out of the block above
+    I don't think I care for now.
+    if (!savedValues[fieldName]) {
+      savedValues[fieldName] = new Set();
+    }
+    savedValues[fieldName].add(rawValue);
+*/
+    $.ajax({
+      url: "/add_token/",
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: JSON.stringify({
+        field_key: fieldName,
+        token: rawValue,
+        fields: allFields,
+      }),
+      success: response => console.log("Token added:", response),
+      error: xhr => console.error("Error adding token:", xhr.responseText)
+    });
+
+    handleManualInput(fieldName, cardId);
+    return false;
+  } else {
+    $(this).val(ui.item.value);
+    handleManualInput(fieldName, cardId);
+    return false;
+  }
+}
+
+
+// Enable/disable field on checkbox toggle
+function handleOverrideToggle(fieldName, cardId) {
+  const checkbox = document.getElementById(`${fieldName}_is_manual-${cardId}`);
+  const input = document.getElementById(`field_${fieldName}-${cardId}`);
+
+  if (checkbox.checked) {
+    input.removeAttribute("disabled");
+    input.value = ""
+  } else {
+    input.setAttribute("disabled", "disabled");
+    const defaultValue = input.getAttribute("data-default");
+    input.value = defaultValue || "-";
+  }
+}
+
+function handleManualInput(fieldName, cardId) {
+  console.log(`handleManualInput called with field="${fieldName}", idx=${cardId}`);
+
+  const titleFieldId = `field_title_to_be-${cardId}`;
+  const thisFieldId = `${fieldName}-${cardId}`;
+  console.log("titleFieldId:", titleFieldId);
+  console.log("thisFieldId:", thisFieldId);
+
+  if (titleFieldId !== `field_${thisFieldId}`) {
+    const titleCheckbox = document.getElementById(`title_to_be_is_manual-${cardId}`);
+    const titleElement = document.getElementById(titleFieldId);
+
+    if (titleElement) {// && !titleCheckbox.checked) {
+      // ⏳ Delay field collection until DOM updates
+      setTimeout(() => {
+        const fields = collectAllFields(cardId);
+        console.log("Collected fields2:", fields);
+
+        // #this is a re-implementation of csr.build_title
+        const titleParts = [
+          fields.year,
+          fields.brand,
+          fields.subset !=" " ? `${fields.subset}` : null,
+          fields.full_name,
+          fields["attributes.1st"] ? "1st" : null,
+          fields["attributes.RC"] ? "RC" : null,
+          fields["attributes.HOF"] ? "HOF" : null,
+          fields["attributes.Auto"] ? "Auto" : null,
+          fields["attributes.All-Star"] ? "All-Star" : null,
+          fields.parallel !=" " ? `${fields.parallel}` : null,
+          fields.serial_number !="-" ? `${fields.serial_number}` : null, 
+          fields.card_number != "" ? `#${fields.card_number}` : null,
+          fields.city,
+          fields.team,
+          fields.condition,
+          fields["attributes.Oddball"] ? "Oddball" : null
+        ];
+
+      titleElement.value = titleParts
+        .filter(part => part && part.trim() !== '') // Remove null/empty/whitespace-only
+        .join(' ');
+
+        //titleElement.value = `${fields.year} ${fields.brand} ${fields.subset} ${fields.full_name} ${fields.serial_number} #${fields.card_number} ${fields.city} ${fields.team}`;
+
+      }, 0);
+    } else {
+      console.log("No title element or checkbox is checked.");
+    }
+  }
+  
+  const titleElement = document.getElementById(titleFieldId);
+  const maxLength = parseInt(titleElement.dataset.maxlength, 10);
+  if (titleElement.value.length > maxLength) {
+    titleElement.classList.add("input-error");
+  } else {
+    titleElement.classList.remove("input-error");
+  }
+} 
+
+function handleEnterPress(fieldName, cardCounter) {
+  const inputId = `field_${fieldName}-${cardCounter}`;
+  const value = document.getElementById(inputId).value;
+  
+  // Your logic here
+  console.log(`Enter pressed in ${inputId}:`, value);
+  // You could trigger a save, validation, AJAX call, etc.
+}
+
+</script>
+
+<table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
+
+<tbody>
+  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
+    <!-- 🏷️ Title Row -->
+    <tr>
+      <td colspan="4" style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;"> 
+      <input type="text"
+                id="field_title_to_be-{{ card_counter }}"
+                name="title_to_be_m"
+                value="{{ title }}"
+                style="width: 100%; box-sizing: border-box; font-size: 1.25em; padding: 5px; 8px; border: 2px solid #ccc; border-radius: 6px;"
+                data-default="{{ title }}"
+                data-maxlength="80"
+                oninput="handleManualInput('title_to_be', {{ card_counter }})">
+      </td>
+    </tr>
+    
+    {% for field_name in search_result.display_fields %}
+      {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual" resolved_value=search_result|get_attribute:field_name %}
+      <tr style="border-bottom: 3px solid #eee;">
+        <!-- 🟩 Label + Override Checkbox -->
+        <td colspan="2" style="padding: 6px;">
+          <label style="display: flex; align-items: center; gap: 6px;">
+            {% if field_name in checkboxes %}
+            <input type="checkbox"
+                id="{{ field_name }}_is_manual-{{ card_counter }}"
+                name="{{ field_name }}_is_manual"
+                checked disabled
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+            {% else %}
+            <input type="checkbox"
+                id="{{ field_name }}_is_manual-{{ card_counter }}"
+                name="{{ field_name }}_is_manual"
+                {% if search_result|get_attribute:manual_flag %}checked{% endif %}
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+            {% endif %}
+            <span>{{ search_result|get_field_verbose:field_name }}</span>
+          </label>
+        </td>
+
+        {% with display_attr="display_"|add:field_name manual_flag=field_name|add:"_is_manual"%}
+        {% with resolved_value=search_result|get_attribute:display_attr %}
+        <!-- 🟦 Field Input -->
+        <td colspan="2" style="padding: 6px; width: 300px;">
+          {% if field_name in overrideables %}
+            <!-- A: Editable input -->
+            <input type="text"
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})"
+                {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+          
+          {% elif field_name in calculated %}
+            <!-- B: Calculated input -->
+            <input type="text"
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
+            {% elif field_name in checkboxes %}
+              <!-- D: Checkbox group -->
+              <div style="display: flex; flex-wrap:wrap; gap: 8px;">
+              {% get_all_options field_name as options %}
+              {% for option in options %}
+                <label style="margin-bottom: 4px;">
+                  <input type="checkbox"
+                        id="field_{{ field_name }}-{{ option }}-{{ card_counter }}"
+                        name="{{ field_name }}.{{ option }}"
+                        value="true"
+                        {% if search_result.attribute_flags|dict_get:option == True %}checked{% endif %}
+                        onchange="handleManualInput('{{ field_name }}', {{ card_counter }})">
+                  {{ option }}
+                </label>
+              {% endfor %}
+          </div>
+          {% elif field_name in textonly %}
+            <!-- E: Textarea for text-only fields -->
+            <textarea
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}_m"
+                rows="5"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})">
+              {{ resolved_value }}
+            </textarea>
+
+
+          {% else %}
+            <!-- C: Fallback textarea -->
+            <input type="text"
+                id="field_{{ field_name }}-{{ card_counter }}"
+                name="{{ field_name }}"
+                value="{{ resolved_value }}"
+                style="width: 100%; box-sizing: border-box;"
+                data-default="{{ resolved_value }}"
+                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})">
+          {% endif %}
+        </td>
+        {% endwith %}
+      </tr>
+      {% endwith %}
+      {% endwith %}
+    {% endfor %}
+    
+  {% endwith %}
+</tbody>
+
+</table>
+
+
+
+
+
+
+

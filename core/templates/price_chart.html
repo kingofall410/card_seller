@@ -6,7 +6,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     #chart-container {
-      width: 800px;
+      width: 1200px;
+      height: 400px;
       margin: 40px auto;
     }
   </style>
@@ -17,6 +18,8 @@
 
     <canvas id="priceChart"></canvas>
   </div>
+  <div id="selected-price" data-shared="{{ some_value }}"></div>
+
 </body>
 </html>
 
@@ -94,41 +97,44 @@
     if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) return;
 
     const point = tooltip.dataPoints[0].raw;
-    const canvasRect = chart.canvas.getBoundingClientRect();
+    console.log(point)
+    if (point.y) {
+      const canvasRect = chart.canvas.getBoundingClientRect();
 
-    // Create tooltip container
-    tooltipEl = document.createElement('div');
-    tooltipEl.id = 'chartjs-tooltip';
-    tooltipEl.style.position = 'absolute';
-    tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
-    tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
-    tooltipEl.style.background = '#fff';
-    tooltipEl.style.border = '1px solid #ccc';
-    tooltipEl.style.borderRadius = '6px';
-    tooltipEl.style.padding = '8px';
-    tooltipEl.style.pointerEvents = 'none';
-    tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
-    tooltipEl.style.fontSize = '12px';
-    tooltipEl.style.zIndex = 1000;
-    tooltipEl.style.maxWidth = '300px';
+      // Create tooltip container
+      tooltipEl = document.createElement('div');
+      tooltipEl.id = 'chartjs-tooltip';
+      tooltipEl.style.position = 'absolute';
+      tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
+      tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
+      tooltipEl.style.background = '#fff';
+      tooltipEl.style.border = '1px solid #ccc';
+      tooltipEl.style.borderRadius = '6px';
+      tooltipEl.style.padding = '8px';
+      tooltipEl.style.pointerEvents = 'none';
+      tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+      tooltipEl.style.fontSize = '12px';
+      tooltipEl.style.zIndex = 1000;
+      tooltipEl.style.maxWidth = '300px';
 
-    // Build table layout
-    tooltipEl.innerHTML = `
-      <div style="font-weight:bold; margin-bottom:6px;">Bin: ${tooltip.title[0]}</div>
-      <table style="width:100%; border-collapse:collapse;">
-        <tr>
-          <td style="width:60px; vertical-align:top;">
-            <img src="${point.thumb}" style="width:60px; height:auto; border-radius:4px;" />
-          </td>
-          <td style="padding-left:8px; vertical-align:top;">
-            <div><strong>Price:</strong> $${point.y.toFixed(2)}</div>
-            <div><strong>Item:</strong> ${point.title}</div>
-          </td>
-        </tr>
-      </table>
-    `;
+      // Build table layout
+      tooltipEl.innerHTML = `
+        <div style="font-weight:bold; margin-bottom:6px;">Bin: ${tooltip.title[0]}</div>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr>
+            <td style="width:60px; vertical-align:top;">
+              <img src="${point.thumb}" style="width:60px; height:auto; border-radius:4px;" />
+            </td>
+            <td style="padding-left:8px; vertical-align:top;">
+              <div><strong>Price:</strong> $${point.y.toFixed(2)}</div>
+              <div><strong>Item:</strong> ${point.title}</div>
+            </td>
+          </tr>
+        </table>
+      `;
 
-    document.body.appendChild(tooltipEl);
+      document.body.appendChild(tooltipEl);
+    }
   };
 
 
@@ -156,6 +162,7 @@
       ]
     },
     options: {
+      maintainAspectRatio:false,
       scales: {
         x: {
           type: 'category',
@@ -199,8 +206,23 @@
           enabled: false, // ⛔ disables built-in tooltip
           external: externalTooltipHandler // ⬅️ use custom handler
         }
-      }
-
+      },
+      onClick: (event, elements, chart) => {
+        const activePoints = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, false);
+        const priceElem = document.getElementById("selected-price")
+        console.log("priceelem:", priceElem)
+        if (activePoints.length > 0) {
+          const point = activePoints[0];
+          const datasetIndex = point.datasetIndex;
+          const index = point.index;
+          const dataset = chart.data.datasets[datasetIndex];
+          const dataPoint = dataset.data[index];
+          
+          // 🔥 Your callback logic here
+          console.log("Clicked point:", dataPoint);
+          priceElem.setAttribute("data-shared", dataPoint.y);
+        }
+      },
     }
   });
 </script>

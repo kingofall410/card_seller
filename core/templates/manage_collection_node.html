@@ -31,6 +31,12 @@
   border-radius: 4px;
 }
 
+.status-icon {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  font-size: 0.85em;
+}
 .image-wrapper {
   position: relative;
   width: 150px;
@@ -195,14 +201,15 @@
     <button onclick="addCard({{ collection.id }})">➕</button>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="saveTitle({{ collection.id }})">💾</button>
+    <button onclick="cropCollection({{ collection.id }})">✂</button>
     
     <input type="text"
-       name="collection_name_{{ collection.id }}"
-       value="{{ collection.name }}"
-       style="width: 50%; box-sizing: border-box;"
-       data-id="{{ collection.id }}"
-       placeholder="Change collection name..."
-       onchange="saveTitle({{ collection.id }})">
+      name="collection_name_{{ collection.id }}"
+      value="{{ collection.name }}"
+      style="width: 50%; box-sizing: border-box;"
+      data-id="{{ collection.id }}"
+      placeholder="Change collection name..."
+      onchange="saveTitle({{ collection.id }})">
   </div>
   <div class="card-sort-controls">
     <select onchange="sortCardsInModule(this)">
@@ -213,18 +220,17 @@
     </select>
   </div>
 
- <div class="card-list">
+  <div class="card-list">
     {% for card in collection.cards.all %}
     {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
     {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
     <div id="card-{{ card.id }}" class="card">    
     <div class="card-item status-{{ card.active_search_results.status|lower }}"
-     data-id="{{ card.id }}"
-     data-year="{{ display_year|default:'' }}"
-     data-brand="{{ display_brand|default:'' }}"
-     data-subset="{{ display_subset|default:'' }}"
-     data-name="{{ display_name|default:'' }}">
-        
+      data-id="{{ card.id }}"
+      data-year="{{ display_year|default:'' }}"
+      data-brand="{{ display_brand|default:'' }}"
+      data-subset="{{ display_subset|default:'' }}"
+      data-name="{{ display_name|default:'' }}">          
         <div class="card-meta">
             {{ display_year }} {{ display_brand }} {{ display_subset }}
         </div>
@@ -237,11 +243,16 @@
             <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover"></a>
         </div>
         <div class="card-actions">
+          {% with meta=card.active_search_results.status|status_icon_meta %}
+            <div class="status-icon">{{ meta.icon }}</div>
+          {% endwith %}
             <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
                 <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
             </div>
             <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
             <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
+            
+            
             <div class="card-count">{{ card.search_count }}</div>
             <div class="move-dropdown" style="display: none;">
             <ul>
@@ -262,11 +273,11 @@
     {% endfor %}
     {% for subcollection in collection.subcollections.all %}
     
-    <div class="card-item" 
-     data-year="{{ display_year }}"
-     data-brand="{{ display_brand }}"
-     data-subset="{{ display_subset }}"
-     data-search_count="{{ card.search_count }}">
+  <div class="card-item" 
+    data-year="{{ display_year }}"
+    data-brand="{{ display_brand }}"
+    data-subset="{{ display_subset }}"
+    data-search_count="{{ card.search_count }}">
 
         <div class="image-wrapper">
             <img src="/static/images/missing_collection.png" alt="{{ subcollection.id }}" class="thumbnail default">
@@ -470,10 +481,6 @@ function moveCardToCollection(cardId, collectionId) {
   });
 }
 
-
-
-
-
 function removeCollection(collectionId) {
   // AJAX call to delete card
   $.post("/delete/", {
@@ -511,6 +518,10 @@ function saveTitle(collectionId) {
 
 function cropCard(collectionId, cardId) {
     window.location.href = "/collection/"+collectionId
+}
+
+function cropCollection(collectionId) {
+  window.location.href = "/crop_review/"+collectionId
 }
 
 </script>

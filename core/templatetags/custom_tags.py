@@ -1,5 +1,5 @@
 from django import template
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ResultStatus
 from core.models.Card import Collection
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from django.db.models import F
@@ -56,6 +56,15 @@ def get_collections():
     return Collection.objects.order_by('-id')
 
 @register.simple_tag
+def get_calculated():
+    return CardSearchResult.calculated_fields
+
+@register.simple_tag
+def get_status_icon(ca):
+    return Collection.objects.order_by('-id')
+
+
+@register.simple_tag
 def get_overrideables():
     return CardSearchResult.overrideable_fields
 
@@ -67,9 +76,9 @@ def get_display():
 def get_checkboxes():
     return CardSearchResult.checkbox_fields
 
-@register.simple_tag
-def get_calculated():
-    return CardSearchResult.calculated_fields
+@register.filter
+def status_icon_meta(value):
+    return ResultStatus.get_icon(value)
 
 @register.simple_tag
 def get_textonly():

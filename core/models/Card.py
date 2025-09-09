@@ -559,5 +559,6 @@ class Card(models.Model):
             portrait_image.update(content=content_file, crop_params=crop_params)
 
         self.save()  # Save the updated crop parameters to the database
+        return target_image.img.url
 
     

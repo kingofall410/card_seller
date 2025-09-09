@@ -51,9 +51,10 @@ def crop_review(request, collection_id):
     else:
         page_number = request.GET.get('page')
     card_tuples = [(card, card.active_search_results()) for card in cards]
-    paginator = Paginator(card_tuples, settings.nr_collection_page_items)
+    #TODO:I just have this hardcoded for now.  Only need it if cropper overhead is high
+    paginator = Paginator(card_tuples, 1000)
     page_obj = paginator.get_page(page_number)
-    return render(request, "crop_review.html", {"page_obj": page_obj})
+    return render(request, "crop_review.html", {"page_obj": page_obj, "collection_id":collection_id})
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -105,7 +106,7 @@ def view_collection(request, collection_id=None):
     else:
         cards = Card.objects.order_by('-id')
 
-    settings = Settings.objects.first()  # or however you fetch it
+    settings = Settings.get_default()  # or however you fetch it
     prices = [json.dumps(card.active_search_results().get_prices()) for card in cards]
     print(prices)
     for element in prices:
@@ -128,8 +129,8 @@ def view_collection(request, collection_id=None):
 def view_card(request, card_id):
     if card_id:
         card = Card.objects.get(id=card_id)
-        
-    return render(request, "card.html", {"card": card, "search_results":card.active_search_results()})
+    
+    return render(request, "card.html", {"card": card, "search_results":card.active_search_results(), "prices":json.dumps(card.active_search_results().get_prices()), "settings":Settings.get_default()})
 
 
 @csrf_exempt
@@ -680,13 +681,13 @@ def upload_crop(request):
                 is_reverse = True
     
             instance = Card.objects.get(id=card_id)
-            instance.update_crop(img_file, is_reverse, crop_left, crop_top, crop_width, crop_height, crop_canvas_left, crop_canvas_top, canvas_rotation)
+            url = instance.update_crop(img_file, is_reverse, crop_left, crop_top, crop_width, crop_height, crop_canvas_left, crop_canvas_top, canvas_rotation)
         except Card.DoesNotExist:
             return JsonResponse({'error': 'Card not found'}, status=404)
         
         
 
-        return JsonResponse({'status': 'saved'})
+        return JsonResponse({'status': 'saved', 'url':url})
     return JsonResponse({'error': 'no image'}, status=400)
 
 @csrf_exempt
