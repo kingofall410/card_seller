@@ -31,46 +31,46 @@
 </style>
 <table class="listing-fields-table">
   <tr>
-    <td><label for="field_list_price-{{ card_counter }}">List Price</label></td>
+    <td><label for="field_list_price-{{ card_id }}">List Price</label></td>
     <td>
       <input type="text"
-             id="field_list_price-{{ card_counter }}"
-             name="list_price"
-             value="{{ price }}"
-             data-default="{{ price }}"
-             data-maxlength="80">
+        id="field_list_price-{{ card_id }}"
+        name="list_price"
+        value="{{ search_result.list_price }}"
+        data-default="{{ price }}"
+        data-maxlength="80">
     </td>
-    <td><label for="field_ebay_listing_id{{ card_counter }}">eBay Listing ID</label></td>
+    <td><label for="field_ebay_listing_id-{{ card_id }}">eBay Listing ID</label></td>
     <td>
       <input type="text"
-             id="field_ebay_listing_id{{ card_counter }}"
-             name="ebay_listing_id"
-             value="{{ ebay_listing_id }}"
-             data-default="{{ ebay_listing_id }}"
-             data-maxlength="80"
-             disabled>
+        id="field_ebay_listing_id-{{ card_id }}"
+        name="ebay_listing_id"
+        value="{{ search_result.ebay_listing_id }}"
+        data-default="{{ search_result.ebay_listing_id }}"
+        data-maxlength="80"
+        disabled>
     </td>
   </tr>
   <tr>
-    <td><label for="field_sku{{ card_counter }}">SKU</label></td>
+    <td><label for="field_sku-{{ card_id }}">SKU</label></td>
     <td>
       <input type="text"
-             id="field_sku{{ card_counter }}"
-             name="sku"
-             value="{{ sku }}"
-             data-default="{{ sku }}"
-             data-maxlength="80"
-             disabled>
+        id="field_sku-{{ card_id }}"
+        name="sku"
+        value="{{ search_result.ebay_item_id }}"
+        data-default="{{ search_result.ebay_item_id }}"
+        data-maxlength="80"
+        disabled>
     </td>
-    <td><label for="field_ebay_offer_id{{ card_counter }}">eBay Offer ID</label></td>
+    <td><label for="field_ebay_offer_id-{{ card_id }}">eBay Offer ID</label></td>
     <td>
       <input type="text"
-             id="field_ebay_offer_id{{ card_counter }}"
-             name="ebay_offer_id"
-             value="{{ ebay_offer_id }}"
-             data-default="{{ ebay_offer_id }}"
-             data-maxlength="80"
-             disabled>
+        id="field_ebay_offer_id-{{ card_id }}"
+        name="ebay_offer_id"
+        value="{{ search_result.ebay_offer_id }}"
+        data-default="{{ search_result.ebay_offer_id }}"
+        data-maxlength="80"
+        disabled>
     </td>
   </tr>
 </table>

@@ -202,6 +202,7 @@
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="saveTitle({{ collection.id }})">💾</button>
     <button onclick="cropCollection({{ collection.id }})">✂</button>
+    <button onclick="searchCollection({{ collection.id }})">🔍</button>
     
     <input type="text"
       name="collection_name_{{ collection.id }}"
@@ -212,6 +213,7 @@
       onchange="saveTitle({{ collection.id }})">
   </div>
   <div class="card-sort-controls">
+  Sort: 
     <select onchange="sortCardsInModule(this)">
       <option value="year">Year</option>
       <option value="brand">Brand</option>
@@ -219,23 +221,51 @@
       <option value="id">Default</option>
     </select>
   </div>
+  <div class="card-filter-controls">
+  Status: 
+    <select onchange="filterCardsInModule(this)">
+      {% get_all_options "status" as options %}
+      {% for option in options %}
+        <option value="status">{{ option }}</option>
+      {% endfor %}
+    
+  Year:
+    <select onchange="filterCardsInModule(this)">
+      {% get_all_options "year" None collection.id as options %}
+      {% for option in options %}
+        <option value="year">{{ option }}</option>
+      {% endfor %}
+    
+  Brand: 
+    <select onchange="filterCardsInModule(this)">
+      {% get_all_options "brands" None collection.id as options %}
+      {% for option in options %}
+        <option value="brand">{{ option }}</option>
+      {% endfor %}
+      
+</select>
+
+  </div>
 
   <div class="card-list">
     {% for card in collection.cards.all %}
     {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
     {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
+    {% with meta=card.active_search_results.status|status_icon_meta %}
     <div id="card-{{ card.id }}" class="card">    
     <div class="card-item status-{{ card.active_search_results.status|lower }}"
       data-id="{{ card.id }}"
       data-year="{{ display_year|default:'' }}"
       data-brand="{{ display_brand|default:'' }}"
       data-subset="{{ display_subset|default:'' }}"
-      data-name="{{ display_name|default:'' }}">          
+      data-name="{{ display_name|default:'' }}"
+      data-status="{{ meta.icon }}"
+      >
         <div class="card-meta">
-            {{ display_year }} {{ display_brand }} {{ display_subset }}
+            {{ card.active_search_results.list_price }} 
         </div>
         <div class="card-meta">
-            {{ display_name }}
+            {{ display_year }} {{ display_brand }} {{ display_subset }} 
         </div>
 
         <div class="image-wrapper">
@@ -243,9 +273,8 @@
             <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover"></a>
         </div>
         <div class="card-actions">
-          {% with meta=card.active_search_results.status|status_icon_meta %}
+          
             <div class="status-icon">{{ meta.icon }}</div>
-          {% endwith %}
             <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
                 <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
             </div>
@@ -265,6 +294,7 @@
             </div>
 
         </div>
+        {% endwith %}
         {% endwith %}
         {% endwith %}
         
@@ -344,9 +374,45 @@ function sortCardsInModule(selectEl) {
   sortableCards.forEach(card => cardList.appendChild(card));
   if (lastItem) cardList.appendChild(lastItem); // Preserve final control
 }
+function filterCardsInModule(selectEl) {
+  const container = selectEl.closest('.collection');
+  if (!container) {
+    console.warn('No collection container found for filtering');
+    return;
+  }
 
+  const cardList = container.querySelector('.card-list');
+  if (!cardList) {
+    console.warn('No card list found in collection');
+    return;
+  }
 
+  const cards = Array.from(cardList.querySelectorAll('.card'));
+  const lastItem = cardList.lastElementChild;
+  const selectedOption = selectEl.selectedOptions?.[0];
 
+  const key = selectedOption?.value ?? '';
+  const filterValue = selectedOption?.text ?? '';
+
+  console.log("Filtering by:", key, filterValue);
+  cards.forEach(card => {
+    if (card === lastItem) {
+      card.style.display = ''; // Always show control element
+      return;
+    }
+  console.log("filterval:", filterValue);
+    const data = card.querySelector('.card-item')?.dataset || {};
+    const val = data[key] || '';
+
+    // Show all if filterValue is empty
+    const isMatch = filterValue === ''
+      || (key === 'search_count'
+          ? parseInt(val) === parseInt(filterValue)
+          : val === filterValue);
+
+    card.style.display = isMatch ? '' : 'none';
+  });
+}
 
 function triggerFileUpload(collectionId) {
   document.getElementById("fileInput_" + collectionId).click();
@@ -492,6 +558,30 @@ function removeCollection(collectionId) {
             location.reload()
         }
     });
+}
+
+function searchCollection(collectionId) {
+  const container = document.getElementById(`collection-${collectionId}`);
+  if (!container) {
+    console.warn("No collection found with ID:", collectionId);
+    return;
+  }
+
+  const visibleCards = Array.from(container.querySelectorAll('.card'))
+    .filter(card => card.style.display !== 'none' && card.querySelector('.card-item'))
+    .map(card => card.querySelector('.card-item').dataset.id)
+    .filter(id => id); // Remove undefined/null
+
+  console.log(visibleCards);
+  const encodedIds = encodeURIComponent(visibleCards.join(','));
+  const url = `/crop_review/${collectionId}?card_ids=${encodedIds}`;
+
+  fetch(`/image_search_collection/${collectionId}/`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ cards: visibleCards })
+});
+
 }
 
 function saveTitle(collectionId) {

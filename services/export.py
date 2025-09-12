@@ -1,5 +1,5 @@
 import csv, io
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ResultStatus
 from django.http import HttpResponse
 import zipfile
 from services import ebay
@@ -45,6 +45,7 @@ def export_zip(csrs):
 import cloudinary
 import cloudinary.uploader
 
+#TODO:remove
 cloudinary.config(
   cloud_name = "dg7c9vsis",
   api_key = "748944422398635",
@@ -75,7 +76,7 @@ def test_create_ebay_location():
 import random
 
 #TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csrs):
+def export_to_ebay(csrs, publish=False):
     
     print("ebay export")
     settings = Settings.get_default()
@@ -89,22 +90,22 @@ def export_to_ebay(csrs):
         
         shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
         shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
-        sku = csr.build_sku()+str(random.randint(0, 100000))
-        print("SKU:", sku)
+        csr.ebay_item_id = csr.build_sku()
+        print("SKU:", csr.ebay_item_id)
         print("🔗 Public link:", shareable_link_front)
         print("🔗 Public link:", shareable_link_reverse)
 
-        item_data = csr.export_to_template(sku, ebay.ebay_item_data_template, [shareable_link_front, shareable_link_reverse])
+        item_data = csr.export_to_template(csr.ebay_item_id, ebay.ebay_item_data_template, [shareable_link_front, shareable_link_reverse])
         print(item_data)
         offer_data = {
-            "sku": sku,
+            "sku": csr.ebay_item_id,
             "marketplaceId": "EBAY_US",
             "format": "FIXED_PRICE",
-            "listingDescription": "This 2024 Bowman Luisangel Acuña RC #TP-18 features the rising star in his San Diego Padres debut, captured in the coveted Top Prospects insert series. A sharp, near mint or better condition card with vivid imagery and crisp edges, it’s a must-have for collectors tracking Acuña’s ascent through the MLB. Whether you're building out your Padres roster or investing in future talent, this rookie insert delivers standout appeal. Ships securely from the U.S. with care — add it to your collection today.",
+            "listingDescription": csr.title_to_be,
             "availableQuantity": 1,
             "pricingSummary": {
                 "price": {
-                "value": "19.99",
+                "value": csr.list_price,
                 "currency": "USD"
                 }
             },
@@ -113,7 +114,7 @@ def export_to_ebay(csrs):
             #"conditionId":4000,
             #"storeCategoryId": "",
             "listingPolicies": {
-                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE,
+                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_USPS_GROUND,
                 "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
                 "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
             },
@@ -124,21 +125,27 @@ def export_to_ebay(csrs):
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #create_ebay_location(access_token)
         #csr.check_category_metadata("261328",access_token)
-        if ebay.create_inventory_item(sku, item_data, access_token):
+        if ebay.create_inventory_item(csr.ebay_item_id, item_data, access_token):
             #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
             csr.ebay_offer_id = ebay.create_offer(offer_data, access_token)
             #csr.get_offer(offer_id, access_token)
 
-            csr.ebay_listing_id = ebay.publish_offer(csr.ebay_offer_id, access_token)
-            csr.save()
+            if publish:
+                csr.ebay_listing_id = ebay.publish_offer(csr.ebay_offer_id, access_token)
+            else:
+                csr.ebay_listing_id = ""
+            csr.status = ResultStatus.LISTED
+        csr.save()
+
+        return True, csr.ebay_offer_id, csr.ebay_listing_id
+    
         #print("asking for token ")
         #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #print(access_token)
         #ebay.publish_offer("66119568011", access_token)
 
-
     else:
-        return False
+        return False, None, None
 
 
 ''''

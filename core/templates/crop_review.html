@@ -120,6 +120,25 @@
   bottom-margin: 20px;
 }
 
+/* Border of the crop box */
+.cropper-crop-box {
+  border: 2px solid #ff0000ff; /* Bright green border */
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+}
+
+.cropper-container .cropper-line,
+.cropper-container .cropper-point {
+  background-color: #ff0099
+}
+
+
+/* Inner face of the crop box */
+.cropper-face {
+  background-color: rgba(0, 255, 153, 0.2); /* Semi-transparent fill */
+}
+
+
+
 .status-icon {
   position: absolute;
   top: 10px;
@@ -132,42 +151,27 @@
   {% include "header.html" %}
   <div id="title-block">
     <div class="title">
-      <h2>Collection {{ collection_id }} - Crop Review</h2>
+      <h2>Crop Review</h2>
     </div>
     <div class="collection-controls">
     </div>
   </div>
   <div class="cropper-horizontal-wrapper">
-    {% for card in page_obj %}
+    {% for card in card_tuples %}
       {% with meta=card.0.active_search_results.status|status_icon_meta %}
         <div class="cropper-block">
           <div class="status-icon">{{ meta.icon }}</div>
-          <h3>Card {{ card.0.id }}</h3>
+          <h3>Card {{ card.1 }}</h3>
       {% endwith %}
+      {% with portrait=card.0|get_portrait:card.1 cropped=card.0|get_cropped:card.1 crop_params=card.0|get_crop_params:card.1 %}
         <div class="cropper-nav-wrapper">
           <div class="cropper-nav-row">
             <div class="cropper-nav-center">
-              {% include "cropper_only.html" with card=card.0 card_id=card.0.id portrait_img=card.0.portrait_image.url cropped_img=card.0.cropped_image.url reverse_img=card.0.cropped_reverse.url crop_params=card.1.front_crop_params hide_portrait_thumbnail=true%}
+              {% include "cropper_only.html" with card=card.0 card_id=card.1 portrait_img=portrait.url cropped_img=cropped.url crop_params=crop_params hide_portrait_thumbnail=true %}
             </div>
           </div>
         </div>
       </div>
+    {% endwith %}
     {% endfor %}
   </div>
-
-  
-    <div class="pagination-wrapper">
-      <div class="pagination-controls">
-        {% if page_obj.has_previous %}
-          <a href="?page={{ page_obj.previous_page_number }}" class="page-link">⬅ Prev Page</a>
-        {% endif %}
-
-        <span class="page-info">
-          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-        </span>
-
-        {% if page_obj.has_next %}
-          <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next Page ➡</a>
-        {% endif %}
-      </div>
-    </div>

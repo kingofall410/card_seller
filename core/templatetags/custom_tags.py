@@ -51,6 +51,18 @@ def dict_get(d, key):
         print ("f")
         return None
 
+@register.filter
+def get_portrait(card, id):
+    return card.get_portrait(id)
+
+@register.filter
+def get_crop_params(card, id):
+    return card.get_crop_params(id)
+
+@register.filter
+def get_cropped(card, id):
+    return card.get_cropped(id)
+
 @register.simple_tag
 def get_collections():
     return Collection.objects.order_by('-id')
@@ -85,8 +97,60 @@ def get_textonly():
     return CardSearchResult.text_fields
 
 @register.simple_tag
-def get_all_options(field_key, csrId=None):
-    if not csrId:
+def get_all_options(field_key, csrId=None, collection_id=None):
+
+    print("key", field_key, ',', csrId, ',', collection_id)
+    if collection_id:
+        #if no specific CSR Is passed, we just return everything
+        try:
+            if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('brand', flat=True)
+                return Brand.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
+                used_subset_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('subset', flat=True)
+                return Subset.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('name', flat=True)
+                return KnownName.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('team', flat=True)
+                return Team.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('city', flat=True)
+                return City.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
+                return #TODO
+            elif field_key == "condition":
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('condition', flat=True)
+                return City.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+                used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('parallel', flat=True)
+                return Parallel.objects.filter(raw_value__in=used_values).distinct().order_by
+            elif field_key == "status":            
+                return [ResultStatus.get_icon(status)["icon"] for status in ResultStatus]  #all statuses
+        except CardSearchResult.DoesNotExist as e:
+            print("Warning no options for collection:", e)
+            return []
+    elif csrId:
+        csr = CardSearchResult.objects.get(id=csrId)
+        if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
+            return [obj.raw_value for obj in csr.brands.all()]
+        elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
+            return [(obj.parent_brand.raw_value, obj.raw_value) for obj in csr.subsets.all()]
+        elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
+            return [obj.raw_value for obj in csr.names.all()]
+        elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
+            return [obj.raw_value for obj in csr.teams.all()]
+        elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
+            return [obj.raw_value for obj in csr.cities.all()]
+        elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
+            return [opt for opt in csr.get_individual_options("attribs")]
+        elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
+            return [obj.raw_value for obj in csr.condition.all()]
+        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
+            return [obj.raw_value for obj in csr.parallel.all()]
+        
+    else:
         #if no specific CSR Is passed, we just return everything
         if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
             return [obj.raw_value for obj in Brand.objects.order_by("raw_value")]
@@ -105,21 +169,8 @@ def get_all_options(field_key, csrId=None):
             return [obj.raw_value for obj in Condition.objects.filter(primary_token_id=F("id")).order_by("raw_value")]
         elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
             return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
-    else:
-        csr = CardSearchResult.objects.get(id=csrId)
-        if field_key == "brands" or field_key == CardSearchResult.stupid_map("brands"):
-            return [obj.raw_value for obj in csr.brands.all()]
-        elif field_key == "subsets" or field_key == CardSearchResult.stupid_map("subsets"):
-            return [(obj.parent_brand.raw_value, obj.raw_value) for obj in csr.subsets.all()]
-        elif field_key == "names" or field_key == CardSearchResult.stupid_map("names"):
-            return [obj.raw_value for obj in csr.names.all()]
-        elif field_key == "teams" or field_key == CardSearchResult.stupid_map("teams"):
-            return [obj.raw_value for obj in csr.teams.all()]
-        elif field_key == "cities" or field_key == CardSearchResult.stupid_map("cities"):
-            return [obj.raw_value for obj in csr.cities.all()]
-        elif field_key == "attribs" or field_key == CardSearchResult.stupid_map("attribs"):
-            return [opt for opt in csr.get_individual_options("attribs")]
-        elif field_key == "condition" or field_key == CardSearchResult.stupid_map("condition"):
-            return [obj.raw_value for obj in csr.condition.all()]
-        elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
-            return [obj.raw_value for obj in csr.parallel.all()]
+        elif field_key == "status":            
+            print([ResultStatus.get_icon(status)["icon"] for status in ResultStatus])
+            return [ResultStatus.get_icon(status)["icon"] for status in ResultStatus]
+
+        

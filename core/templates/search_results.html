@@ -213,7 +213,7 @@ function collectAllFields(cardId) {
     console.log(el.name)
     const value = el.value;
 
-    if (name && name.endsWith("_m")) {
+    if (name && name.endsWith("_m")) {+
       name = name.slice(0, -2);
     }
     if (name && name.endsWith(`-${cardId}`)) {

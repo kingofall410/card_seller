@@ -1,6 +1,8 @@
 {% load custom_tags %}
 {% load static %}
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script src="{% static 'js/test.js' %}?v={{ timestamp }}"></script>
 <style>
 .thumb-container {
   display: flex;
@@ -96,6 +98,5 @@
       canvasLeft: "{{ crop_params.display_offset_left|safe }}",
       canvasTop: "{{ crop_params.display_offset_top|safe }}"
   };
+  console.log(window)
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-<script src="{% static 'js/test.js' %}"></script>

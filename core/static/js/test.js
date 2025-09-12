@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         img.dataset.bound = "true"
 
         const starting_crop = window[`starting_crop_${cardId}`];
+
         const initCropper = () => {
             let imageData, containerData;
             let canvasBefore, canvasAfter;
@@ -48,6 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     imageData = cropper.getImageData();
                     containerData = cropper.getContainerData();
                     console.log("cd:,", containerData)
+                    
                     //calculate REVERSE canvas and crop-box transformations
                     scaleX = imageData.width / imageData.naturalWidth;
                     scaleY = imageData.height / imageData.naturalHeight;
@@ -67,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     //UNDO whatever cropper did to the canvas
                     cropper.setCanvasData(canvasBefore);
-                    console.log("Canvas Before:", cropper.getCanvasData());
+                    console.log("Canvas Before CALC:", cropper.getCanvasData());
                     console.log("crop:", starting_crop);
 
                     //rotate around origin
@@ -109,24 +111,26 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.log("scale:", scaleX, scaleY)
                     console.log("offset:", offsetX, scaleY)
                     
-                    console.log("cb", canvasBefore)
-                    console.log("ca", canvasAfter)
+                    console.log("canvas before CBD", canvasBefore)
+                    console.log("canvas after CBD", canvasAfter)
                     let deltaX = (canvasBefore.left-canvasAfter.left)
                     let deltaY = (canvasBefore.top-canvasAfter.top)
 
-                    console.log("deta:", deltaX, deltaY)
+                    console.log("delta:", deltaX, deltaY)
                     const cropBoxData = {
                         left: starting_crop.x * scaleX + imageData.left + offsetX - deltaX - parsedLeft,
                         top: starting_crop.y * scaleY + imageData.top + offsetY - deltaY - parsedTop,
                         width: starting_crop.width * scaleX,
                         height: starting_crop.height * scaleY
                     };
-                    console.log("Crop Box Data:", cropBoxData);
-
-                    cropper.setCanvasData(canvasAfter);
+                    console.log("Start CBD:", cropper.getCropBoxData());
+                    console.log("Calc CBD:", cropBoxData);
+                    //cropper.setCanvasData(canvasAfter);
                     cropper.setCropBoxData(cropBoxData);
 
-                    console.log("CropBox:", cropper.getCropBoxData());
+                    console.log("End CBD:", cropper.getCropBoxData());
+                    console.log("CA2 CBD:", cropper.getCanvasData());
+                    //cropper.setCanvasData(canvasAfter);
                 }
             });
             

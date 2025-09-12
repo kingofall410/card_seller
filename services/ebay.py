@@ -40,7 +40,7 @@ ebay_item_data_template = {
             "Player/Athlete": "full_name",
             "Card Name": "card_name",
             "Card Number": "card_number",
-            "Features": "features",
+            #"Features": "features",
             "League": "league",
             "Team": "full_team",
             #"Event/Tournament": "",

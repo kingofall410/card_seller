@@ -13,7 +13,7 @@ from services import text
 from services import photo_manip as photo
 from services.models import Settings, Condition, Team, City, CardAttribute, Brand, Subset, KnownName, Parallel
 from core.models.Card import Card, Collection
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ResultStatus
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -32,7 +32,12 @@ def hello_world(request):
     return render("success.html")
 
 def test_view(request):
-    return crop_review(request, 739)
+    for csr in CardSearchResult.objects.all():
+        print(csr)
+        if type(csr.attribute_flags) is not {}:
+            csr.attribute_flags = {}
+            csr.save()
+    return JsonResponse({"status": "success"})
     
 
     return render(request, "price_chart.html", context)
@@ -40,21 +45,22 @@ def test_view(request):
 def crop_review(request, collection_id):
     
     collection = get_object_or_404(Collection, id=collection_id)
-    card_id = request.GET.get('card_id')
     cards = collection.cards.all()
     settings = Settings.get_default()
 
-    page_number = 0
-    if card_id:
-        position = list(cards.values_list('id', flat=True)).index(card_id) + 1    
-        page_number = (position - 1) // settings.nr_collection_page_items + 1
-    else:
-        page_number = request.GET.get('page')
-    card_tuples = [(card, card.active_search_results()) for card in cards]
-    #TODO:I just have this hardcoded for now.  Only need it if cropper overhead is high
-    paginator = Paginator(card_tuples, 1000)
-    page_obj = paginator.get_page(page_number)
-    return render(request, "crop_review.html", {"page_obj": page_obj, "collection_id":collection_id})
+    card_tuples = [(card, id_, results) for card in cards for id_ in (card.id, card.reverse_id) for results in [card.active_search_results()]]
+
+    print(card_tuples)
+    return render(request, "crop_review.html", {"card_tuples":card_tuples})
+
+def full_crop(request, card_id):
+    
+    card = get_object_or_404(Card, id=card_id)
+    settings = Settings.get_default()
+
+    card_tuples = [(card, card.id, card.active_search_results()), (card, card.reverse_id, card.active_search_results())]
+    
+    return render(request, "crop_review.html", {"card_tuples":card_tuples})
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -130,7 +136,7 @@ def view_card(request, card_id):
     if card_id:
         card = Card.objects.get(id=card_id)
     
-    return render(request, "card.html", {"card": card, "search_results":card.active_search_results(), "prices":json.dumps(card.active_search_results().get_prices()), "settings":Settings.get_default()})
+    return render(request, "card.html", {"card": card, "collection_id": card.collection.id, "search_results":card.active_search_results(), "prices":json.dumps(card.active_search_results().get_prices()), "settings":Settings.get_default()})
 
 
 @csrf_exempt
@@ -310,6 +316,18 @@ def update_collection(request):
     collection.save()
     return JsonResponse({"success": True, "message": "Collection updated successfully"})
 
+def convert_and_sanitize(field_data, csr):
+    field_data.pop("csrId", None)  # Remove csrId from field data
+    field_data.pop("csrfmiddlewaretoken", None)  # Remove CSRF token
+    #print("caesar: ", field_data)
+    # Coerce boolean fields
+    for key, value in field_data.items():
+        field = csr._meta.get_field(key) if key in [f.name for f in csr._meta.fields] else None
+        if isinstance(field, models.BooleanField):
+            field_data[key] = value.lower() in ["true", "1", "yes"]
+
+    return field_data
+
 @csrf_exempt
 def update_csr_fields(request):
     if request.method != 'POST':
@@ -325,15 +343,7 @@ def update_csr_fields(request):
         return JsonResponse({"error": True, "message": f"CardSearchResult with id {csr_id} not found"}, status=404)
 
     # Convert POST data to dict and sanitize
-    field_data = request.POST.dict()
-    field_data.pop("csrId", None)  # Remove csrId from field data
-    field_data.pop("csrfmiddlewaretoken", None)  # Remove CSRF token
-    #print("caesar: ", field_data)
-    # Coerce boolean fields
-    for key, value in field_data.items():
-        field = csr._meta.get_field(key) if key in [f.name for f in csr._meta.fields] else None
-        if isinstance(field, models.BooleanField):
-            field_data[key] = value.lower() in ["true", "1", "yes"]
+    field_data = convert_and_sanitize(request.POST.dict(), csr)    
 
     try:
         csr.update_fields(field_data)
@@ -355,6 +365,7 @@ def move_to_collection(request, card_id, collection_id):
     card.save()
     return JsonResponse({"success": True})
 
+#TODO:these can be condensed
 @csrf_exempt
 def image_search(request, card_id):
     print("image_search")
@@ -372,11 +383,16 @@ def image_search(request, card_id):
 @csrf_exempt
 def image_search_collection(request, collection_id):
     print("image_search")
-    if not collection_id:
+        
+    data = json.loads(request.body)
+    card_ids = data.get("cards", [])
+    cards = Card.objects.filter(id__in=card_ids)
+    if not cards:
+        cards = Collection.objects.get(id=collection_id).cards.all()
         return JsonResponse({'error': 'Collection ID is required'}, status=400)
     
-    collection = Collection.objects.get(id=collection_id)
-    for card in collection.cards.all():
+    
+    for card in cards:
         lookup.single_image_lookup(card)
     
     return JsonResponse({"success": True, "error": ""})
@@ -418,16 +434,49 @@ def delete(request):
 
 @csrf_exempt
 def export(request, csr_id):
-    settings = Settings.objects.first()
+    settings = Settings.get_default()
 
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
     csr = CardSearchResult.objects.get(id=csr_id)
     
-    success = export_handler.export_to_ebay([csr])
+    success = export_handler.export_zip([csr])
     if not success:
         return JsonResponse({'error': 'Need auth', 'url':settings.ebay_user_auth_consent}, status=404)
-    return export_handler.export_to_ebay([csr])
+    return success
+
+@csrf_exempt
+def list_card(request, csr_id):
+    settings = Settings.get_default()
+    publish = request.GET.get('publish')
+    print("pub", publish)
+    if not csr_id or csr_id == 'undefined':
+        return JsonResponse({'error': 'CSR ID is required'}, status=400)
+    csr = CardSearchResult.objects.get(id=csr_id)
+    
+    success, _, _ = export_handler.export_to_ebay([csr], publish=True)
+    if success: 
+        return JsonResponse({"success": success}, status=200)
+    if not success:
+        return JsonResponse({'error': 'Need auth', 'url':settings.ebay_user_auth_consent}, status=404)
+
+@csrf_exempt
+def hold_card(request, csr_id):
+    print("hold", csr_id)
+    if not csr_id or csr_id == 'undefined':
+        return JsonResponse({'error': 'CSR ID is required'}, status=400)
+    
+    csr = CardSearchResult.objects.get(id=csr_id)
+    settings = Settings.get_default()
+    
+    if request.method == 'POST':
+        field_data = convert_and_sanitize(request.POST.dict(), csr)
+        csr.update_fields(field_data)
+        
+    csr.status = ResultStatus.HOLD
+    csr.save()
+    return JsonResponse({"success": 'true'}, status=200)
+    
 
 @csrf_exempt
 def export_collection(request, collection_id):
@@ -485,7 +534,7 @@ def upload_image(request, collection_id=None):
             collection_id = collection.id
         else:
             collection = Collection.objects.get(id=collection_id)        
-        
+        app_settings = Settings.get_default()
         return_cards = []
         if len(uploaded_files) > 0:
             timestamp_folder = now().strftime("%Y%m%d_%H%M%S/")  # e.g., '20250701_125342'
@@ -509,12 +558,12 @@ def upload_image(request, collection_id=None):
                     skip_next = not skip_next
                 else:
                     source_card, skip_next = Card.from_filename(collection, absolute_path, crop=True, match_back=True)
-
-                    lookup.single_image_lookup(source_card, "")
+                    #we need to keep the lookup call even though we're not doing a search in order to set up the CSRs
+                    lookup.single_image_lookup(source_card, app_settings, site="")
                     return_cards.insert(0, source_card)
 
-            return JsonResponse({"success": True, "error": ""})
-                           
+            return redirect(manage_collection)
+        
     return render(request, "upload_image.html", {"collection_id":collection.id})
 
 def select_directory(request):

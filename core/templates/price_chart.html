@@ -97,29 +97,33 @@
     if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) return;
 
     const point = tooltip.dataPoints[0].raw;
+
+    const canvasRect = chart.canvas.getBoundingClientRect();
+
+    // Create tooltip container
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'chartjs-tooltip';
+    tooltipEl.style.position = 'absolute';
+    tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
+    tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
+    tooltipEl.style.background = '#fff';
+    tooltipEl.style.border = '1px solid #ccc';
+    tooltipEl.style.borderRadius = '6px';
+    tooltipEl.style.padding = '8px';
+    tooltipEl.style.pointerEvents = 'none';
+    tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+    tooltipEl.style.fontSize = '12px';
+    tooltipEl.style.zIndex = 1000;
+    tooltipEl.style.maxWidth = '300px';
+
     console.log(point)
+
     if (point.y) {
-      const canvasRect = chart.canvas.getBoundingClientRect();
-
-      // Create tooltip container
-      tooltipEl = document.createElement('div');
-      tooltipEl.id = 'chartjs-tooltip';
-      tooltipEl.style.position = 'absolute';
-      tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
-      tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
-      tooltipEl.style.background = '#fff';
-      tooltipEl.style.border = '1px solid #ccc';
-      tooltipEl.style.borderRadius = '6px';
-      tooltipEl.style.padding = '8px';
-      tooltipEl.style.pointerEvents = 'none';
-      tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
-      tooltipEl.style.fontSize = '12px';
-      tooltipEl.style.zIndex = 1000;
-      tooltipEl.style.maxWidth = '300px';
-
+      //scatterplot
+      
       // Build table layout
       tooltipEl.innerHTML = `
-        <div style="font-weight:bold; margin-bottom:6px;">Bin: ${tooltip.title[0]}</div>
+        <div style="font-weight:bold; margin-bottom:6px;">$${point.y.toFixed(2)}</div>
         <table style="width:100%; border-collapse:collapse;">
           <tr>
             <td style="width:60px; vertical-align:top;">
@@ -132,9 +136,21 @@
           </tr>
         </table>
       `;
+    } else {
+      //histogram bar
+      // histogram bar
+        const binTop = parseFloat(tooltip.dataPoints[0].label); // this is your x-axis label
+        const binBottom = binTop - 0.99;
 
-      document.body.appendChild(tooltipEl);
+        tooltipEl.innerHTML = `
+          <div style="font-weight:bold;">Bin: $${binBottom.toFixed(2)} - $${binTop.toFixed(2)}</div>
+          <div>Bucket listings: ${point}</div>
+        `;
+
     }
+    document.body.appendChild(tooltipEl);
+    
+
   };
 
 
@@ -217,10 +233,17 @@
           const index = point.index;
           const dataset = chart.data.datasets[datasetIndex];
           const dataPoint = dataset.data[index];
-          
+
+          let sharedValue;
           // 🔥 Your callback logic here
           console.log("Clicked point:", dataPoint);
-          priceElem.setAttribute("data-shared", dataPoint.y);
+          if (dataPoint.y) {
+            sharedValue = dataPoint.y            
+          } else {
+            console.log(activePoints)
+            sharedValue = chart.data.labels[index];      
+          }
+            priceElem.setAttribute("data-shared", sharedValue);
         }
       },
     }

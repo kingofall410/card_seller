@@ -14,15 +14,17 @@ class ResultStatus(models.TextChoices):
     SEARCHED="searched","Searched"
     SAVED="saved", "Saved"
     LISTED="listed", "Listed"
+    HOLD="hold", "Hold"
 
     @classmethod
     def get_icon(cls, value):
         return {
             cls.NEW: {'color': '', 'icon': '⭐'},
-            cls.CROPPED: {'color': 'red', 'icon': '🖼'},
+            cls.CROPPED: {'color': 'red', 'icon': '🖼️'},
             cls.SEARCHED: {'color': 'yellow', 'icon': '🔎'},
             cls.SAVED: {'color': 'green', 'icon': '✔'},
             cls.LISTED: {'color': 'blue', 'icon': '💲'},
+            cls.HOLD: {'color': 'grey', 'icon': '✋'},
 
         }.get(value, {})
 
@@ -150,7 +152,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     response_count = models.IntegerField(default=0)
     condition = models.CharField(max_length=100, blank=True)
 
-    attribute_flags = models.JSONField(default=list)
+    attribute_flags = models.JSONField(default=dict)
 
     #maybe this should be a full CSR object?  Would you ever Search by back?  But that makes displayu easier
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
@@ -166,7 +168,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     features = models.CharField(max_length=100, blank=True)
     ebay_listing_id = models.CharField(max_length=50, blank=True)
     ebay_item_id = models.CharField(max_length=50, blank=True)
-    ebay_offer_id = models.CharField(max_length=50, blank=True)
+    ebay_offer_id = models.CharField(max_length=50, blank=True, null=True)
+    ebay_listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
 
     ebay_mean_price = models.FloatField(default=0.0)
@@ -176,7 +179,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_high_price = models.FloatField(default=0.0)
 
     status = models.CharField(max_length=20, choices=ResultStatus.choices,default=ResultStatus.NEW)
-
+    
+    
     #combine all this into field_definition
     readonly_fields = ["search_string", "response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
 
@@ -210,6 +214,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
+    
+    def get_crop_params(self, card_id=None):
+        if card_id == self.parent_card.reverse_id:
+            return self.reverse_crop_params
+        else:
+            return self.front_crop_params
+        
     def save(self, *args, **kwargs):
 
         if self.title_to_be_m:
@@ -218,10 +229,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.league = ""
         self.full_set = self.build_full_set()
         self.full_team = self.build_full_team()
-        if self.attribute_flags:
+        #if self.attribute_flags:
             #print(self.attributes)
             #print(self.attribute_flags)
-            self.features = " | ".join(key for key in self.attribute_flags.keys())
+            #self.features = " | ".join(key for key in self.attribute_flags.keys())
             #print(self.features)
         #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
         super().save(*args, **kwargs)
@@ -286,11 +297,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def aggregate_pricing_info(self):
         
         prices = [listing.ebay_price for listing in self.listings.all()]
-        self.ebay_mean_price = statistics.mean(prices)
-        self.ebay_median_price = statistics.median(prices)
-        self.ebay_mode_price = statistics.mode(prices)
-        self.ebay_low_price = min(prices)
-        self.ebay_high_price = max(prices)
+        if len(prices) > 0:
+            self.ebay_mean_price = statistics.mean(prices)
+            self.ebay_median_price = statistics.median(prices)
+            self.ebay_mode_price = statistics.mode(prices)
+            self.ebay_low_price = min(prices)
+            self.ebay_high_price = max(prices)
         self.save()
 
 
@@ -356,6 +368,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     #print(counter)
                     #TODO obviously remove this hardcode; the value 5 should be a % based on occurrence count/total listings
                     final_value = {key[0]: True for key in counter.items() if key[1] > 5}
+                    if "1st" in final_value:
+                        final_value["First"] = final_value["1st"]
+                        del final_value["1st"]
                     field_name = "attribute_flags"#TODO obviously remove this hardcode
                 else:
                     most_common = counter.most_common(1)
@@ -393,14 +408,16 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return [[listing.ebay_price, self.clean_text(listing.title.title), listing.thumb_url] for listing in self.listings.all()]
 
     def update_fields(self, all_field_data):
-        #print("afd", all_field_data)
+        print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
+            print(field_name)
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
             
             #check for compound names (checkbox groups, etc)
             if hasattr(self, field_name) or hasattr(self, field_name[:field_name.find('.')]):
-                #print("has attr", field_name, field_value, self.overrideable_fields)
+                print("has attr", field_name, field_value, self.overrideable_fields)
+            
                 if field_name in self.overrideable_fields:    
                     #print("over")
                     #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
@@ -411,18 +428,27 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     #print(group_name, field_name)
                     #TODO: need to make this more generic to handle additional checkhbox fields
                     if group_name == 'attributes':
-                        #print('checkboxes')
+                        if field_name == "1st":
+                            field_name = "First"
+                        print(self.attribute_flags)
                         print(field_name, type(field_value), field_value)
                         #if field_name in self.attribute_flags:
                         self.attribute_flags[field_name] = (field_value.lower() == 'true')
                         #else:
-                        print(self.attribute_flags)
 
                 else:
-                    #print("setting", field_name, field_value)
+                    print("setting: ", field_name, field_value)
                     setattr(self, field_name, field_value)
+            elif hasattr(self.parent_card, field_name):
+                setattr(self.parent_card, field_name, field_value)
+            else:
+                print("still fucking oopsie:", field_name)
         self.status = ResultStatus.SAVED
+        print("done")
         self.save()
+        print("done2")
+        self.parent_card.save()
+        print("done3")
 
     @classmethod
     def create_empty(cls, pcard):
@@ -438,21 +464,23 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def from_search_results(cls, pcard, items=None, tokenize=True):
         csr = cls.create_empty(pcard)
         listing_set = []
-        if not items is None:
+        if len(items) > 0:
             for idx, item in enumerate(items, 1): 
                 listing = ProductListing.from_search_results(item, csr, tokenize)
                 listing_set.append(listing)
             csr.response_count = len(items)
+            print("attribs:", csr.attribute_flags) 
             if tokenize:
                 #must pass the listings here to preserve the in memory attributes
                 csr.collapsed_tokens = csr.collapse_token_maps(listing_set)
                 csr.aggregate_pricing_info()
                 csr.status = ResultStatus.SEARCHED
-            csr.save()
+        csr.save()
         return csr
         
     def build_title(self, fields=None):
         print("fields:", fields)
+        
         if not fields:
             year = self.display_value("year")
             brand = self.display_value("brand")
@@ -463,13 +491,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             nr = f"#{cardnr}" if cardnr else ""
             city = self.display_value("city")
             team = self.display_value("team")
+            print("attribs:", self.attribute_flags)
+            isRC = "RC" if len(self.attribute_flags) > 0 and self.attribute_flags.get("RC") else ""
+            isAuto = "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else ""
+            is1st = "1st" if len(self.attribute_flags) > 0 and self.attribute_flags.get("1st") else ""
+            isHOF = "HOF" if len(self.attribute_flags) > 0 and self.attribute_flags.get("HOF") else ""
+            isAS = "All-Star" if len(self.attribute_flags) > 0 and self.attribute_flags.get("All-Star") else ""
+            isOddball = "Oddball"if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else ""
 
-            isRC = "RC" if self.attribute_flags.get("RC") else ""
-            isAuto = "Auto" if self.attribute_flags.get("Auto") else ""
-            is1st = "1st" if self.attribute_flags.get("1st") else ""
-            isHOF = "HOF" if self.attribute_flags.get("HOF") else ""
-            isAS = "All-Star" if self.attribute_flags.get("All-Star") else ""
-            isOddball = "Oddball" if self.attribute_flags.get("Oddball") else ""
             condition = self.display_value("condition")
         
         else:            
@@ -527,9 +556,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO:Too many saves
     def build_sku(self):
         full_set = self.build_full_set()
-        self.sku = f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
-        self.save()
-        return self.sku
+        sku = f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+        return sku
 
     def get_search_strings(self):
         return self.display_value("title_to_be")
@@ -573,11 +601,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #TODO: this is a fucking disaster
         
         filled_template = traverse(template)
+        if filled_template["product"]["aspects"]["Card Name"] == "":
+            filled_template["product"]["aspects"]["Card Name"] == []
+            
         filled_template["sku"] = sku
         filled_template["product"]["aspects"]["Autographed"] = "Yes" if "Auto" in self.attributes else "No"
         filled_template["condition"] = "USED_VERY_GOOD"
 
         #if self.condition
+        print("condition:", self.condition)
         condition_token = Condition.objects.get(raw_value=self.condition)
         condition_descriptor = [
             {
@@ -590,11 +622,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         filled_template["product"]["aspects"]["Sport"] = "Baseball"
         filled_template["product"]["aspects"]["League"] = "MLB"
         filled_template["product"]["imageUrls"] = image_links
-
         #need to backfill these all to lists
-        for field in filled_template["product"]["aspects"]:
-            filled_template["product"]["aspects"][field] = [filled_template["product"]["aspects"][field]]
-        #filled_template["product"]["aspects"]["Condition"] = ["Ungraded"]        
+        filled_template["product"]["aspects"] = {
+            k: [v] for k, v in filled_template["product"]["aspects"].items() if v
+        }
+
+        
         return filled_template
     
 

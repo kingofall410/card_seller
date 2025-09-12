@@ -43,14 +43,19 @@
       margin-bottom: 16px;
     }
 
-.info-button-row {
-  display: flex;
-  justify-content: center;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
-  width: 100%;
-}
+    .info-button-row {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding-top: 12px;
+      border-top: 1px solid #eee;
+      width: 100%;
+    }
 
+    .notes-wrapper,
+    .buttons-wrapper {
+      width: 100%;
+    }
 
     .portrait-image {
       display: flex;
@@ -106,6 +111,7 @@
 
 <body>
   {% include "header.html" %}
+  {% include "nav_buttons.html" with prev_id=card.previous_card.id next_id=card.next_card.id %}
 
   <div class="overview-wrapper">
 
@@ -130,14 +136,21 @@
       </div>
 
       <div class="info-button-row">
-        {% include "re_search_buttons.html" with card_id=card.0.id search_result=card.1 %}
+        <div class="notes-wrapper">
+          {% include "notes_panel.html" with card=card %}
+        </div>
+        <div class="buttons-wrapper">
+          {% include "re_search_buttons.html" with card_id=card.id search_result=search_results %}
+        </div>
       </div>
+
     </div>
 
     <!-- Price Chart + Listing Details -->
     <div class="uicard price-block">
       {% include "price_chart.html" with prices=prices listings=search_results settings=settings %}
-      {% include "ebay_listing_details.html" %}
+      {% include "ebay_listing_details.html" with card_id=card.id search_result=search_results %}
+      {% include "listing_buttons.html" with card_id=card.id search_result=search_results  %}
     </div>
 
     <!-- Product Listings -->
@@ -146,5 +159,6 @@
     </div>
 
   </div>
+  {% include "nav_buttons.html" with prev_id=card.previous_card.id next_id=card.next_card.id collection_id=card%}
 </body>
 </html>

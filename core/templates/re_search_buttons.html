@@ -2,11 +2,11 @@
     <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🖼️ Image Search
     </button>
-    <button id="text-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    <button id="text-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🔤 Text Search
     </button>
-    <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🚀 Export
+    <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        👇 Download
     </button>
     <button id="retokenize-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🔍 Retokenize
@@ -14,7 +14,12 @@
     <button id="crop-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         ✂ Crop
     </button>
-    <a href="/export/{{ search_result.id }}/" download="card_collection.csv">Download CSV</a>
+    <button id="save-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        💾 Save
+    </button>
+    <button id="save-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        💾→ Save & Next
+    </button>
 </div>
 
 <script>
@@ -23,7 +28,9 @@
         const retokenizeBtn = document.getElementById("retokenize-btn-{{ card_id }}");
         const textSearchBtn = document.getElementById("text-search-btn-{{ card_id }}");
         const exportBtn = document.getElementById("export-btn-{{ card_id }}");
-        const cropBtn = document.getElementById("export-btn-{{ card_id }}");
+        const cropBtn = document.getElementById("crop-btn-{{ card_id }}");
+        const saveBtn = document.getElementById("save-btn-{{ card_id }}");
+        const saveNextBtn = document.getElementById("save-next-btn-{{ card_id }}");
         const searchResultId = "{{ search_result.id }}"
         const cardId = "{{ card_id }}";
 
@@ -49,14 +56,69 @@
             });
         });
         exportBtn.addEventListener('click', () => {
+            //TODO:reimplement this when needed as download csv
             console.log(` Export triggered for ${exportBtn.id}`);
             console.log(searchResultId);
-            fetch(`/export/${searchResultId}/`)
-                .then(res => res.json())
+            //fetch(`/export/${searchResultId}/`)
+              //  .then(res => res.json())
                 
+        });
+        saveBtn.addEventListener('click', () => {
+            
+            console.log(` Save triggered for ${saveBtn.id}`);
+            console.log(searchResultId);
+            allFields = collectAllFields(cardId);
+            //TODO:fix this hack maybe
+            allFields["notes"] = document.getElementById("notes").value
+            console.log("Fields:", allFields);
+
+            $.ajax({
+                url: "/update_csr_fields/",
+                method: "POST",
+                data: {
+                    csrId: searchResultId,
+                    ...allFields,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: response => {
+                    console.log("Saved:", response);
+                    alert("Changes saved successfully.");
+                },
+                error: xhr => {
+                    console.error("Save error:", xhr.responseText);
+                    alert("Error saving changes.");
+                }
+            });       
+        });
+        saveNextBtn.addEventListener('click', () => {
+            
+            console.log(` Save triggered for ${saveBtn.id}`);
+            console.log(searchResultId);
+            allFields = collectAllFields(cardId);
+            //TODO:fix this hack maybe
+            allFields["notes"] = document.getElementById("notes").value
+            console.log("Fields:", allFields);
+
+            $.ajax({
+                url: "/update_csr_fields/",
+                method: "POST",
+                data: {
+                    csrId: searchResultId,
+                    ...allFields,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: response => {
+                    handleNext()
+                },
+                error: xhr => {
+                    console.error("Save error:", xhr.responseText);
+                    alert("Error saving changes.");
+                }
+            });       
         });
         cropBtn.addEventListener('click', () => {
             console.log(` Detailed Crop page `);
+            window.location.href = "/full_crop/" + cardId;
                 
         });
         

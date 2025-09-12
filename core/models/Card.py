@@ -23,7 +23,8 @@ class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
     parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
-           
+    
+    notes = models.TextField(blank=True)
     
     @classmethod
     def get_default(cls):
@@ -35,6 +36,13 @@ class Collection(models.Model):
     @property
     def get_size(self):
         return len(self.cards.all())
+    
+    def nxt(self, card_id):
+        return self.cards.filter(id__gt=card_id).order_by('id').first()
+
+    def previous(self, card_id):
+        return self.cards.filter(id__lt=card_id).order_by('-id').first()
+
 
 class Card(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)
@@ -49,23 +57,49 @@ class Card(models.Model):
     reverse_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse", null=True)
     cropped_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_crop", null=True)
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
-   
+    
+    notes = models.TextField(blank=True)
+        
+    def next_card(self):
+        return self.collection.nxt(self.id)
+    
+    def previous_card(self):
+        return self.collection.previous(self.id)
 
     def get_lookup_image(self):
         if self.cropped_image:
             return self.cropped_image.img
         else:
             return self.uploaded_image.img
+    
+    def get_portrait(self, card_id=None):
+        if card_id == self.reverse_id:
+            return self.portrait_reverse.img
+        else:
+            return self.portrait_image.img
         
+    def get_cropped(self, card_id=None):
+        if card_id == self.reverse_id:
+            return self.cropped_reverse.img
+        else:
+            return self.cropped_image.img
+        
+    def get_crop_params(self, card_id=None):
+        return self.active_search_results().get_crop_params(card_id)
+    
     def get_search_strings(self):
         return self.active_search_results().get_search_strings()
-        
+
     def active_search_results(self):
         return self.search_results.last()
 
     @property
     def search_count(self):
         return len(self.search_results.all())
+    
+    @classmethod
+    def is_reverse(cls, id):
+        return id[-1:] == "R"
     
     @classmethod
     def find_back_by_alpha(cls, front_filepath):
@@ -460,14 +494,14 @@ class Card(models.Model):
 
         # Check if aspect ratio is too extreme — fallback if so
         aspect = final_crop.shape[1] / final_crop.shape[0] if final_crop.shape[0] else 0
-        if aspect > 3.0 or aspect < 0.3:
-            print("⚠️ Cropped region has unusual aspect ratio — reverting to original image.")
-            final_crop = img.copy()
-            crop_params = None
-        else:
-            crop_params = CropParams.objects.create(x=bb_x1, y=bb_y1, width=bb_x2-bb_x1, height=bb_y2-bb_y1, rotate=float(skew_angle))
-            crop_params.save()
-            print("Cp:",  crop_params)
+        #if aspect > 3.0 or aspect < 0.3:
+            #print("⚠️ Cropped region has unusual aspect ratio — reverting to original image.")
+            #final_crop = img.copy()
+            #crop_params = None
+        #else:
+        crop_params = CropParams.objects.create(x=bb_x1, y=bb_y1, width=bb_x2-bb_x1, height=bb_y2-bb_y1, rotate=float(skew_angle))
+        crop_params.save()
+        print("Cp:",  crop_params)
         
         # Encode as jpg
         success, buffer = cv2.imencode(".jpg", final_crop)
