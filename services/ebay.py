@@ -4,9 +4,9 @@ from PIL import Image
 from pathlib import Path
 import time
 
-CLIENT_ID = 'DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10'
-CLIENT_SECRET = 'PRD-a6d6e5b02d26-532c-4825-8507-5903'
-RUNAME = "Daniel_Crown-DanielCr-Latest-reqvvsrz"
+CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
+CLIENT_SECRET = 'PRD-113ecf9c5fd1-5956-4012-a05a-9770'
+RUNAME = "Daniel_Crown-DanielCr-Latest-obqqa"
 IMG_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search_by_image"
 TXT_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
 SELL_URL="https://api.ebay.com/oauth/api_scope/sell.inventory"
@@ -134,14 +134,23 @@ def get_access_token(settings, user_auth_code=None):
         else:
             print("Trading user auth code...")
             data = {'grant_type': 'authorization_code', "code":user_auth_code, "redirect_uri":RUNAME}
-    else:#user-less request
-        data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
+    #else:#user-less request
+        #print("user-less")
+        #data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
        
     url = 'https://api.ebay.com/identity/v1/oauth2/token'
     headers = {"Content-Type": "application/x-www-form-urlencoded"}    
 
+    
+    print("*"+base64.b64decode("RGFuaWVsQ3ItTGF0ZXN0U2EtUFJELWQxMTQ5MGM2Yi0yNzdjOWM2ZjpQUkQtMTEzZWNmOWM1ZmQxLTU5NTYtNDAxMi1hMDVhLTk3NzA=").decode()+"*")
+
     response = requests.post(url, headers=headers, data=data, auth=HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET))
-    print(response)
+    
+    print("🔗 URL:", response.request.url)
+    print("📨 Method:", response.request.method)
+    print("🧾 Headers:", response.request.headers)
+    print("📦 Body:", response.request.body)
+
     if response.status_code == 200:
         data = response.json()
 
@@ -206,7 +215,7 @@ def image_search(loaded_img, limit=10, settings=None):
     print("image_search: ", loaded_img.name)
     #if not auth_token:
     if has_user_consent(settings):
-        access_token = get_access_token(settings)
+        access_token = get_access_token(settings, settings.ebay_user_auth_code)
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",

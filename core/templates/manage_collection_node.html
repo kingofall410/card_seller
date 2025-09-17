@@ -186,8 +186,35 @@
   background-color: #e6f7ff; /* soft blue */
   border-color: #91d5ff;
 }
+.image-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
 
 </style>
+<script>
+  window.submitCardForm = function(collectionId, cardId, targetUrl) {
+    console.log("submit to", targetUrl);
+    const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
+    console.log(visibleCards);
+    if (visibleCards.value) {
+      const cardIds = JSON.parse(visibleCards.value).map(Number);
+    } else {
+      cardIds = []
+    }
+    
+
+    const form = document.getElementById(`view-card-form-${collectionId}`);
+    form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
+    form.submit();
+
+  }
+</script>
+
+
+
 {% load custom_tags %}
 <div id="collection-{{ collection.id }}" class="collection">
 <div class="collection-node" data-id="{{ collection.id }}">
@@ -201,8 +228,8 @@
     <button onclick="addCard({{ collection.id }})">➕</button>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="saveTitle({{ collection.id }})">💾</button>
-    <button onclick="cropCollection({{ collection.id }})">✂</button>
-    <button onclick="searchCollection({{ collection.id }})">🔍</button>
+    <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
+    <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
     
     <input type="text"
       name="collection_name_{{ collection.id }}"
@@ -222,22 +249,26 @@
     </select>
   </div>
   <div class="card-filter-controls">
+    <form id="view-card-form-{{ collection.id }}" method="POST" style="display: none;">
+    <input type="hidden" name="card_ids" id="visible-cards-{{ collection.id }}">
+  </form>
+
   Status: 
-    <select onchange="filterCardsInModule(this)">
+    <select onchange="filterCardsInModule(this, {{ collection.id }})">
       {% get_all_options "status" as options %}
       {% for option in options %}
         <option value="status">{{ option }}</option>
       {% endfor %}
     
   Year:
-    <select onchange="filterCardsInModule(this)">
+    <select onchange="filterCardsInModule(this, {{ collection.id }})">
       {% get_all_options "year" None collection.id as options %}
       {% for option in options %}
         <option value="year">{{ option }}</option>
       {% endfor %}
     
   Brand: 
-    <select onchange="filterCardsInModule(this)">
+    <select onchange="filterCardsInModule(this, {{ collection.id }})">
       {% get_all_options "brands" None collection.id as options %}
       {% for option in options %}
         <option value="brand">{{ option }}</option>
@@ -252,6 +283,7 @@
     {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
     {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
     {% with meta=card.active_search_results.status|status_icon_meta %}
+    
     <div id="card-{{ card.id }}" class="card">    
     <div class="card-item status-{{ card.active_search_results.status|lower }}"
       data-id="{{ card.id }}"
@@ -268,10 +300,14 @@
             {{ display_year }} {{ display_brand }} {{ display_subset }} 
         </div>
 
+          
         <div class="image-wrapper">
-            <a href="../card/{{ card.id }}"><img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
-            <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover"></a>
+          <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">
+            <img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
+            <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
+          </button>
         </div>
+
         <div class="card-actions">
           
             <div class="status-icon">{{ meta.icon }}</div>
@@ -343,7 +379,8 @@ function sortCardsInModule(selectEl) {
     console.warn('No collection container found for sorting');
     return;
   }
-
+  
+  const collectionId = container.id.split('-')[1];
   const cardList = container.querySelector('.card-list');
   if (!cardList) {
     console.warn('No card list found in collection');
@@ -374,8 +411,10 @@ function sortCardsInModule(selectEl) {
   sortableCards.forEach(card => cardList.appendChild(card));
   if (lastItem) cardList.appendChild(lastItem); // Preserve final control
 }
-function filterCardsInModule(selectEl) {
-  const container = selectEl.closest('.collection');
+
+
+function filterCardsInModule(selectEl, collectionId) {
+  const container = document.getElementById(`collection-${collectionId}`);
   if (!container) {
     console.warn('No collection container found for filtering');
     return;
@@ -388,31 +427,48 @@ function filterCardsInModule(selectEl) {
   }
 
   const cards = Array.from(cardList.querySelectorAll('.card'));
+  console.log(cards)
   const lastItem = cardList.lastElementChild;
   const selectedOption = selectEl.selectedOptions?.[0];
-
+  console.log("Selected option:", selectedOption);
   const key = selectedOption?.value ?? '';
+  console.log("collectionId:", collectionId);
   const filterValue = selectedOption?.text ?? '';
 
-  console.log("Filtering by:", key, filterValue);
+  console.log("Filtering by:", key, filterValue, collectionId);
+
+  const visibleCardIds = [];
+
   cards.forEach(card => {
     if (card === lastItem) {
       card.style.display = ''; // Always show control element
       return;
     }
-  console.log("filterval:", filterValue);
+
     const data = card.querySelector('.card-item')?.dataset || {};
     const val = data[key] || '';
 
-    // Show all if filterValue is empty
     const isMatch = filterValue === ''
       || (key === 'search_count'
           ? parseInt(val) === parseInt(filterValue)
           : val === filterValue);
 
     card.style.display = isMatch ? '' : 'none';
+
+    if (isMatch && data.id) {
+      visibleCardIds.push(data.id);
+    }
   });
+
+  // Update hidden input with visible card IDs
+  const hiddenInput = document.getElementById(`visible-cards-`+collectionId);
+  console.log("hidden:", hiddenInput, collectionId, `visible-cards-`+collectionId)
+  if (hiddenInput) {
+    hiddenInput.value = JSON.stringify(visibleCardIds);
+    console.log("Updated visible_cards input:", hiddenInput);
+  }
 }
+
 
 function triggerFileUpload(collectionId) {
   document.getElementById("fileInput_" + collectionId).click();
@@ -567,11 +623,6 @@ function searchCollection(collectionId) {
     return;
   }
 
-  const visibleCards = Array.from(container.querySelectorAll('.card'))
-    .filter(card => card.style.display !== 'none' && card.querySelector('.card-item'))
-    .map(card => card.querySelector('.card-item').dataset.id)
-    .filter(id => id); // Remove undefined/null
-
   console.log(visibleCards);
   const encodedIds = encodeURIComponent(visibleCards.join(','));
   const url = `/crop_review/${collectionId}?card_ids=${encodedIds}`;
@@ -581,6 +632,8 @@ function searchCollection(collectionId) {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ cards: visibleCards })
 });
+
+
 
 }
 
@@ -611,6 +664,8 @@ function cropCard(collectionId, cardId) {
 }
 
 function cropCollection(collectionId) {
+  const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
+  const cardIds = JSON.parse(visibleCards.value).map(Number);
   window.location.href = "/crop_review/"+collectionId
 }
 

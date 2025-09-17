@@ -25,42 +25,15 @@ from django.db.models import F
 from urllib.parse import unquote
 
 
-BASE_DIR = os.path.join(settings.BASE_DIR)  # example folder
+'''BASE_DIR = os.path.join(settings.BASE_DIR)  # example folder
 
 def hello_world(request):
     
     return render("success.html")
 
 def test_view(request):
-    for csr in CardSearchResult.objects.all():
-        print(csr)
-        if type(csr.attribute_flags) is not {}:
-            csr.attribute_flags = {}
-            csr.save()
-    return JsonResponse({"status": "success"})
-    
-
-    return render(request, "price_chart.html", context)
-
-def crop_review(request, collection_id):
-    
-    collection = get_object_or_404(Collection, id=collection_id)
-    cards = collection.cards.all()
-    settings = Settings.get_default()
-
-    card_tuples = [(card, id_, results) for card in cards for id_ in (card.id, card.reverse_id) for results in [card.active_search_results()]]
-
-    print(card_tuples)
-    return render(request, "crop_review.html", {"card_tuples":card_tuples})
-
-def full_crop(request, card_id):
-    
-    card = get_object_or_404(Card, id=card_id)
-    settings = Settings.get_default()
-
-    card_tuples = [(card, card.id, card.active_search_results()), (card, card.reverse_id, card.active_search_results())]
-    
-    return render(request, "crop_review.html", {"card_tuples":card_tuples})
+    pass
+        
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -78,31 +51,6 @@ def next(request, card_id):
         
         return redirect("crop_review", card_id=next_card_id)
     
-def save_overrides(request, card_id=None, csr_id=None):
-    print(f"saveOverrides: {card_id}")
-    card = get_object_or_404(Card, pk=card_id)
-    csr = card.active_search_results()
-    if csr_id:
-        csr = get_object_or_404(CardSearchResult, pk=csr_id)       
-
-    for field in csr.overrideable_fields:
-    
-        manual_flag = f"{field}_is_manual"
-        manual_val = f"{field}_m"
-
-        # Handle manual toggle checkbox
-        is_manual = request.POST.get(manual_flag) == "on"
-        print(f"setting {manual_flag} to {is_manual}")
-        setattr(csr, manual_flag, is_manual)
-
-        # Handle manual value input
-        if manual_val in request.POST:
-            print(f"setting {manual_val} to {request.POST.get(manual_val)}")
-            setattr(csr, manual_val, request.POST.get(manual_val))
-
-    csr.save()
-    return JsonResponse({"status": "success"})
-
 @csrf_exempt
 def view_collection(request, collection_id=None):
     cards = []
@@ -116,44 +64,20 @@ def view_collection(request, collection_id=None):
     prices = [json.dumps(card.active_search_results().get_prices()) for card in cards]
     print(prices)
     for element in prices:
-        if isinstance(element, list) and len(element) == 3:
-            _, title, _ = element
-            assert isinstance(title, str)
-            assert '"' not in title
-            assert "'" not in title
             assert '\\' not in title
+    def image_search(request, card_id):
+        print("image_search")
+        if not card_id:
+            return JsonResponse({'error': 'Card ID is required'}, status=400)
+        card = Card.objects.get(id=card_id)
+        settings = Settings.get_default()
+        search_results = lookup.single_image_lookup(card, settings)
+        if search_results:
+            return JsonResponse({"success": True, "error": ""})
     
-    cards = [(card, card.active_search_results(), json.dumps(card.active_search_results().get_prices())) for card in cards]
-    paginator = Paginator(cards, settings.nr_collection_page_items)
-    
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+        return JsonResponse({"error": True, "error": "No results"})
 
     return render(request, "collection.html", {"page_obj": page_obj, "collection_id":collection.id, "settings":settings})
-
-@csrf_exempt    
-def view_card(request, card_id):
-    if card_id:
-        card = Card.objects.get(id=card_id)
-    
-    return render(request, "card.html", {"card": card, "collection_id": card.collection.id, "search_results":card.active_search_results(), "prices":json.dumps(card.active_search_results().get_prices()), "settings":Settings.get_default()})
-
-
-@csrf_exempt
-def add_token(request):
-    print("body", request.body)
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        field_key = data.get("field_key")
-        new_value = data.get("token", "")
-        allFields = data.get("fields", {})
-
-        print(f"add_token: {field_key}: {new_value}")
-        print(allFields)
-
-        if app_settings.add_token(field_key, new_value, allFields):
-            return JsonResponse({"success": True, "error": ""})
-    return JsonResponse({"error": True, "error": "Failed to add token"})
 
 @csrf_exempt
 def get_dynamic_options(request):
@@ -294,28 +218,6 @@ def get_dynamic_options(request):
 
 
 
-@csrf_exempt
-def update_collection(request):
-    if request.method != 'POST':
-        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
-
-    collection_id = request.POST.get("collectionId")
-    if not collection_id or not collection_id.isdigit():
-        return JsonResponse({"error": True, "message": "Missing or invalid collectionId"}, status=400)
-
-    try:
-        collection = Collection.objects.get(id=int(collection_id))
-    except Collection.DoesNotExist:
-        return JsonResponse({"error": True, "message": f"Collection with id {collection_id} not found"}, status=404)
-
-    new_name = request.POST.get("name", "").strip()
-    if not new_name:
-        return JsonResponse({"error": True, "message": "Missing collection name"}, status=400)
-
-    collection.name = new_name
-    collection.save()
-    return JsonResponse({"success": True, "message": "Collection updated successfully"})
-
 def convert_and_sanitize(field_data, csr):
     field_data.pop("csrId", None)  # Remove csrId from field data
     field_data.pop("csrfmiddlewaretoken", None)  # Remove CSRF token
@@ -397,17 +299,6 @@ def image_search_collection(request, collection_id):
     
     return JsonResponse({"success": True, "error": ""})
 
-@csrf_exempt
-def retokenize(request, csr_id):
-    print("retokenize")
-
-    if not csr_id or csr_id == 'undefined':
-        return JsonResponse({'error': 'CSR ID is required'}, status=400)
-    csr = CardSearchResult.objects.get(id=csr_id)
-    csr.retokenize()
-
-    return JsonResponse({"success": True, "error": ""})
-
 
 @csrf_exempt
 def delete(request):
@@ -478,18 +369,6 @@ def hold_card(request, csr_id):
     return JsonResponse({"success": 'true'}, status=200)
     
 
-@csrf_exempt
-def export_collection(request, collection_id):
-    print("export collection")
-    settings = Settings.objects.first()
-
-    if not collection_id or collection_id == 'undefined':
-        return JsonResponse({'error': 'Collection ID is required'}, status=400)
-    
-    collection = Collection.objects.get(id=collection_id)
-    csrs = collection.get_default_exports()
-
-    return export_handler.export_zip(csrs)
 
 @csrf_exempt
 def text_search(request, card_id):
@@ -522,19 +401,83 @@ def upload_image(request, collection_id=None):
             collection = Collection.objects.get(id=collection_id)
         else:
             collection = Collection.objects.create()
-
-    if request.method == 'POST':
-     
-        uploaded_files = sorted(request.FILES.getlist('images'), key=lambda r: r.name)
-        collection_id = request.POST.get('collection_id')
-        print(len(uploaded_files)," files")
-        print("collection_id1: ", collection_id)
-        if collection_id == "__Add__":
-            collection = Collection.objects.create()
-            collection_id = collection.id
-        else:
+        @csrf_exempt
+        def text_search(request, card_id):
+            print("text search")
+            if not card_id:
+                return JsonResponse({'error': 'Card ID is required'}, status=400)
+            card = Card.objects.get(id=card_id)
+            search_results = lookup.single_text_lookup(card) 
+            if search_results:
+                return JsonResponse({"success": True, "error": ""})
+    
+            return JsonResponse({"error": True, "error": "No results"})
             collection = Collection.objects.get(id=collection_id)        
         app_settings = Settings.get_default()
+# Collection-related views
+import json
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.views.decorators.csrf import csrf_exempt
+from core.models.Card import Card, Collection
+from services.models import Settings
+from services import export as export_handler
+
+@csrf_exempt
+def update_collection(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
+
+    collection_id = request.POST.get("collectionId")
+    if not collection_id or not collection_id.isdigit():
+        return JsonResponse({"error": True, "message": "Missing or invalid collectionId"}, status=400)
+
+    try:
+        collection = Collection.objects.get(id=int(collection_id))
+    except Collection.DoesNotExist:
+        return JsonResponse({"error": True, "message": f"Collection with id {collection_id} not found"}, status=404)
+
+    new_name = request.POST.get("name", "").strip()
+    if not new_name:
+        return JsonResponse({"error": True, "message": "Missing collection name"}, status=400)
+
+    collection.name = new_name
+    collection.save()
+    return JsonResponse({"success": True, "message": "Collection updated successfully"})
+
+@csrf_exempt
+def move_to_collection(request, card_id, collection_id):
+    collection = Collection.objects.get(id=collection_id)
+    card = Card.objects.get(id=card_id)
+    card.collection = collection
+    card.save()
+    return JsonResponse({"success": True})
+
+@csrf_exempt
+def collection_create(request):
+    try:            
+        parent_collection_id = request.POST.get('collection_id')    
+        parent_collection = Collection.objects.get(id=parent_collection_id)
+        new_collection = Collection.objects.create(parent_collection=parent_collection)
+    
+    except Collection.DoesNotExist:
+        return JsonResponse({'error': 'Collection not found'}, status=404)
+
+    return JsonResponse({"success": True, "error": ""})
+
+@csrf_exempt
+def export_collection(request, collection_id):
+    print("export collection")
+    settings = Settings.objects.first()
+
+    if not collection_id or collection_id == 'undefined':
+        return JsonResponse({'error': 'Collection ID is required'}, status=400)
+    
+    collection = Collection.objects.get(id=collection_id)
+    csrs = collection.get_default_exports()
+
+    return export_handler.export_zip(csrs)
         return_cards = []
         if len(uploaded_files) > 0:
             timestamp_folder = now().strftime("%Y%m%d_%H%M%S/")  # e.g., '20250701_125342'
@@ -702,44 +645,6 @@ def settings_file_upload(request, file_type):
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
-def upload_crop(request):
-    print("upload crop")
-    if request.method == 'POST' and request.FILES.get('cropped_image'):
-        
-        img_file = request.FILES['cropped_image']
-
-        crop_left = float(request.POST.get('crop_left', 0))
-        crop_top = float(request.POST.get('crop_top', 0))
-        crop_width = float(request.POST.get('crop_width', 0))
-        crop_height = float(request.POST.get('crop_height', 0))
-        crop_canvas_left = float(request.POST.get('canvas_left', 0))
-        crop_canvas_top = float(request.POST.get('canvas_top', 0))
-        canvas_rotation = float(request.POST.get('canvas_rotation', 0))
-        card_id = request.POST.get('card_id', None)
-        print("Card: ", card_id)
-        print("Crop params:", crop_left, crop_top, crop_width, crop_height)
-        print("Canvas params:", crop_canvas_left, crop_canvas_top, canvas_rotation)
-        
-        is_reverse = False
-        if not card_id:
-            return JsonResponse({'error': 'Card ID is required'}, status=400)
-        try:
-        
-            if card_id.endswith("R"):
-                card_id = card_id[:-1]
-                is_reverse = True
-    
-            instance = Card.objects.get(id=card_id)
-            url = instance.update_crop(img_file, is_reverse, crop_left, crop_top, crop_width, crop_height, crop_canvas_left, crop_canvas_top, canvas_rotation)
-        except Card.DoesNotExist:
-            return JsonResponse({'error': 'Card not found'}, status=404)
-        
-        
-
-        return JsonResponse({'status': 'saved', 'url':url})
-    return JsonResponse({'error': 'no image'}, status=400)
-
-@csrf_exempt
 def register_field(request):
     if request.method == 'POST':
         data = json.loads(request.body)
@@ -752,4 +657,4 @@ def register_field(request):
         print(f'{card_id} Registered "{search_fields}" as "{field_name}" ({new_value})')
 
         return JsonResponse({'status': 'success'})
-    return JsonResponse({'error': 'Invalid request'}, status=400)
+    return JsonResponse({'error': 'Invalid request'}, status=400)'''

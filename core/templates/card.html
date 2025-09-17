@@ -111,8 +111,23 @@
 
 <body>
   {% include "header.html" %}
-  {% include "nav_buttons.html" with prev_id=card.previous_card.id next_id=card.next_card.id %}
+  <h1>Collection {{collection_id}}</h1>
+  <div class="pagination" style="text-align:center; margin-top:40px;">
+    <br><br>
+    {% if page_obj.has_previous %}
+      <a href="?page=1">⏪ First</a>
+      <a href="?page={{ page_obj.previous_page_number }}">◀ Prev</a>
+    {% endif %}
 
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
+      <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
+    {% endif %}<br>
+    <span>({{ filtered }} filtered)</span><br><br>
+  </div><br>
+  {% for card in page_obj %}
   <div class="overview-wrapper">
 
     <!-- Info Block: Search Results + Portrait + Buttons -->
@@ -131,6 +146,7 @@
                  alt="{{ card.id }} hover"
                  onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
                  class="thumbnail hover">
+          
           </div>
         </div>
       </div>
@@ -159,6 +175,6 @@
     </div>
 
   </div>
-  {% include "nav_buttons.html" with prev_id=card.previous_card.id next_id=card.next_card.id collection_id=card%}
+  {% endfor %}
 </body>
 </html>

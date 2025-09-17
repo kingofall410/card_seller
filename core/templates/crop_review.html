@@ -156,22 +156,39 @@
     <div class="collection-controls">
     </div>
   </div>
+  <div class="pagination" style="text-align:center; margin-top:40px;">
+    <br><br>
+    {% if page_obj.has_previous %}
+      <a href="?page=1">⏪ First</a>
+      <a href="?page={{ page_obj.previous_page_number }}">◀ Prev</a>
+    {% endif %}
+
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
+      <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
+    {% endif %}<br>
+    <span>({{ filtered }} filtered)</span><br><br>
+  </div>
   <div class="cropper-horizontal-wrapper">
-    {% for card in card_tuples %}
-      {% with meta=card.0.active_search_results.status|status_icon_meta %}
+    {% for card_tuple in page_obj %}
+      {% with card=card_tuple.0 card_id=card_tuple.1 search_results=card_tuple.2 %}
+      {% with meta=search_results.status|status_icon_meta %}
         <div class="cropper-block">
           <div class="status-icon">{{ meta.icon }}</div>
-          <h3>Card {{ card.1 }}</h3>
+          <h3>Card {{ card_id }}</h3>
       {% endwith %}
-      {% with portrait=card.0|get_portrait:card.1 cropped=card.0|get_cropped:card.1 crop_params=card.0|get_crop_params:card.1 %}
+      {% with portrait=card|get_portrait:card_id cropped=card|get_cropped:card_id crop_params=card|get_crop_params:card_id %}
         <div class="cropper-nav-wrapper">
           <div class="cropper-nav-row">
             <div class="cropper-nav-center">
-              {% include "cropper_only.html" with card=card.0 card_id=card.1 portrait_img=portrait.url cropped_img=cropped.url crop_params=crop_params hide_portrait_thumbnail=true %}
+              {% include "cropper_only.html" with card=card card_id=card_id portrait_img=portrait.url cropped_img=cropped.url crop_params=crop_params hide_portrait_thumbnail=true %}
             </div>
           </div>
         </div>
       </div>
+    {% endwith %}
     {% endwith %}
     {% endfor %}
   </div>

@@ -464,7 +464,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def from_search_results(cls, pcard, items=None, tokenize=True):
         csr = cls.create_empty(pcard)
         listing_set = []
-        if len(items) > 0:
+        if items and len(items) > 0:
             for idx, item in enumerate(items, 1): 
                 listing = ProductListing.from_search_results(item, csr, tokenize)
                 listing_set.append(listing)
