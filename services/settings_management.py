@@ -1,5 +1,5 @@
 import io, csv
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel
+from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel, Settings
 from django.shortcuts import render, redirect
     
 def load_settings_file(dj_file, file_type, user_settings=None):
@@ -70,40 +70,6 @@ def load_settings_file(dj_file, file_type, user_settings=None):
             except Exception as e:
                 print(f"Error creating keyword '{keyword}':", e)
 
-def update_all_fields(all_field_data, user_settings=None):
-    new_obj = None
-    if not user_settings:
-        user_settings = User.objects.first().active_settings.first()
-
-    for field_key, value in all_field_data.items():            
-        
-        if field_key == "brands": 
-            new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
-
-        elif field_key == "subsets":
-            brand_obj = Brand.objects.get(raw_value=all_field_data["brands"])
-            
-            if brand_obj:
-                new_obj = Subset.create(value=value, settings=user_settings, field=field_key, brand=brand_obj)
-
-
-        elif field_key == "cities":   
-            new_obj = City.create(value=value, settings=user_settings, field=field_key)
-        elif field_key == "teams":
-            city_obj = City.objects.get(raw_value=all_field_data["cities"])
-            
-            if city_obj:
-                new_obj = Subset.create(value=value, settings=user_settings, field=field_key, city=city_obj)
-
-        elif field_key == "names":
-            new_obj = KnownName.create(value=value, settings=user_settings, field=field_key)
-        elif field_key == "attribs":
-            new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
-        elif field_key == "condition":
-            new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
-        
-        return not (new_obj is None)
-
 def add_token(field_key, value, all_field_data, user_settings=None):
     new_obj = None
     if not user_settings:
@@ -112,27 +78,41 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     if field_key == "brands" or field_key == "brand": 
         new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
 
-    elif field_key == "subsets":
-        brand_obj = Brand.objects.get(raw_value=all_field_data["brand"])
+    elif field_key == "subsets" or field_key == "subset":
+        brand_obj = None
+        if all_field_data:
+            brand_obj = Brand.objects.get(raw_value=all_field_data["brand"], disabled_date=None)
         
         if brand_obj:
             new_obj = Subset.create(value=value, settings=user_settings, field=field_key, brand=brand_obj)
+        else:
+            #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
+            new_obj = Subset.objects.filter(raw_value=value).first()
 
-
-    elif field_key == "cities":   
+    elif field_key == "cities" or field_key == "city":   
         new_obj = City.create(value=value, settings=user_settings, field=field_key)
-    elif field_key == "teams":
-        city_obj = City.objects.get(raw_value=all_field_data["city"])
+
+    elif field_key == "teams" or field_key == "team":
+
+        city_obj = None
+        if all_field_data:
+            print("here",all_field_data)
+            city_obj = City.objects.get(raw_value=all_field_data["city"], disabled_date=None)
+            print(city_obj)
         
         if city_obj:
             new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)
+        else:
+            #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
+            new_obj = Team.objects.filter(raw_value=value).first()
 
     elif field_key == "names" or field_key == "full_name":
         new_obj = KnownName.create(value=value, settings=user_settings, field="names")
-    elif field_key == "attribs":
+    elif field_key == "attribs" or field_key == "attributes": 
         new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "condition":
         new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
+    elif field_key == "parallel":
+        new_obj = Parallel.create(value=value, settings=user_settings, field=field_key)
     
-    return not (new_obj is None)
-
+    return new_obj

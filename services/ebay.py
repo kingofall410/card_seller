@@ -211,7 +211,7 @@ def get_dominant_category_id(payload):
     return '261328'
     
 
-def image_search(loaded_img, limit=10, settings=None):
+def image_search(loaded_img, limit=10, page=1, settings=None):
     print("image_search: ", loaded_img.name)
     #if not auth_token:
     if has_user_consent(settings):
@@ -234,19 +234,18 @@ def image_search(loaded_img, limit=10, settings=None):
 
         category_id = get_dominant_category_id(payload)
         
-        limit_str = f"limit={limit}"
-
-        #TODO: these query params don't seem to have any effect; will have to do this manbually based on title results
-        #TODO: it's possible they only work on text search, haven't tried
-        category_str = f"category_ids={category_id}"
-        brands = "{Topps|Bowman}"
-        filter_str = f"aspect_filter=categoryId:{category_id},Team:San Diego Padres"
-
-        search_url = f"{IMG_SEARCH_URL}?{limit_str}&{category_str}"
-        print(search_url)
+        offset = (page - 1) * limit
+        query_params = [
+            f"limit={limit}",
+            f"offset={offset}",
+            f"category_ids={category_id}"
+        ]
+        search_url = f"{IMG_SEARCH_URL}?{'&'.join(query_params)}"
+        print("Search URL:", search_url)
         
         response = requests.post(search_url, headers=headers, json=payload)
         print("resp: ", response)
+        #print("resp: ", response.json())
         if response.status_code == 200:
             #print(response.json())
             items = response.json().get("itemSummaries", [])
@@ -256,6 +255,8 @@ def image_search(loaded_img, limit=10, settings=None):
             else:
                 print(f"✅ Found {len(items)} matches for the input image.")
                 return items
+        else:
+            print(response.json())
 
 
 #https://auth.ebay.com/oauth2/authorize?client_id=DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10&redirect_uri=Daniel_Crown-DanielCr-Latest-reqvvsrz&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory
@@ -271,8 +272,8 @@ def create_inventory_item(sku, item_data, access_token):
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
     response = requests.put(url, headers=headers, json=item_data)
-    print("Inventory response: ", response.text)
-    return response.status_code == 204
+    print("Inventory response: ", response, response.text)
+    return response.status_code == 204 or response.status_code == 200
 
 def create_offer(offer_data, access_token):
 
@@ -285,12 +286,18 @@ def create_offer(offer_data, access_token):
 
     url = "https://api.ebay.com/sell/inventory/v1/offer"
     
-    offerId = None
+    offer_id = None
     response = requests.post(url, headers=headers, json=offer_data)
-    print("Offer response: ", response.text)
-    data = response.json()
-    offerId = data.get('offerId', None)
-    return offerId
+    print("Offer response: ", response, response.text)
+    if response.status_code == 201:
+        data = response.json()
+        offer_id = data.get('offerId', None)
+    elif response.status_code == 400:
+        data = response.json()
+        offer_id = data['errors'][0]['parameters'][0]['value']
+        print(offer_id)
+
+    return offer_id
 
 
 def publish_offer(offer_id, access_token):

@@ -43,7 +43,7 @@ $(document).ready(function () {
     console.log("stat: ",csrState)
     if (csrState == "new") 
       console.log("new csr")
-      handleManualInput(input); // Run once on init
+      rebuildTitle(input); // Run once on init
   });
   
   // 🧩 Allow HTML in autocomplete labels
@@ -79,14 +79,14 @@ $(document).ready(function () {
     }
   });
   //console.log("AC: Autocomplete options:", autocompleteOptions);
-
+  /*
+  let fields;
   {% for field_name in search_result.display_fields %}
   (function () {
     const fieldName = "{{ field_name|escapejs }}";
     const selector = `#field_${fieldName}-{{ card_id }}`;
     const cardId = "{{ card_id }}";
     const csrId = "{{ search_result.id }}";
-    let fields = collectAllFields(cardId);
     $(selector).autocomplete({
       minLength: 0,
       autoFocus: true,
@@ -161,12 +161,12 @@ $(document).ready(function () {
         allFields["new_field"] = fieldName;
         allFields["new_value"] = rawValue;
 
-        handleManualInput(allFields, cardId);
+        rebuildTitle(allFields, cardId);
       }
     });
   })();
 {% endfor %}
-
+*/
 
 
   // 💾 Save button handler
@@ -203,14 +203,36 @@ $(document).ready(function () {
 
 
 
-function collectAllFields(cardId) {
+function collectAllFields(cardId, required_only = false) {
+  console.log(`collectAllFields called for cardId=${cardId}, required_only=${required_only}`);
   const allFields = {};
-  console.log(cardId)
+  //console.log(cardId)  
+  //console.log("1", allFields)
+  // Checkboxes
+  document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
+    console.log("checkbox loop")
+    let name = checkbox.name;
+    const value = checkbox.checked
+
+    if (name && name.endsWith(`_${cardId}`)) {
+      name = name.slice(0, -(`_${cardId}`.length));
+    }
+
+    if (required_only) {
+      if (!name.startsWith('attributes') && value) {  
+        allFields[name] = value;
+      }
+    }
+    else {
+        allFields[name] = value;
+    }
+  });
+  //console.log("2", allFields)
   // Text inputs
   document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
-
+    console.log("textbox loop")
     let name = el.name;
-    console.log(el.name)
+    //console.log(el.name)
     const value = el.value;
 
     if (name && name.endsWith("_m")) {
@@ -220,11 +242,21 @@ function collectAllFields(cardId) {
       name = name.slice(0, -(`-${cardId}`.length));
     }
 
+    // If required_only is true, skip non checked fields
+    is_required = allFields[`${name}_is_manual`] || false;
+    if (required_only && name && !is_required) {
+      return;
+    }
+
     if (name) {
       allFields[name] = value;
     }
   });
+  
+  //why the fuck is this here?
+  //console.log("3", allFields)
   document.querySelectorAll(".calculated-input").forEach(input => {
+    console.log(".calculated-input loop")
     input.addEventListener("input", function () {
       const maxLength = parseInt(this.dataset.maxlength, 10);
       if (this.value.length > maxLength) {
@@ -234,21 +266,7 @@ function collectAllFields(cardId) {
       }
     });
   });
-
-  // Checkboxes
-  document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
-    let name = checkbox.name;
-    const value = checkbox.checked
-
-    if (name && name.endsWith(`_${cardId}`)) {
-      name = name.slice(0, -(`_${cardId}`.length));
-    }
-
-    if (name) {
-      allFields[name] = value;
-    }
-  });
-
+  //console.log("4", allFields)
   return allFields;
 }
 
@@ -257,7 +275,7 @@ function handleSelect(selector, event, ui) {
   console.log("Selected value:", selector);
   // You can add more logic here to handle the selected value
   
-  console.log("Selected item:", ui.item);
+  //console.log("Selected item:", ui.item);
   const match = selector.match(/^#field_(.+)-(\d+)$/);
   if (!match) {
     console.warn("Unexpected field ID format:", selector);
@@ -266,20 +284,20 @@ function handleSelect(selector, event, ui) {
 
   const fieldName = match[1];
   const cardId = match[2];
-  console.log("fieldName", fieldName)
+  //console.log("fieldName", fieldName)
   const inputValue = $(selector).val(); // current text box value
 
-  console.log(cardId);
-  console.log("dan", ui);
+  //console.log(cardId);
+  //console.log("dan", ui);
     // If selected item is disabled, fallback to input value
 
   if (ui.item.disabled) {
     console.log("Disabled item selected, using input value:", inputValue);
     ui.item.value = "__add__";
-    //handleManualInput(fieldName, cardId);
+    //rebuildTitle(fieldName, cardId);
     //return false;
   }
-
+/*
   if (ui.item.value && (ui.item.value === "__add__")) {
     const rawValue = ui.item.rawValue || inputValue;
     const allFields = collectAllFields(cardId);
@@ -287,13 +305,13 @@ function handleSelect(selector, event, ui) {
     allFields["new_field"] = fieldName;
     allFields["new_value"] = rawValue;
 
-    /* this doesn't work since I moved it out of the block above
+     this doesn't work since I moved it out of the block above
     I don't think I care for now.
     if (!savedValues[fieldName]) {
       savedValues[fieldName] = new Set();
     }
     savedValues[fieldName].add(rawValue);
-*/
+
     $.ajax({
       url: "/add_token/",
       method: "POST",
@@ -309,13 +327,15 @@ function handleSelect(selector, event, ui) {
       error: xhr => console.error("Error adding token:", xhr.responseText)
     });
 
-    handleManualInput(fieldName, cardId);
+    rebuildTitle(fieldName, cardId);
     return false;
   } else {
     $(this).val(ui.item.value);
-    handleManualInput(fieldName, cardId);
+    rebuildTitle(fieldName, cardId);
     return false;
-  }
+  }*/
+  rebuildTitle(fieldName, cardId);
+  return false;
 }
 
 
@@ -334,8 +354,8 @@ function handleOverrideToggle(fieldName, cardId) {
   }
 }
 
-function handleManualInput(fieldName, cardId) {
-  console.log(`handleManualInput called with field="${fieldName}", idx=${cardId}`);
+function rebuildTitle(fieldName, cardId) {
+  console.log(`rebuildTitle called with field="${fieldName}", idx=${cardId}`);
 
   const titleFieldId = `field_title_to_be-${cardId}`;
   const thisFieldId = `${fieldName}-${cardId}`;
@@ -403,7 +423,7 @@ function handleEnterPress(fieldName, cardCounter) {
 }
 
 </script>
-
+{{ card_id }} -- {{ search_result.id }} 
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
 
 <tbody>
@@ -418,7 +438,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 style="width: 100%; box-sizing: border-box; font-size: 1.25em; padding: 5px; 8px; border: 2px solid #ccc; border-radius: 6px;"
                 data-default="{{ title }}"
                 data-maxlength="80"
-                oninput="handleManualInput('title_to_be', {{ card_counter }})">
+                oninput="rebuildTitle('title_to_be', {{ card_counter }})">
       </td>
     </tr>
     
@@ -457,7 +477,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
-                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})"
                 onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})"
                 {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
           
@@ -469,7 +489,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
-                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})"
                 {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
             {% elif field_name in checkboxes %}
               <!-- D: Checkbox group -->
@@ -482,7 +502,7 @@ function handleEnterPress(fieldName, cardCounter) {
                         name="{{ field_name }}.{{ option }}"
                         value="true"
                         {% if search_result.attribute_flags|dict_get:option == True %}checked{% endif %}
-                        onchange="handleManualInput('{{ field_name }}', {{ card_counter }})">
+                        onchange="rebuildTitle('{{ field_name }}', {{ card_counter }})">
                   {{ option }}
                 </label>
               {% endfor %}
@@ -495,7 +515,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 rows="5"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
-                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})">
+                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})">
               {{ resolved_value }}
             </textarea>
 
@@ -508,7 +528,7 @@ function handleEnterPress(fieldName, cardCounter) {
                 value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
-                oninput="handleManualInput('{{ field_name }}', {{ card_counter }})"
+                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})"
                 onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }})">
           {% endif %}
         </td>

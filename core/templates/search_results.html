@@ -202,40 +202,11 @@ $(document).ready(function () {
 });
 
 
-
-function collectAllFields(cardId) {
+function collectAllFields(cardId, required_only=false) {
   const allFields = {};
   console.log(cardId)
-  // Text inputs
-  document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
 
-    let name = el.name;
-    console.log(el.name)
-    const value = el.value;
-
-    if (name && name.endsWith("_m")) {+
-      name = name.slice(0, -2);
-    }
-    if (name && name.endsWith(`-${cardId}`)) {
-      name = name.slice(0, -(`-${cardId}`.length));
-    }
-
-    if (name) {
-      allFields[name] = value;
-    }
-  });
-  document.querySelectorAll(".calculated-input").forEach(input => {
-    input.addEventListener("input", function () {
-      const maxLength = parseInt(this.dataset.maxlength, 10);
-      if (this.value.length > maxLength) {
-        this.classList.add("input-error");
-      } else {
-        this.classList.remove("input-error");
-      }
-    });
-  });
-
-  // Checkboxes
+  // Checkboxes first so we can determine required/not
   document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
     let name = checkbox.name;
     const value = checkbox.checked
@@ -244,16 +215,59 @@ function collectAllFields(cardId) {
       name = name.slice(0, -(`_${cardId}`.length));
     }
 
+    if (name && !name.startsWith('.attributes')) {
+      allFields[name] = value;
+    }
+  });
+  console.log("1", allFields)
+  // Text inputs
+  document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
+
+    let name = el.name;
+    //console.log(el.name)
+    const value = el.value;
+
+    if (name && name.endsWith("_m")) {+
+      name = name.slice(0, -2);
+    } 
+    if (name && name.endsWith(`-${cardId}`)) {
+      name = name.slice(0, -(`-${cardId}`.length));
+    }
+
+    // If required_only is true, skip non checked fields
+    is_required = allFields.get(`${name}_is_manual`, false)
+    if (required_only && name && !is_required) {
+      continue
+
     if (name) {
       allFields[name] = value;
     }
   });
-
+  console.log("2", allFields)
+  document.querySelectorAll(".calculated-input").forEach(input => {
+    input.addEventListener("input", function () {
+      const maxLength = parseInt(this.dataset.maxlength, 10);
+      if (this.value.length > maxLength) {
+        this.classList.add("input-error");2
+      } else {
+        this.classList.remove("input-error");
+      }
+    });    
+console.log(allFields)
+    // If required_only is true, skip all calcs
+    if (required_only) {
+      continue
+    } else {
+      allFields[name] = value;
+    }
+    
+  });
+console.log(allFields)
   return allFields;
 }
 
 function handleSelect(selector, event, ui) {
-  const selectedValue = selector.value;
+  const selectedValue = selector.valeue;
   console.log("Selected value:", selector);
   // You can add more logic here to handle the selected value
   
@@ -269,12 +283,12 @@ function handleSelect(selector, event, ui) {
   console.log("fieldName", fieldName)
   const inputValue = $(selector).val(); // current text box value
 
-  console.log(cardId);
-  console.log("dan", ui);
+  //console.log(cardId);
+  //console.log("dan", ui);
     // If selected item is disabled, fallback to input value
 
   if (ui.item.disabled) {
-    console.log("Disabled item selected, using input value:", inputValue);
+    //console.log("Disabled item selected, using input value:", inputValue);
     ui.item.value = "__add__";
     //handleManualInput(fieldName, cardId);
     //return false;
@@ -339,8 +353,8 @@ function handleManualInput(fieldName, cardId) {
 
   const titleFieldId = `field_title_to_be-${cardId}`;
   const thisFieldId = `${fieldName}-${cardId}`;
-  console.log("titleFieldId:", titleFieldId);
-  console.log("thisFieldId:", thisFieldId);
+  //console.log("titleFieldId:", titleFieldId);
+  //console.log("thisFieldId:", thisFieldId);
 
   if (titleFieldId !== `field_${thisFieldId}`) {
     const titleCheckbox = document.getElementById(`title_to_be_is_manual-${cardId}`);
@@ -350,7 +364,7 @@ function handleManualInput(fieldName, cardId) {
       // ⏳ Delay field collection until DOM updates
       setTimeout(() => {
         const fields = collectAllFields(cardId);
-        console.log("Collected fields2:", fields);
+        //console.log("Collected fields2:", fields);
 
         // #this is a re-implementation of csr.build_title
         const titleParts = [

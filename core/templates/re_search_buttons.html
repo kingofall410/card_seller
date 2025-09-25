@@ -37,7 +37,10 @@
         imageSearchBtn.addEventListener('click', () => {
             console.log(`🖼️ Image Search triggered for ${imageSearchBtn.id}`);
             fetch(`/image_search/${cardId}/`, { 
-                method: 'POST',
+                method: 'POST',                      
+                body: JSON.stringify({
+                    required_words: {}
+                })
             }).then(response => {
                 console.log("Successfully");
                 location.reload()
@@ -108,7 +111,11 @@
                     csrfmiddlewaretoken: '{{ csrf_token }}'
                 },
                 success: response => {
-                    handleNext()
+                    {% if page_obj.has_next %}
+                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}");
+                    {% else %}
+                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1");
+                    {% endif %}
                 },
                 error: xhr => {
                     console.error("Save error:", xhr.responseText);
@@ -123,7 +130,24 @@
         });
         
         textSearchBtn.addEventListener('click', () => {
-            console.log("🔤 Text Search triggered for fields-1");
+            let allFields = {}
+            console.log(`🖼️ Image Search (with req) triggered`, allFields)
+            allFields = collectAllFields(cardId);
+            console.log(`🖼️ Image Search (with req) triggered`, allFields)
+            fetch(`/image_search/${cardId}/`, { 
+                method: 'POST',                            
+                body: JSON.stringify({
+                    required_words: allFields
+                })
+            }).then(response => {
+                console.log("Successfully");
+                location.reload()
+            }).catch(error => {
+                console.error("Save error", error);
+            });
+        });
+        /*temp using this as image_search_with_req
+            console.log("🔤 Text Search triggered");
             
             // Show loading indicator
             textSearchBtn.innerHTML = "🔄 Searching...";
@@ -141,6 +165,6 @@
                 textSearchBtn.innerHTML = "🔍 Text Search";
                 textSearchBtn.disabled = false;
             });
-        });
+        });*/
     });
 </script>

@@ -108,55 +108,72 @@
     }
   </style>
 </head>
-
+<script>
+    window.submitCardForm = function(collectionId, cardId, targetUrl) {
+    console.log("submit to", targetUrl, cardId, collectionId);
+    const visibleCards = document.getElementById(`visible-cards`);
+    console.log(visibleCards.value);
+    
+    let cardIds = [];  // Declare outside the block
+    if (visibleCards.value) {
+      cardIds = JSON.parse(visibleCards.value).map(Number);
+    } else {
+      cardsIds = [];
+    }
+    
+    // Optionally attach cardIds to the form as a hidden input
+    const form = document.getElementById(`view-card-form`);
+    form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
+    form.submit();
+  }
+</script>
 <body>
   {% include "header.html" %}
-  <h1>Collection {{collection_id}}</h1>
   <div class="pagination" style="text-align:center; margin-top:40px;">
-    <br><br>
+    
+    <form id="view-card-form" method="POST" style="display: none;">
+      <input type="hidden" name="card_ids" id="visible-cards" value='{{ card_ids|safe }}'>
+    </form>
+    <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1")'>⏪ First</button>
     {% if page_obj.has_previous %}
-      <a href="?page=1">⏪ First</a>
-      <a href="?page={{ page_obj.previous_page_number }}">◀ Prev</a>
+      <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.previous_page_number }}")'>◀ Previous</button>
     {% endif %}
 
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-
+    <button type="button" onclick="/manage/">⬆ Collection {{ collection_id }} ⬆</button>
+    
     {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
-      <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
-    {% endif %}<br>
-    <span>({{ filtered }} filtered)</span><br><br>
+      <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}")'>Next ▶</button>
+    {% endif %}
+    <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.paginator.num_pages }}")'>Last ⏩</button>
+    <br>
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    <span>({{ filtered }} filtered)</span><br>  
+    
+  </form>
   </div><br>
-  {% for card in page_obj %}
+  {% for card_tuple in page_obj %}
   <div class="overview-wrapper">
 
     <!-- Info Block: Search Results + Portrait + Buttons -->
     <div class="uicard info-block">
       <div class="info-flex-row">
         <div class="csr-fields">
-          {% include "search_results_reduced.html" with card_id=card.id search_result=search_results %}
+          {% include "search_results_reduced.html" with card_id=card_tuple.0.id search_result=card_tuple.2 %}
         </div>
         <div class="portrait-image">
           <div class="image-wrapper">
-            <img src="{{ card.cropped_image.url }}"
-                 alt="{{ card.id }}"
-                 onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';"
-                 class="thumbnail default">
-            <img src="{{ card.cropped_reverse.url }}"
-                 alt="{{ card.id }} hover"
-                 onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
-                 class="thumbnail hover">
-          
+            <img src="{{ card_tuple.0.cropped_image.url }}" alt="{{ card_tuple.1 }}" onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';" class="thumbnail default">
+            <img src="{{ card_tuple.0.cropped_reverse.url }}" alt="{{ card_tuple.1 }} hover" onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';" class="thumbnail hover">
           </div>
         </div>
       </div>
 
       <div class="info-button-row">
         <div class="notes-wrapper">
-          {% include "notes_panel.html" with card=card %}
+          {% include "notes_panel.html" with card=card_tuple.0 %}
         </div>
         <div class="buttons-wrapper">
-          {% include "re_search_buttons.html" with card_id=card.id search_result=search_results %}
+          {% include "re_search_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
         </div>
       </div>
 
@@ -164,14 +181,16 @@
 
     <!-- Price Chart + Listing Details -->
     <div class="uicard price-block">
-      {% include "price_chart.html" with prices=prices listings=search_results settings=settings %}
-      {% include "ebay_listing_details.html" with card_id=card.id search_result=search_results %}
-      {% include "listing_buttons.html" with card_id=card.id search_result=search_results  %}
+      {% include "price_chart.html" with prices=card_tuple.3 listings=card_tuple.3 settings=settings title="unfiltered" %}
+      {% include "price_chart.html" with prices=card_tuple.4 listings=card_tuple.4 settings=settings title="filtered" %}
+      {% include "ebay_listing_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
+      {% include "listing_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2  %}
     </div>
 
     <!-- Product Listings -->
     <div class="uicard listing-block">
-      {% include "product_listings.html" with search_result=search_results %}
+      {% include "product_listings.html" with listings=card_tuple.2.listings.all %}<hr>
+      {% include "product_listings.html" with listings=card_tuple.2.filtered_listings.all %}
     </div>
 
   </div>

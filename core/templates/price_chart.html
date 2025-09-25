@@ -5,7 +5,7 @@
   <title>eBay Price Distribution</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    #chart-container {
+    .chart-container {
       width: 1200px;
       height: 400px;
       margin: 40px auto;
@@ -14,9 +14,9 @@
 </head>
 
 <body>
-  <div id="chart-container">
+  <div class="chart-container">
 
-    <canvas id="priceChart"></canvas>
+    <canvas id="priceChart-{{ title }}"></canvas>
   </div>
   <div id="selected-price" data-shared="{{ some_value }}"></div>
 
@@ -24,6 +24,8 @@
 </html>
 
 <script>
+(function() {
+
   // Sample price data from eBay
   const priceData = JSON.parse(`{{ prices | safe }}`);
 
@@ -84,7 +86,7 @@
   }));
 
   // Chart.js setup
-  const ctx = document.getElementById('priceChart').getContext('2d');
+  const ctx = document.getElementById(`priceChart-{{ title }}`).getContext('2d');
   
 
     const externalTooltipHandler = (context) => {
@@ -221,6 +223,18 @@
         tooltip: {
           enabled: false, // ⛔ disables built-in tooltip
           external: externalTooltipHandler // ⬅️ use custom handler
+        },
+        title: {
+          display: true,
+          text: '{{ title }}', // or any dynamic string
+          font: {
+            size: 18,
+            weight: 'bold'
+          },
+          padding: {
+            top: 10,
+            bottom: 20
+          }
         }
       },
       onClick: (event, elements, chart) => {
@@ -248,5 +262,6 @@
       },
     }
   });
+})();
 </script>
 

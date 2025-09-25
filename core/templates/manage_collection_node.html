@@ -160,6 +160,12 @@
   background-color: #f0f0f0;
 }
 
+.dropdown-wrapper {
+  position: relative; /* This anchors the dropdown */
+  display: inline-block; /* Optional, keeps it tight */
+}
+
+
 .card-meta {
   white-space: nowrap;
   overflow: hidden;
@@ -195,22 +201,24 @@
 
 </style>
 <script>
-  window.submitCardForm = function(collectionId, cardId, targetUrl) {
-    console.log("submit to", targetUrl);
+    window.submitCardForm = function(collectionId, cardId, targetUrl) {
+    console.log("submit to", targetUrl, cardId, collectionId);
     const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
-    console.log(visibleCards);
+    console.log(visibleCards.value);
+    
+    let cardIds = [];  // Declare outside the block
     if (visibleCards.value) {
-      const cardIds = JSON.parse(visibleCards.value).map(Number);
+      cardIds = JSON.parse(visibleCards.value).map(Number);
     } else {
-      cardIds = []
+      cardIds = [];
     }
     
-
+    // Optionally attach cardIds to the form as a hidden input
     const form = document.getElementById(`view-card-form-${collectionId}`);
     form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
     form.submit();
-
   }
+
 </script>
 
 
@@ -230,7 +238,18 @@
     <button onclick="saveTitle({{ collection.id }})">💾</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
-    
+    <div class="dropdown-wrapper">
+      <button onclick="toggleMoveCollectionDropdown({{ collection.id }})" title="Move">📂</button>
+      <div id="move-collection-{{collection.id}}" class="move-dropdown" style="display: none;">
+        <ul>
+            {% for targetCollection in collections %}
+            <li onclick="moveToCollection('{{ collection.id }}', '{{ targetCollection.id }}')">
+                {{targetCollection.id}}. {{targetCollection.name}}
+            </li>
+            {% endfor %}
+        </ul>
+      </div>
+    </div>
     <input type="text"
       name="collection_name_{{ collection.id }}"
       value="{{ collection.name }}"
@@ -294,12 +313,8 @@
       data-status="{{ meta.icon }}"
       >
         <div class="card-meta">
-            {{ card.active_search_results.list_price }} 
+          ${{ card.active_search_results.list_price }}
         </div>
-        <div class="card-meta">
-            {{ display_year }} {{ display_brand }} {{ display_subset }} 
-        </div>
-
           
         <div class="image-wrapper">
           <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">
@@ -314,12 +329,12 @@
             <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
                 <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
             </div>
-            <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
+            <button onclick="toggleMoveDropdown({{card.id}})" title="Move">📂</button>
             <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
             
             
             <div class="card-count">{{ card.search_count }}</div>
-            <div class="move-dropdown" style="display: none;">
+            <div id="move-card-{{card.id}}" class="move-dropdown" style="display: none;">
             <ul>
                 {% for collection in collections %}
                 <li onclick="moveCardToCollection({{ card.id }}, '{{ collection.id }}')">
@@ -344,7 +359,13 @@
     data-brand="{{ display_brand }}"
     data-subset="{{ display_subset }}"
     data-search_count="{{ card.search_count }}">
-
+    <div class="card-meta">
+        {{subcollection.id}}<br>
+    </div>
+    <div class="card-meta">
+         {{subcollection.name}}
+    </div>
+    
         <div class="image-wrapper">
             <img src="/static/images/missing_collection.png" alt="{{ subcollection.id }}" class="thumbnail default">
             <img src="/static/images/missing_collection_reverse.png" alt="{{ subcollection.id }} hover" class="thumbnail hover">
@@ -541,8 +562,13 @@ function removeCard(cardId) {
     });
 }
 
-function toggleMoveDropdown(button) {
-  const dropdown = button.nextElementSibling.nextElementSibling.nextElementSibling; // Adjust if DOM changes
+function toggleMoveDropdown(cardId) {
+  const dropdown = document.getElementById('move-card-' + cardId);
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleMoveCollectionDropdown(collectionId) {
+  const dropdown = document.getElementById('move-collection-' + collectionId);
   dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
 }
 
@@ -561,6 +587,27 @@ function refreshCollectionCount(collectionId) {
   }
 }
 
+function moveToCollection(collectionToMoveId, targetCollectionId) {
+  fetch('/move_to_collection/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      //'X-CSRFToken': getCookie('csrftoken')  // Make sure you have a getCookie() helper
+    },
+    body: JSON.stringify({
+      collection_to_move: collectionToMoveId,
+      cards_to_move: [],
+      target_collection: targetCollectionId,
+    })
+  })
+  .then(response => {
+    console.log("Successfully");
+    location.reload()
+  })
+  .catch(err => {
+    console.error("❌ Error sending data:", err);
+  });
+}
 
 function moveCardToCollection(cardId, collectionId) {
   fetch(`/move_to_collection/${cardId}/${collectionId}`, {
@@ -602,6 +649,8 @@ function moveCardToCollection(cardId, collectionId) {
     console.error('Error moving card:', error);
   });
 }
+
+
 
 function removeCollection(collectionId) {
   // AJAX call to delete card

@@ -519,8 +519,8 @@ class Card(models.Model):
 
         return django_file, portrait_django_file, crop_params
     
-    def parse_and_tokenize_search_results(self, items):
-        csr = CardSearchResult.from_search_results(self, items)
+    def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None):
+        csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr)
 
         return csr
 

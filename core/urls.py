@@ -17,7 +17,7 @@ urlpatterns = [
     path('get_dynamic_options/', search_views.get_dynamic_options, name='get_dynamic_options'),
     path('test/', misc_views.test_view, name="test_view"),
     path('delete/', card_views.delete, name="delete"),
-    path('crop_review/<int:collection_id>', card_views.crop_review, name="crop_review"),
+    path('crop_review/<int:collection_id>/', card_views.crop_review, name="crop_review"),
     path('full_crop/<int:card_id>', card_views.full_crop, name="full_crop"),
     path('save_and_next/<int:card_id>', card_views.save_and_next, name="save_and_next"),
     path('next/<int:card_id>', card_views.next_card, name="next_card"),    
@@ -46,6 +46,7 @@ urlpatterns = [
     path('list_card/<int:csr_id>/', export_views.list_card, name='list_card'),
     path('export_collection/<int:collection_id>/', collection_views.export_collection, name='export_collection'),
     path('manage/', collection_views.manage_collection, name='manage_collection'),
-    path('move_to_collection/<int:card_id>/<int:collection_id>', collection_views.move_to_collection, name="move_to_collection")
+    path('move_to_collection/<int:card_id>/<int:collection_id>', collection_views.move_to_collection, name="move_to_collection"),
+    path('move_to_collection/', collection_views.move_to_collection2, name="move_to_collection2")
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

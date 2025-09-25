@@ -118,7 +118,7 @@ def export_to_ebay(csrs, publish=False):
                 "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
                 "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
             },
-             "merchantLocationKey": "Freeport"
+            "merchantLocationKey": "Freeport"
 
         }
         print(offer_data)

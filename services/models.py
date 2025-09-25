@@ -61,6 +61,19 @@ class SettingsToken(models.Model):
     def __str__(self):
         return f"{self.raw_value}"
     
+    '''def __eq__(self, value):
+        if isinstance(value, str):
+            return any(item.raw_value == value for item in self.get)
+        elif isinstance(value, SettingsToken):
+            return super().__eq__(value)
+    
+    def __hash__(self):
+        return super().__hash__()'''
+
+    @property
+    def primary_value(self):
+        return self.primary_token.raw_value if self.primary_token else self.raw_value
+    
     #this method is not called for creation of subclasses if they have overridden
     #don't do anything fancy here
     @classmethod
@@ -72,8 +85,8 @@ class SettingsToken(models.Model):
             parent_settings=settings, 
             field_key=field
         ).first()
-
-        obj, _ = cls.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, primary_attrib=primary_attrib, primary_token=primary_token)
+        print(value, settings, field, primary_attrib)
+        obj, _ = cls.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
         return obj
     
     class Meta:
@@ -82,9 +95,9 @@ class SettingsToken(models.Model):
 
     @classmethod    
     def join_input_phrases(cls, input_str, max_len=4):
-        print("TOP: ", input_str)
+        #print("TOP: ", input_str)
 
-        input_tokens = re.findall(r'[a-z0-9]+', input_str.lower())          
+        input_tokens = re.findall(r'[a-z0-9]+(?:-[a-z0-9]+)*', input_str.lower())          
         joined_input_tokens = []
 
         for n in range(max_len, 0, -1):
@@ -95,7 +108,7 @@ class SettingsToken(models.Model):
 
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        print("me:", input_str)
+        #print("me:", input_str)
 
         #doing this joining repeatedly will cause previously un-adjacent strings to be adjacent after the first match/extract
         #problem?
@@ -112,8 +125,8 @@ class SettingsToken(models.Model):
             field_key=key,
             disabled_date__isnull=True
         ).filter(query).all()
-
-        
+        #print(joined_input_phrases)
+        #print("***", matching_tokens)
         matching_tokens_sorted = sorted(
             matching_tokens,
             key=lambda token: (
@@ -161,10 +174,10 @@ class CardNumber(SettingsToken):
     @classmethod    
     #TODO:ultimately need to remove current_tokens and just return the new tokens
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        print("me:", input_str)
+        #print("me:", input_str)
         #most of the top of this can be abstracted up to SettingToken
         #this method can also probably be shared with serial number
-        print("TOP: ", input_str, key)
+        #print("TOP: ", input_str, key)
         title_clean = input_str.lower()
         new_tokens = []
         # Match formats like "#23", "RC-12", "A7", "23"
@@ -189,7 +202,7 @@ class SerialNumber(SettingsToken):
 
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        print("me:", input_str)
+        #print("me:", input_str)
         """
         Extracts a serial number like '/250' from a title string.
         Returns (serial_string, reduced_title).
@@ -213,7 +226,7 @@ class Season(SettingsToken):
     #this needs cleanup
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        print("me:", input_str)
+        #print("me:", input_str)
         title_clean = input_str.lower()
         reduced = input_str
         normalized = None
@@ -300,7 +313,7 @@ class KnownName(SettingsToken):
     
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        print("me:", input_str)
+        #print("me:", input_str)
         joined_input_phrases = SettingsToken.join_input_phrases(input_str, max_len)
 
         #find a(ny) matching settingsToken belonging to the Settings obj
@@ -318,8 +331,8 @@ class KnownName(SettingsToken):
         sort_key = lambda token: (-token.is_full, -len(token.raw_value), token.raw_value.lower())
         full_or_first_tokens_sorted = sorted(full_or_first_tokens,key=sort_key)
         last_name_tokens_sorted = sorted(last_name_tokens, key=lambda token: (-len(token.raw_value), token.raw_value.lower()))
-        print("me2:", full_or_first_tokens_sorted)
-        print("me2:", last_name_tokens_sorted)
+        #print("me2:", full_or_first_tokens_sorted)
+        #print("me2:", last_name_tokens_sorted)
         title, tokens, new_tokens = SettingsToken.process_token_matches(input_str, full_or_first_tokens_sorted, current_tokens, key, True)
         
         if new_tokens and new_tokens[0].is_first:
@@ -352,9 +365,9 @@ class Condition(SettingsToken):
     
     @classmethod
     def create(cls, value, settings, field, primary_attrib="", eid="0", val_string="Unspecified"):
-        print("here")
+        #print("here")
         condition_obj, _ = Condition.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, ebay_id_value=eid, ebay_string_value=val_string)
-        print(condition_obj)
+        #print(condition_obj)
         #set this second since it could point to self
         if primary_attrib == value:
             condition_obj.primary_token = condition_obj
