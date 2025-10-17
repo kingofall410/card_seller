@@ -2,14 +2,17 @@
     <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🖼️ Image Search
     </button>
-    <button id="text-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔤 Text Search
+    <button id="text-filter-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🔤 Refine
     </button>
     <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         👇 Download
     </button>
     <button id="retokenize-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🔍 Retokenize
+    </button>
+    <button id="price-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        💲 Price Only
     </button>
     <button id="crop-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
         ✂ Crop
@@ -26,20 +29,22 @@
     document.addEventListener("DOMContentLoaded", function () {
         const imageSearchBtn = document.getElementById("image-search-btn-{{ card_id }}");
         const retokenizeBtn = document.getElementById("retokenize-btn-{{ card_id }}");
-        const textSearchBtn = document.getElementById("text-search-btn-{{ card_id }}");
+        const priceBtn = document.getElementById("price-btn-{{ card_id }}");
+        const textFilterBtn = document.getElementById("text-filter-btn-{{ card_id }}");
         const exportBtn = document.getElementById("export-btn-{{ card_id }}");
         const cropBtn = document.getElementById("crop-btn-{{ card_id }}");
         const saveBtn = document.getElementById("save-btn-{{ card_id }}");
         const saveNextBtn = document.getElementById("save-next-btn-{{ card_id }}");
         const searchResultId = "{{ search_result.id }}"
         const cardId = "{{ card_id }}";
+        const collectionId = "{{ collection_id }}";
 
         imageSearchBtn.addEventListener('click', () => {
             console.log(`🖼️ Image Search triggered for ${imageSearchBtn.id}`);
             fetch(`/image_search/${cardId}/`, { 
                 method: 'POST',                      
                 body: JSON.stringify({
-                    required_words: {}
+                    required_words: collectAllFields(cardId)
                 })
             }).then(response => {
                 console.log("Successfully");
@@ -51,6 +56,16 @@
         retokenizeBtn.addEventListener('click', () => {
             fetch(`/retokenize/${searchResultId}/`, { 
                 method: 'POST',
+            }).then(response => {
+                console.log("Successfully");
+                location.reload()
+            }).catch(error => {
+                console.error("Save error", error);
+            });
+        });
+        priceBtn.addEventListener('click', () => {
+            fetch(`/price_only/${searchResultId}/`, { 
+                method: 'GET',
             }).then(response => {
                 console.log("Successfully");
                 location.reload()
@@ -124,20 +139,33 @@
             });       
         });
         cropBtn.addEventListener('click', () => {
-            console.log(` Detailed Crop page `);
-            window.location.href = "/full_crop/" + cardId;
-                
+            console.log(cardId)
+            fetch(`/crop_review/${collectionId}/`, { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },             
+                body: JSON.stringify({
+                    card_ids: [cardId]
+                })
+            }).then(response => {
+                console.log("Successfully");
+                location.reload()
+            }).catch(error => {
+                console.error("Save error", error);
+            });
         });
         
-        textSearchBtn.addEventListener('click', () => {
+        textFilterBtn.addEventListener('click', () => {
             let allFields = {}
-            console.log(`🖼️ Image Search (with req) triggered`, allFields)
             allFields = collectAllFields(cardId);
-            console.log(`🖼️ Image Search (with req) triggered`, allFields)
-            fetch(`/image_search/${cardId}/`, { 
+            console.log(`Text filter triggered`, allFields)
+            fetch(`/text_filter/`, { 
                 method: 'POST',                            
                 body: JSON.stringify({
-                    required_words: allFields
+                    required_words: allFields,
+                    csr_ids: [searchResultId],
+                    new_search: true
                 })
             }).then(response => {
                 console.log("Successfully");

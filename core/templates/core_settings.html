@@ -77,11 +77,11 @@
         Save
       </button>
     </form>
-
+{% include "settings_block.html" with primary_field_key="names" secondary_field_key="" primary_upload_url="upload/names/"  secondary_upload_url="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
     {% comment %}
 
       {% include "settings_block.html" with primary_field_key="brands" secondary_field_key="subsets" primary_upload_url="upload/brands/"  secondary_upload_url="upload/subsets/" primary_autocomplete_id="brands-autocomplete-data" secondary_autocomplete_id="subsets_autocomplete_data" %}<br><br><hr>
-      {% include "settings_block.html" with primary_field_key="names" secondary_field_key="" primary_upload_url="upload/names/"  secondary_upload_url="" primary_autocomplete_id="names-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
+      
       {% include "settings_block.html" with primary_field_key="cities" secondary_field_key="" primary_upload_url="upload/cities/"  secondary_upload_url="" primary_autocomplete_id="cities-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
       {% include "settings_block.html" with primary_field_key="teams" secondary_field_key="" primary_upload_url="upload/teams/"  secondary_upload_url="" primary_autocomplete_id="teams-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>
       {% include "settings_block.html" with primary_field_key="attribs" secondary_field_key="" primary_upload_url="upload/attribs/"  secondary_upload_url="" primary_autocomplete_id="attribs-autocomplete-data" secondary_autocomplete_id="" %}<br><br><hr>

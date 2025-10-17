@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title }} – Sold Price Over Time</title>
+
+  <!-- Chart.js and plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+
+  <style>
+    .chart-container {
+      width: 1200px;
+      height: 400px;
+      margin: 40px auto;
+    }
+    .title-header {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .controls {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .controls label {
+      margin-right: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-header">{{ title }} – Sold Price Over Time</div>
+
+  <div class="controls">
+    <label for="maxPrice-time">Max Price:</label>
+    <input type="number" oninput="updateChartWrapper()" id="maxPrice-time" value="10" step="1" min="0" style="width: 60px;">
+
+    <label for="movingAvgWindow-time">Moving Avg:</label>
+    <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="20" step="1" min="1" style="width: 60px;">
+
+    <div style="margin-top: 12px;">
+      <label><input type="checkbox" id="toggle-sold" checked onchange="updateChartWrapper()"> Sold Listings</label>
+      <label><input type="checkbox" id="toggle-sold-refined" checked onchange="updateChartWrapper()"> Sold Refined</label>
+      <label><input type="checkbox" id="toggle-id" onchange="updateChartWrapper()"> ID Listings</label>
+      <label><input type="checkbox" id="toggle-refined" checked onchange="updateChartWrapper()"> Refined Listings</label>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="priceTimeChart-{{ title }}"></canvas>
+  </div>
+
+  <script>
+    (function() {
+      const soldListings = JSON.parse(`{{ sold_listings | safe }}`);
+      const soldRefinedListings = JSON.parse(`{{ sold_refined_listings | safe }}`);
+      const idListings = JSON.parse(`{{ id_listings | safe }}`);
+      const refinedListings = JSON.parse(`{{ refined_listings | safe }}`);
+      const ctxTime = document.getElementById(`priceTimeChart-{{ title }}`).getContext('2d');
+      let timeChart;
+
+      function filterByPrice(data, maxPrice) {
+        return data.filter(([price]) => price <= maxPrice);
+      }
+
+      function buildSeries(rawData, windowSize = 1) {
+        const groupedByDay = {};
+        rawData.forEach(([price, title, thumb, date]) => {
+          const day = new Date(date).toISOString().split('T')[0];
+          if (!groupedByDay[day]) groupedByDay[day] = [];
+          groupedByDay[day].push({ price, title, thumb, date });
+        });
+
+        const dailyHighs = Object.entries(groupedByDay).map(([day, entries]) => {
+          const highest = entries.reduce((max, entry) => entry.price > max.price ? entry : max, entries[0]);
+          return {
+            x: new Date(day).toISOString(),
+            y: highest.price,
+            title: highest.title,
+            thumb: highest.thumb
+          };
+        });
+
+        const sorted = dailyHighs.sort((a, b) => new Date(a.x) - new Date(b.x));
+
+        if (windowSize > 1) {
+          return sorted.map((point, i, arr) => {
+            const start = Math.max(0, i - Math.floor(windowSize / 2));
+            const end = Math.min(arr.length, i + Math.ceil(windowSize / 2));
+            const window = arr.slice(start, end);
+            const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
+            return { ...point, y: avg };
+          });
+        }
+
+        return sorted;
+      }
+
+      window.updateChart = function({
+        soldListings,
+        soldRefinedListings,
+        idListings,
+        refinedListings
+      }) {
+        const maxPrice = parseFloat(document.getElementById("maxPrice-time").value);
+        const windowSize = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
+
+        const toggles = {
+          sold: document.getElementById("toggle-sold").checked,
+          soldRefined: document.getElementById("toggle-sold-refined").checked,
+          id: document.getElementById("toggle-id").checked,
+          refined: document.getElementById("toggle-refined").checked
+        };
+
+        const datasets = [];
+
+        if (toggles.sold) {
+          const filtered = filterByPrice(soldListings, maxPrice);
+          datasets.push({
+            label: 'Sold Listings',
+            data: buildSeries(filtered, windowSize),
+            fill: false,
+            backgroundColor: 'rgba(9, 196, 40, 0.2)',
+            borderColor: 'rgba(9, 196, 40, 0.8)',
+            tension: 0.8,
+            borderWidth: 1,
+            pointRadius: 0
+          });
+        }
+
+        if (toggles.soldRefined) {
+          const filtered = filterByPrice(soldRefinedListings, maxPrice);
+          datasets.push({
+            label: 'Sold Refined Listings',
+            data: buildSeries(filtered, windowSize),
+            fill: false,
+            backgroundColor: 'rgba(9, 196, 40, 0.2)',
+            borderColor: 'rgba(9, 196, 40, 0.8)',
+            tension: 0.8,
+            borderWidth: 2,
+            pointRadius: 0
+          });
+        }
+
+        if (toggles.id) {
+          const filtered = filterByPrice(idListings, maxPrice);
+          datasets.push({
+            label: 'ID Listings',
+            data: buildSeries(filtered, windowSize),
+            fill: false,
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderColor: 'rgba(255, 99, 132, 0.8)',
+            tension: 0.6,
+            borderWidth: 1,
+            pointRadius: 0
+          });
+        }
+
+        if (toggles.refined) {
+          const filtered = filterByPrice(refinedListings, maxPrice);
+          datasets.push({
+            label: 'Refined Listings',
+            data: buildSeries(filtered, windowSize),
+            fill: false,
+            backgroundColor: 'rgba(255, 206, 86, 0.2)',
+            borderColor: 'rgba(255, 206, 86, 0.8)',
+            tension: 0.6,
+            borderWidth: 1,
+            pointRadius: 0
+          });
+        }
+
+        if (timeChart) {
+          timeChart.clear();
+          timeChart.destroy();
+          timeChart = null;
+        }
+
+        timeChart = new Chart(ctxTime, {
+          type: 'line',
+          data: { datasets },
+          options: {
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                type: 'time',
+                time: { unit: 'month', tooltipFormat: 'MMM dd, yyyy' },
+                title: { display: true, text: 'Date' },
+                min: datasets.length && datasets[0].data.length ? datasets[0].data[0].x : undefined
+              },
+              y: {
+                title: { display: true, text: 'Price ($)' },
+                beginAtZero: true
+              }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const point = context.raw;
+                    return [`Price: $${point.y.toFixed(2)}`, `Item: ${point.title}`];
+                  }
+                }
+              },
+              zoom: {
+                pan: { enabled: true, mode: 'x' },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: 'x'
+                }
+              }
+            }
+          }
+        });
+      };
+
+      window.updateChartWrapper = function() {
+        updateChart({
+          soldListings,
+          soldRefinedListings,
+          idListings,
+          refinedListings
+        });
+      };
+
+      updateChartWrapper(); // Initial render
+    })();
+  </script>
+</body>
+</html>

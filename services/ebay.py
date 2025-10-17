@@ -3,6 +3,10 @@ from requests.auth import HTTPBasicAuth
 from PIL import Image
 from pathlib import Path
 import time
+from datetime import datetime, timedelta
+from requests.exceptions import Timeout, RequestException
+from urllib.parse import quote
+
 
 CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
 CLIENT_SECRET = 'PRD-113ecf9c5fd1-5956-4012-a05a-9770'
@@ -175,29 +179,38 @@ def get_access_token(settings, user_auth_code=None):
     
     return settings.ebay_access_token
 
-
-def text_search(search_string, limit=10):
+def text_search(search_string, settings, limit=50, page=1):
     print("text_search: ", search_string)
-    #if not auth_token:
-    get_access_token()
+    if has_user_consent(settings):
+        access_token = get_access_token(settings, settings.ebay_user_auth_code)
+
     headers = {
-        "Authorization": f"Bearer {auth_token}",
+        "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
     }
-    #url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
-    params = {'q': search_string, 'limit': 50, 'sort': 'price'}
-    response = requests.get(TXT_SEARCH_URL, headers=headers, params=params)
-    if response.status_code != 200:
-        print(f"❌ eBay query failed with status code {response.status_code}.")
-    #category_id = "261328"
-    #search_url = f'{TXT_SEARCH_URL}q={quote(search_string)}&limit={limit}&category_ids={category_id}'
+    category_id = get_dominant_category_id(None)
+    offset = (page - 1) * limit
+    query_params = [
+        f"q={quote(search_string.replace("#", ""))}",
+        f"limit={limit}",
+        f"offset={offset}",
+        f"category_ids={category_id}",
+        f"sort=price"
+    ]
+    search_url = f"{TXT_SEARCH_URL}?{'&'.join(query_params)}"
+
+    print("Search URL:", search_url)
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+    except Timeout:
+        print("❌ Request timed out while contacting eBay image search API.")
+        return
+    except RequestException as e:
+        print(f"❌ Request failed: {e}")
     
-    #print(f"Request to: {search_url}")
-    #response = requests.post(search_url, headers=headers)
-    print("Response: ", response)
-    if response.status_code == 200:
-        print(response.json())
+    if response and response.status_code == 200:
+        #print(response.json())
         items = response.json().get("itemSummaries", [])
         if not items:
             print("❌ No matches found.")
@@ -205,12 +218,14 @@ def text_search(search_string, limit=10):
         else:
             print(f"✅ Found {len(items)} matches for the input image.")
             return items
+    else:
+        print(response.json())
 
 #TODO: the standard way of getting dominant category has never worked.  It's hardcoded for now
 def get_dominant_category_id(payload):
     return '261328'
     
-
+#TODO: I don't think this will actually work if settings=None
 def image_search(loaded_img, limit=10, page=1, settings=None):
     print("image_search: ", loaded_img.name)
     #if not auth_token:
@@ -227,13 +242,12 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
             print(f"❌ Failed to encode image: {e}")
             return
 
-
         payload = { 
             "image": encoded
         }
 
         category_id = get_dominant_category_id(payload)
-        
+           
         offset = (page - 1) * limit
         query_params = [
             f"limit={limit}",
@@ -242,11 +256,17 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
         ]
         search_url = f"{IMG_SEARCH_URL}?{'&'.join(query_params)}"
         print("Search URL:", search_url)
-        
-        response = requests.post(search_url, headers=headers, json=payload)
+        try:
+            response = requests.post(search_url, headers=headers, json=payload, timeout=10)
+        except Timeout:
+            print("❌ Request timed out while contacting eBay image search API.")
+            return
+        except RequestException as e:
+            print(f"❌ Request failed: {e}")
+
         print("resp: ", response)
         #print("resp: ", response.json())
-        if response.status_code == 200:
+        if response and response.status_code == 200:
             #print(response.json())
             items = response.json().get("itemSummaries", [])
             if not items:
@@ -273,9 +293,9 @@ def create_inventory_item(sku, item_data, access_token):
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
     response = requests.put(url, headers=headers, json=item_data)
     print("Inventory response: ", response, response.text)
-    return response.status_code == 204 or response.status_code == 200
+    return response.status_code == 200 or response.status_code == 204
 
-def create_offer(offer_data, access_token):
+def get_or_create_offer(offer_data, access_token, sku=None):
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -289,19 +309,26 @@ def create_offer(offer_data, access_token):
     offer_id = None
     response = requests.post(url, headers=headers, json=offer_data)
     print("Offer response: ", response, response.text)
-    if response.status_code == 201:
-        data = response.json()
+    
+    #TODO this should be cleaned up and generalized
+    data = response.json()
+    if response.status_code == 201:#offer created
         offer_id = data.get('offerId', None)
-    elif response.status_code == 400:
-        data = response.json()
+    elif response.status_code == 400 and sku:#offer already exists, delete it
         offer_id = data['errors'][0]['parameters'][0]['value']
-        print(offer_id)
+        delete_url = url + f"/{offer_id}"        
+        response = requests.delete(delete_url, headers=headers, json=offer_data)
+        response = requests.post(url, headers=headers, json=offer_data)
+        print("Offer response 2: ", response, response.text)
+        
+        if response.status_code == 201:
+            offer_id = response.json().get('offerId', None)
 
-    return offer_id
+    return offer_id, response.status_code
 
 
 def publish_offer(offer_id, access_token):
-
+    print("publish", offer_id)
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -311,7 +338,7 @@ def publish_offer(offer_id, access_token):
 
     url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}/publish"
     response = requests.post(url, headers=headers)
-    print (response.text)
+    print ("Publish response", response.text)
     return response.json()["listingId"]
 
 
@@ -343,4 +370,140 @@ def create_location(access_token, merchant_location_key="Freeport"):
     
     print ("Create Location: ", response)
     return response.status_code == 204
+
+
+from playwright.sync_api import sync_playwright
+import time
+import random
+
+def launch_and_login():
+    with sync_playwright() as p:
+        user_data_dir = "ebay_profile"
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        page = browser.new_page()
+        page.goto("https://www.ebay.com/signin")
+
+        print("Log in manually, then close the browser window.")
+        page.wait_for_timeout(120000)  # 60 seconds to log in
+        browser.close()
+
+def get_split_part_text(text, index, split_index):
+    try:
+        return text.split("\n")[split_index].strip()
+    except (IndexError, AttributeError):
+        return None
+
+
+def get_ebay_date_range(days=90):
+    now = datetime.now()
+
+    # First day of next month
+    first_next_month = datetime(now.year + (now.month // 12), (now.month % 12) + 1, 1)
+
+    # Last day of current month at 11:59:59 PM
+    end_dt = first_next_month - timedelta(seconds=1)
+
+    # Start date: N days before end date
+    start_dt = end_dt - timedelta(days=days)
+
+    # Convert to Unix timestamps in milliseconds
+    start_ts = int(start_dt.timestamp() * 1000)
+    end_ts = int(end_dt.timestamp() * 1000)
+
+    return start_ts, end_ts
+
+
+#TODO: if this persists, will need to improve the login process
+from playwright.sync_api import TimeoutError
+import time
+
+def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
+    print("keywords:", keywords)
+    results = []
+    limit = 50
+
+    with sync_playwright() as p:
+        user_data_dir = "ebay_profile"
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        page = browser.new_page()
+        start_date, end_date = get_ebay_date_range(days=180)
+        kw = keywords.replace(" ", "+").replace('#', '') if keywords else ""
+        base_url = "http://www.ebay.com/sh/research"
+        query = {
+            "marketplace": "EBAY-US",
+            "keywords": kw,
+            "dayRange": "90",
+            "categoryId": "0",
+            "tabName": "SOLD",
+            "tz": "America/New_York",
+            "limit": str(limit),
+            "startDate": start_date,
+            "endDate": end_date,
+        }
+
+        row_count = limit
+        page_num = 0
+
+        while row_count > 0 and page_num in range(max_pages):
+        
+            page_start = time.time()
+            if row_count < 5 and page_num == 1:#need to catch the second time around hacky
+                #probably a bad query, switch to backup and start from 0
+                if backup_keywords and query["keywords"] != backup_keywords:
+                    query["keywords"] = backup_keywords
+                    page_num = 0
+                    row_count=limit
+                    continue
+
+            print("rc", row_count, "pn", page_num, "mp", max_pages)
+            offset = 0 if page_num == 0 else offset + limit
+
+            query["offset"] = str(offset)
+            url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
+            print("url", url)
+
+            page.goto(url, timeout=10000)
+
+            try:
+                page.wait_for_selector("table", timeout=15000)
+                page.wait_for_timeout(2000)
+            except TimeoutError:
+                print(f"Timeout waiting for table on page {page_num}. Skipping.")
+                break
+
+            rows = page.query_selector_all(".research-table-row")
+            row_count = len(rows)
+            print("row_count:", len(rows))
+
+            rows_data = page.evaluate("""() => {
+            return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
+                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                const img = row.querySelector('img');
+                const imgUrl = img ? img.src : null;
+                return { cells, imgUrl };
+            });
+            }""")
+
+
+            for row_data in rows_data:
+                cells = row_data["cells"]
+                if len(cells) < 8:
+                    continue
+
+                results.append({
+                    "title": get_split_part_text(cells[0], 0, 1),
+                    "price": get_split_part_text(cells[2], 0, 0),
+                    "format": get_split_part_text(cells[2], 0, 1),
+                    "sold_date": cells[7],
+                    "shipping": get_split_part_text(cells[3], 0, 0),
+                    "qty": cells[4],
+                    "itemWebUrl": row_data["imgUrl"]
+                })
+
+            #print(f"Page End: {time.time()-page_start}")
+            page_num += 1
+
+        browser.close()
+    return results
+
 

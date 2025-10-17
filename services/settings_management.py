@@ -96,9 +96,8 @@ def add_token(field_key, value, all_field_data, user_settings=None):
 
         city_obj = None
         if all_field_data:
-            print("here",all_field_data)
             city_obj = City.objects.get(raw_value=all_field_data["city"], disabled_date=None)
-            print(city_obj)
+            #print(city_obj)
         
         if city_obj:
             new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)

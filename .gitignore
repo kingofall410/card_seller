@@ -37,6 +37,9 @@ token.json
 service_acct.json
 credentials.json
 credentials/
+untracked/
+gpt.txt
+
 
 # Environment variables
 .env

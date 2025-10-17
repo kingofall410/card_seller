@@ -8,10 +8,27 @@
 <body>
 {% include "header.html" %}
 {% load static %}
+
+<div class="pagination">
+  <a href="?page=1">⏪ First</a>
+
+  {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}">◀ Previous</a>
+  {% endif %}
+
+  <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+  {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}">Next ▶</a>
+  {% endif %}
+
+  <a href="?page={{ page_obj.paginator.num_pages }}">Last ⏩</a>
+</div>
+
 <div id="collection-tree">
-  {% for collection in root_collections %}
+  {% for collection in page_obj %}
     <HR>
-    {% include "manage_collection_node.html" with collection=collection settings=settings collections=root_collections%}
+    {% include "manage_collection_node.html" with collection=collection settings=settings collections=page_obj.paginator.object_list %}
   {% endfor %}
 </div>
 

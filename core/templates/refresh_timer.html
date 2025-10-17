@@ -1,0 +1,67 @@
+<div id="timer-module">
+  <label for="interval-select">Refresh Interval:</label>
+  <select id="interval-select">
+    <option value="5">5s</option>
+    <option value="10" selected>10s</option>
+    <option value="30">30s</option>
+    <option value="60">60s</option>
+  </select>
+
+  <button id="toggle-timer-btn">Start Timer</button>
+  <div id="timer-display">Elapsed: 0s</div>
+</div>
+
+<script>
+(function() {
+  const toggleBtn = document.getElementById('toggle-timer-btn');
+  const intervalSelect = document.getElementById('interval-select');
+  const display = document.getElementById('timer-display');
+
+  let timerInterval = null;
+  let refreshInterval = null;
+
+  function startTimer(startTime, intervalSeconds) {
+    localStorage.setItem('timerActive', 'true');
+    localStorage.setItem('timerStart', startTime);
+    localStorage.setItem('timerInterval', intervalSeconds);
+
+    toggleBtn.textContent = 'Stop Timer';
+
+    timerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      display.textContent = `Elapsed: ${elapsed}s`;
+    }, 1000);
+
+    refreshInterval = setInterval(() => {
+      location.reload();
+    }, intervalSeconds * 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    clearInterval(refreshInterval);
+    localStorage.removeItem('timerActive');
+    localStorage.removeItem('timerStart');
+    localStorage.removeItem('timerInterval');
+    toggleBtn.textContent = 'Start Timer';
+    display.textContent = 'Elapsed: 0s';
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    if (localStorage.getItem('timerActive') === 'true') {
+      stopTimer();
+    } else {
+      const intervalSeconds = parseInt(intervalSelect.value, 10);
+      const now = Date.now();
+      startTimer(now, intervalSeconds);
+    }
+  });
+
+  // 🔁 Restore timer if active
+  if (localStorage.getItem('timerActive') === 'true') {
+    const savedStart = parseInt(localStorage.getItem('timerStart'), 10);
+    const savedInterval = parseInt(localStorage.getItem('timerInterval'), 10);
+    startTimer(savedStart, savedInterval);
+  }
+})();
+</script>

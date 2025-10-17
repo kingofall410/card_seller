@@ -101,7 +101,7 @@ def export_to_ebay(csrs, publish=False):
             "sku": csr.ebay_item_id,
             "marketplaceId": "EBAY_US",
             "format": "FIXED_PRICE",
-            "listingDescription": csr.title_to_be,
+            "listingDescription": csr.parent_card.listing_details,
             "availableQuantity": 1,
             "pricingSummary": {
                 "price": {
@@ -126,13 +126,15 @@ def export_to_ebay(csrs, publish=False):
         #create_ebay_location(access_token)
         #csr.check_category_metadata("261328",access_token)
         if ebay.create_inventory_item(csr.ebay_item_id, item_data, access_token):
+            #item was created successfully
             #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
-            csr.ebay_offer_id = ebay.create_offer(offer_data, access_token)
-            #csr.get_offer(offer_id, access_token)
-
-            if publish:
-                csr.ebay_listing_id = ebay.publish_offer(csr.ebay_offer_id, access_token)
+            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, csr.ebay_item_id)
+            print(offer_id, status)
+            if status == 201 and publish:
+                csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+                csr.ebay_offer_id = offer_id
             else:
+                "Error response from ebay"
                 csr.ebay_listing_id = ""
             csr.status = ResultStatus.LISTED
         csr.save()

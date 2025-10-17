@@ -1,29 +1,50 @@
-<div class="image-grid">
-    {% for listing in listings %}
-    <div class="listing">
-        <div class="listing">
-            <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
-                
-            <img src="{{ listing.thumb_url }}" alt="Product Listing" class="listing-thumb" title="{{ listing.title.title|default:'Listing' }}"
-/>          </a>
-        </div>
-    </div>
-    {% empty %}
-    <p>No listings found for this card.</p>
-    {% endfor %}
-</div>
 <style>
+.image-grid-wrapper {
+  max-height: calc(2 * 112px); /* 100px image + 12px gap */
+  overflow-y: auto;
+  padding-right: 6px; /* optional scrollbar buffer */
+}
+
 .image-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .listing-thumb {
-    max-width: 100px;
-    max-height: 100px;
-    object-fit: contain;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  max-width: 100px;
+  max-height: 100px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.subtitle {
+  margin-top: -8px;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+  color: #555;
 }
 </style>
+
+{% if title %}
+  <h2>{{ title }} ({{ listings.count }})</h2>
+{% else %}
+{% endif %}
+{% if subtitle %}
+  <h3>{{ subtitle }}</h3>
+{% endif %}
+
+<div class="image-grid-wrapper">
+  <div class="image-grid">
+    {% for listing in listings %}
+      <div class="listing">
+        <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
+          <img src="{{ listing.thumb_url }}" alt="Listing Image" class="listing-thumb" title="{{ listing.title|default:'Listing' }}" />
+        </a>
+      </div>
+    {% empty %}
+      <p>No listings found.</p>
+    {% endfor %}
+  </div>
+</div>
+

@@ -1,0 +1,166 @@
+{% load static custom_tags %}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Card Spreadsheet</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.min.js"></script>
+
+
+  <style>
+
+    #spreadsheet {
+      margin-top: 1rem;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script src="{% static 'js/search_results.js' %}"></script>
+<body>
+
+<div class="spreadsheet-scroll-wrapper">
+  <div id="spreadsheet"></div>
+</div>
+
+
+{{ columns|json_script:"card_columns" }}
+{{ cards|spreadsheet_rows_from_search_result:columns|json_script:"card_rows" }}
+
+
+<script>
+let isApplyingServerUpdate = false;
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('spreadsheet');
+  const columns = JSON.parse(document.getElementById('card_columns').textContent);
+  const rows = JSON.parse(document.getElementById('card_rows').textContent);
+  console.log(columns)
+  console.log(rows)
+  const hot = new Handsontable(container, {
+    data: rows,
+    colHeaders: columns,
+    rowHeaders: true,
+    stretchH: 'all',
+    licenseKey: 'non-commercial-and-evaluation',
+    columns: columns.map(col => ({ data: col, type: 'text' })),  // use field names
+    manualColumnResize: true,
+    manualRowResize: true,
+    manualColumnMove: true,
+    contextMenu: true,
+    autoRowSize: false,
+    dropdownMenu: true,
+    filters: true,
+    columnSorting: true,
+
+    // ✅ Enable copy/paste
+    copyPaste: {
+      rowsLimit: 1000,
+      columnsLimit: 100,
+      pasteMode: 'overwrite', // or 'shift_down'
+    },
+
+    afterChange: function(changes, source) {
+      if (isApplyingServerUpdate) {
+        console.log("afterChange skipping");
+        return;
+      }
+
+      console.log("afterChange executing");
+
+      if (source === 'edit' || source === 'CopyPaste.paste') {
+        const columnMap = hot.getSettings().columns.map(col => col.data);
+        const rowChanges = {};
+
+        // 🧩 Accumulate changes per row
+        changes.forEach(([row, prop, oldValue, newValue]) => {
+          const fieldName = typeof prop === 'string' ? prop : columnMap[prop];
+          if (!rowChanges[row]) rowChanges[row] = {};
+          rowChanges[row][fieldName] = newValue;
+        });
+
+        // 🧾 Include brand/city + is_manual flags
+        Object.entries(rowChanges).forEach(([rowIndex, fields]) => {
+          const row = parseInt(rowIndex);
+          const brand = hot.getDataAtCell(row, columnMap.indexOf('brand'));
+          const city = hot.getDataAtCell(row, columnMap.indexOf('city'));
+
+          const brandChanged = Object.prototype.hasOwnProperty.call(fields, 'brand');
+          const cityChanged = Object.prototype.hasOwnProperty.call(fields, 'city');
+
+          if (!brandChanged) fields.brand = brand;
+          if (!cityChanged) fields.city = city;
+
+          fields.brand_is_manual = brandChanged;
+          fields.city_is_manual = cityChanged;
+
+          quickEdit(hot, row, fields);
+        });
+      }
+    }
+
+
+
+  });
+});
+function quickEdit(hot, theRow, fields) {
+  console.log("QE", hot, theRow);
+  const rowData = hot.getSourceDataAtRow(theRow);
+  const csrId = rowData.id;
+
+  $.ajax({
+    url: "/update_csr_fields/",
+    method: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({
+      csrId: csrId,
+      allFields: fields
+    }),
+    success: response => {
+
+      const updatedFields = response.search_result;
+
+      const sourceData = hot.getSourceData();
+      const rowIndex = sourceData.findIndex(row => row.id === csrId);
+      console.log("csrId:", csrId, "rowIndex:", rowIndex, "sourceData:", sourceData);
+      if (rowIndex < 0) {
+        console.warn("Row not found for csrId:", csrId);
+        return;
+      }
+
+      Object.entries(updatedFields).forEach(([field, value]) => {
+        if (!field || typeof field !== 'string') {
+          console.warn("Invalid field name:", field);
+          return;
+        }
+
+        const columnExists = hot.getSettings().columns.some(col => col.data === field);
+        if (!columnExists) {
+          console.warn("Field not found in column definitions:", field);
+          return;
+        }
+
+
+        isApplyingServerUpdate = true;
+        hot.setDataAtRowProp(rowIndex, field, value);
+        isApplyingServerUpdate = false;
+      });
+
+    },
+    error: xhr => {
+      console.error("Save error:", xhr.responseText);
+      alert("Error saving changes.");
+    }
+  });
+}
+
+</script>
+
+
+</body>
+</html>

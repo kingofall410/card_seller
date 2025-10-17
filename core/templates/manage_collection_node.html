@@ -22,13 +22,10 @@
 
 .card-count {
   position: absolute;
-  bottom: 2px;
-  right: 2px;
-  font-weight: bold;
-  font-size: 0.85em;
-  background-color: rgba(255, 255, 255, 0.8); /* optional: subtle background */
-  padding: 2px 6px;
-  border-radius: 4px;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  margin-bottom: 4px;
 }
 
 .status-icon {
@@ -165,6 +162,13 @@
   display: inline-block; /* Optional, keeps it tight */
 }
 
+.card-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+}
+
 
 .card-meta {
   white-space: nowrap;
@@ -205,7 +209,7 @@
     console.log("submit to", targetUrl, cardId, collectionId);
     const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
     console.log(visibleCards.value);
-    
+
     let cardIds = [];  // Declare outside the block
     if (visibleCards.value) {
       cardIds = JSON.parse(visibleCards.value).map(Number);
@@ -218,6 +222,29 @@
     form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
     form.submit();
   }
+
+
+  
+function priceCollection(collectionId) {
+    
+    $.ajax({
+  url: `/price_collection/${collectionId}/`,
+  method: "GET",
+  traditional: true,  // ✅ prevents jQuery from adding [] to array keys
+  success: function(response) {
+    if (response.error) {
+      alert("Error: " + response.message);
+    } else {
+      location.reload();
+    }
+  },
+  error: function(xhr, status, error) {
+    console.error("AJAX error:", error);
+    alert("Request failed: " + error);
+  }
+});
+
+}
 
 </script>
 
@@ -238,12 +265,15 @@
     <button onclick="saveTitle({{ collection.id }})">💾</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
+    <button onclick="priceCollection({{ collection.id }})">💲</button>
+    <button onclick="openForAutomaticInput({{ collection.id }})">📬</button>
+    
     <div class="dropdown-wrapper">
       <button onclick="toggleMoveCollectionDropdown({{ collection.id }})" title="Move">📂</button>
       <div id="move-collection-{{collection.id}}" class="move-dropdown" style="display: none;">
         <ul>
             {% for targetCollection in collections %}
-            <li onclick="moveToCollection('{{ collection.id }}', '{{ targetCollection.id }}')">
+            <li onclick="moveToCollection(null, '{{ collection.id }}', '{{ targetCollection.id }}')">
                 {{targetCollection.id}}. {{targetCollection.name}}
             </li>
             {% endfor %}
@@ -297,26 +327,91 @@
 
   </div>
 
-  <div class="card-list">
+  <div style="text-align: center; margin-top: 20px;">
+    <button onclick="toggleAttributePanel()">⚙️ Select Attributes</button>
+  </div>
+
+    <div id="attributePanel" style="display: none; margin: 10px auto; text-align: center;">
+      <label><input type="checkbox" class="attr-toggle" value="name" checked> Name</label>
+      <label><input type="checkbox" class="attr-toggle" value="thumb" checked> Thumbnail</label>
+      <label><input type="checkbox" class="attr-toggle" value="set" checked> Set</label>
+      <label><input type="checkbox" class="attr-toggle" value="nr" >Card #</label>
+      <label><input type="checkbox" class="attr-toggle" value="team" >Team</label>
+      <label><input type="checkbox" class="attr-toggle" value="serial" >Serial</label><br>
+      <label><input type="checkbox" class="attr-toggle" value="list_price" >List Price</label>
+      <label><input type="checkbox" class="attr-toggle" value="highlow" >Ebay Low / High</label>
+      <label><input type="checkbox" class="attr-toggle" value="mmm" >Ebay Mean / Meadian / Mode</label>
+      <label><input type="checkbox" class="attr-toggle" value="ids" >IDs</label>
+      <label><input type="checkbox" class="attr-toggle" value="highlowsold" checked>Sold Low / High</label>
+      <label><input type="checkbox" class="attr-toggle" value="soldavgs" checked>Last Sale / Last 5 Avg</label>
+      <label><input type="checkbox" class="attr-toggle" value="avgonly" checked>Avg Sale</label>
+    </div>
+    <div class="card-list">
     {% for card in collection.cards.all %}
-    {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" %}
-    {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
-    {% with meta=card.active_search_results.status|status_icon_meta %}
-    
-    <div id="card-{{ card.id }}" class="card">    
-    <div class="card-item status-{{ card.active_search_results.status|lower }}"
-      data-id="{{ card.id }}"
-      data-year="{{ display_year|default:'' }}"
-      data-brand="{{ display_brand|default:'' }}"
-      data-subset="{{ display_subset|default:'' }}"
-      data-name="{{ display_name|default:'' }}"
-      data-status="{{ meta.icon }}"
-      >
-        <div class="card-meta">
-          ${{ card.active_search_results.list_price }}
+      {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" display_team=card.active_search_results|get_attribute:"display_team" display_city=card.active_search_results|get_attribute:"display_city" display_serial=card.active_search_results|get_attribute:"display_serial" %}
+      {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
+      {% with meta=card.active_search_results.status|status_icon_meta %}
+      
+      <div id="card-{{ card.id }}" class="card">    
+      <div class="card-item status-{{ card.active_search_results.status|lower }}">
+        <div class="card-checkbox">
+            <input type="checkbox" onchange="updateSelection({{collection.id}})" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}"><br><br>
         </div>
+  
+
+        <div class="card-meta">
           
-        <div class="image-wrapper">
+        </div>
+
+        <div class="card-meta" data-attr="name">
+          {{ display_name }}
+        </div>
+
+        <div class="card-meta" data-attr="set">
+          {{ display_year }} {{ display_brand }} {{ display_subset }}
+        </div>
+
+        <div class="card-meta" data-attr="nr">
+          {{ card.active_search_results.card_number }}
+        </div>
+
+        <div class="card-meta" data-attr="team">
+          {{ display_city }} {{ display_team }}
+        </div>
+
+        <div class="card-meta" data-attr="serial">
+          {{ display_serial }}
+        </div>
+
+        <div class="card-meta" data-attr="list_price">
+          ${{ card.active_search_results.list_price|floatformat:2 }}
+        </div>
+
+        <div class="card-meta" data-attr="highlow">
+          ${{ card.active_search_results.ebay_low_price|floatformat:2 }} / ${{ card.active_search_results.ebay_high_price|floatformat:2 }}
+        </div>
+
+        <div class="card-meta" data-attr="mmm">
+          ${{ card.active_search_results.ebay_mean_price|floatformat:2 }} / ${{ card.active_search_results.ebay_meadian_price|floatformat:2 }} / ${{ card.active_search_results.ebay_mode_price|floatformat:2 }}
+        </div>
+
+        <div class="card-meta" data-attr="highlowsold">
+          ${{ card.active_search_results.ebay_low_sold_price|floatformat:2 }} /  ${{ card.active_search_results.ebay_high_sold_price|floatformat:2 }}
+        </div>
+
+        <div class="card-meta" data-attr="soldavgs">
+            ${{ card.active_search_results.ebay_last_sold_price|floatformat:2 }} / ${{ card.active_search_results.ebay_last_five_avg_sold_price|floatformat:2 }}
+        </div>
+        <div class="card-meta" data-attr="avgonly">            
+            ${{ card.active_search_results.ebay_avg_sold_price|floatformat:2 }}
+        </div>
+
+        <div class="card-meta" data-attr="ids">
+          {{ card.id }}:{{ card.active_search_results.id }}
+        </div>
+
+          
+        <div class="image-wrapper" data-attr="thumb">
           <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">
             <img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
             <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
@@ -324,27 +419,26 @@
         </div>
 
         <div class="card-actions">
+          <div class="status-icon">{{ meta.icon }}</div>
           
-            <div class="status-icon">{{ meta.icon }}</div>
-            <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
-                <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
-            </div>
-            <button onclick="toggleMoveDropdown({{card.id}})" title="Move">📂</button>
-            <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
-            
-            
-            <div class="card-count">{{ card.search_count }}</div>
-            <div id="move-card-{{card.id}}" class="move-dropdown" style="display: none;">
-            <ul>
-                {% for collection in collections %}
-                <li onclick="moveCardToCollection({{ card.id }}, '{{ collection.id }}')">
-                    {{collection.id}}. {{collection.name}}
-                </li>
-                {% endfor %}
-            </ul>
-            </div>
+          <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
+              <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
+          </div>
+          
+          <button onclick="toggleMoveDropdown({{card.id}})" title="Move">📂</button>
+          <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
 
+          <div id="move-card-{{card.id}}" class="move-dropdown" style="display: none;">
+              <ul>
+                  {% for targetCollection in collections %}
+                  <li onclick="moveToCollection({{ card.id }}, '{{ collection.id }}', {{ targetCollection.id }})">
+                      {{targetCollection.id}}. {{targetCollection.name}}
+                  </li>
+                  {% endfor %}
+              </ul>
+          </div>
         </div>
+
         {% endwith %}
         {% endwith %}
         {% endwith %}
@@ -393,6 +487,36 @@
 </div>
 
 <script>
+function updateAttributeVisibility() {
+  const selected = Array.from(document.querySelectorAll('.attr-toggle:checked'))
+    .map(cb => cb.value);
+
+  document.querySelectorAll('[data-attr]').forEach(el => {
+    const attr = el.getAttribute('data-attr');
+    el.style.display = selected.includes(attr) ? '' : 'none';
+  });
+}
+
+// Initial render
+updateAttributeVisibility();
+
+// Re-run on checkbox change
+document.querySelectorAll('.attr-toggle').forEach(cb => {
+  cb.addEventListener('change', updateAttributeVisibility);
+});
+
+function toggleAttributePanel() {
+  const panel = document.getElementById("attributePanel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+function getSelectedAttributes() {
+  const checkboxes = document.querySelectorAll(".attr-toggle");
+  return Array.from(checkboxes)
+    .filter(cb => cb.checked)
+    .map(cb => cb.value);
+}
+
 function sortCardsInModule(selectEl) {
   // Traverse up to the nearest .collection container
   const container = selectEl.closest('.collection');
@@ -482,14 +606,18 @@ function filterCardsInModule(selectEl, collectionId) {
   });
 
   // Update hidden input with visible card IDs
-  const hiddenInput = document.getElementById(`visible-cards-`+collectionId);
-  console.log("hidden:", hiddenInput, collectionId, `visible-cards-`+collectionId)
-  if (hiddenInput) {
-    hiddenInput.value = JSON.stringify(visibleCardIds);
-    console.log("Updated visible_cards input:", hiddenInput);
-  }
+  updateSelection(collectionId)
 }
 
+function updateSelection(collectionId) {
+  const checkboxes = document.querySelectorAll('input[name="selected_cards"]:checked');
+  const hiddenInput = document.getElementById(`visible-cards-`+collectionId);
+  const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+  if (hiddenInput) {
+    hiddenInput.value = JSON.stringify(selectedIds);
+    console.log("Updated visible_cards input:", selectedIds);
+  }
+}
 
 function triggerFileUpload(collectionId) {
   document.getElementById("fileInput_" + collectionId).click();
@@ -534,6 +662,10 @@ function addCard(collectionId) {
   // AJAX call to Django view to create a new card
   console.log("Add card to collection:", collectionId)
   window.location.href = "/upload_image/" + collectionId;
+}
+
+function openForAutomaticInput(collectionId) {
+  fetch(`/set_default_collection/${collectionId}`);
 }
 
 function addSubcollection(parentId) {
@@ -587,7 +719,20 @@ function refreshCollectionCount(collectionId) {
   }
 }
 
-function moveToCollection(collectionToMoveId, targetCollectionId) {
+function moveToCollection(cardId, collectionToMoveId, targetCollectionId) {
+  let selectedCardIds;
+  const visibleCards = document.getElementById(`visible-cards-${collectionToMoveId}`).value;
+  if (visibleCards)
+    selectedCardIds = JSON.parse(visibleCards).map(Number);
+  else
+    selectedCardIds = ""
+  const initiatingCardId = cardId
+
+  //if I have an initiating cardid and no visibleCards, move the single card to the targetcollection
+  //if initiatingCardId is none, this will fall through to collection-collection 
+  if ((selectedCardIds == "") || (selectedCardIds == "[]"))
+    selectedCardIds = [initiatingCardId]
+
   fetch('/move_to_collection/', {
     method: 'POST',
     headers: {
@@ -595,8 +740,8 @@ function moveToCollection(collectionToMoveId, targetCollectionId) {
       //'X-CSRFToken': getCookie('csrftoken')  // Make sure you have a getCookie() helper
     },
     body: JSON.stringify({
-      collection_to_move: collectionToMoveId,
-      cards_to_move: [],
+      collection_to_move: collectionToMoveId,      
+      cards_to_move:selectedCardIds,
       target_collection: targetCollectionId,
     })
   })
@@ -609,6 +754,7 @@ function moveToCollection(collectionToMoveId, targetCollectionId) {
   });
 }
 
+//single card move clicked (could be selections)
 function moveCardToCollection(cardId, collectionId) {
   fetch(`/move_to_collection/${cardId}/${collectionId}`, {
     method: 'POST',
@@ -649,8 +795,6 @@ function moveCardToCollection(cardId, collectionId) {
     console.error('Error moving card:', error);
   });
 }
-
-
 
 function removeCollection(collectionId) {
   // AJAX call to delete card
@@ -709,7 +853,8 @@ function saveTitle(collectionId) {
 }
 
 function cropCard(collectionId, cardId) {
-    window.location.href = "/collection/"+collectionId
+    window.location.href = "/crop_review/"+collectionId
+    const cardIds = JSON.parse(cardId).map(Number);
 }
 
 function cropCollection(collectionId) {

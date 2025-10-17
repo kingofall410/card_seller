@@ -1,0 +1,72 @@
+<div class="nav-buttons">
+  {% if prev_id %}
+    <button id="prev" class="nav-button prev" data-url="{% url 'view_card' prev_id %}" onclick="handlePrev()">← Previous Card</button>
+
+  {% else %}
+    <span class="nav-button disabled">← Previous Card</span>
+  {% endif %}
+
+  <button id="prev" class="nav-button up" onclick="handleUp()">⬆ Collection {{ collection_id }} ⬆</button>
+
+  {% if next_id %}
+    <button id="next" class="nav-button next" data-url="{% url 'view_card' next_id %}" onclick="handleNext()">Next Card →</button>
+
+  {% else %}
+    <span class="nav-button disabled">Next Card →</span>
+  {% endif %}
+</div>
+
+<style>
+.nav-buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  gap: 12px;
+}
+
+.nav-button {
+  padding: 8px 16px;
+  background-color: #0078D4;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.nav-button:hover {
+  background-color: #005fa3;
+}
+
+.nav-button.disabled {
+  background-color: #ccc;
+  color: #666;
+  cursor: default;
+  pointer-events: none;
+}
+</style>
+
+<script>
+function handleNext() {
+
+  el = document.getElementById("next")
+  url = el.dataset.url;
+
+  console.log("Navigating to:", url);
+  window.location.href = url;
+}
+
+function handlePrev() {
+
+  el = document.getElementById("prev")
+  url = el.dataset.url;
+
+  console.log("Navigating to:", url);
+  window.location.href = url;
+}
+
+function handleUp() {
+
+  window.location.href = "/manage";
+}
+</script>

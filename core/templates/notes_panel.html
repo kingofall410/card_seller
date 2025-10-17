@@ -1,0 +1,53 @@
+<style>
+.notes-container {
+  display: flex;
+  gap: 20px;
+  position: relative;
+  max-width: 100%;        /* Prevent overflow */
+  flex-wrap: wrap;        /* Allow wrapping on smaller screens */
+  box-sizing: border-box; /* Ensure padding/borders are included in width */
+}
+
+.notes-panel {
+  flex: 1 1 0;             /* Allow shrinking if needed */
+  min-width: 0;            /* Prevent flex overflow */
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  box-sizing: border-box;
+}
+
+.notes-content {
+  width: 100%;
+  height: 150px;
+  resize: vertical;
+  padding: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.notes-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+</style>
+
+<div class="notes-container">
+  <div class="notes-panel">
+    <div class="notes-header">
+      📝 <span>Listing Details</span>
+    </div>
+    <textarea id="listing-details" class="notes-content" placeholder="Enter listing details...">{{ card.listing_details | safe }}</textarea>
+  </div>
+
+  <div class="notes-panel">
+    <div class="notes-header">
+      📦 <span>Notes</span>
+    </div>
+    <textarea id="notes" class="notes-content" placeholder="Write your notes here...">{{ card.notes | safe }}</textarea>
+  </div>
+</div>

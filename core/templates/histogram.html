@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>eBay Price Distribution</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .chart-container {
+      width: 1200px;
+      height: 400px;
+      margin: 20px auto;
+    }
+    .title-toggle {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .title-toggle input[type="checkbox"] {
+      margin-left: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="title-toggle">
+    <span style="font-size: 20px; font-weight: 600;">{{ title }}</span>
+    <label style="font-size: 13px; font-weight: normal; margin-left: 12px;">
+      (<input type="checkbox" id="toggleViewCheckbox" checked style="margin-right: 6px;">Filtered)
+      <input type="hidden" id="filteredViewState" name="filtered_view" value="true">  
+    </label>
+  </div>
+
+  <div style="text-align: center; margin-top: 10px;">
+    <label style="font-size: 13px;">
+      Max Price:
+      <input type="number" oninput="rebuildChart()" id="maxPrice-hist" value="3" step="1" min="0" style="width: 60px; margin-left: 6px;">
+    </label>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="priceChart-{{ title }}"></canvas>
+  </div>
+
+  <div id="selected-price" data-shared="{{ some_value }}"></div>
+
+<script>
+  const allPriceData = JSON.parse(`{{ all_listings | safe }}`);
+  const filteredPriceData = JSON.parse(`{{ filtered_listings | safe }}`);
+  const soldPriceData = JSON.parse(`{{ sold_listings | safe }}`);
+  const checkbox = document.getElementById('toggleViewCheckbox');
+  const ctx = document.getElementById(`priceChart-{{ title }}`).getContext('2d');
+
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: [], datasets: [] },
+    options: {
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: 'category',
+          position: 'bottom',
+          title: { display: true, text: 'Price Bins ($)' },
+          ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'Item Count' },
+          beginAtZero: true,
+          min: 0
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'Actual Price ($)' },
+          grid: { drawOnChartArea: false }
+        }
+      },
+      plugins: {
+        tooltip: {
+          enabled: false,
+          external: externalTooltipHandler
+        },
+        title: { display: false }
+      },
+      onClick: (event, elements, chart) => {
+        const activePoints = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, false);
+        const priceElem = document.getElementById("selected-price");
+        if (activePoints.length > 0) {
+          const point = activePoints[0];
+          const datasetIndex = point.datasetIndex;
+          const index = point.index;
+          const dataset = chart.data.datasets[datasetIndex];
+          const dataPoint = dataset.data[index];
+          let sharedValue = dataPoint.y ? dataPoint.y : chart.data.labels[index];
+          priceElem.setAttribute("data-shared", sharedValue);
+        }
+      }
+    }
+  });
+
+  function getMean(arr) {
+    const sum = arr.reduce((acc, val) => acc + val, 0);
+    return sum / arr.length;
+  }
+
+  function getStdDev(arr, mean) {
+    const variance = arr.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / arr.length;
+    return Math.sqrt(variance);
+  }
+
+  function filterByStdDev(data, maxStdDevs) {
+    const prices = data.map(p => p[0]);
+    const mean = getMean(prices);
+    const stdDev = getStdDev(prices, mean);
+    return data.filter(([price]) => Math.abs(price - mean) <= maxStdDevs * stdDev);
+  }
+
+  
+  function filterByPrice(data, maxPrice) {
+    const prices = data.map(p => p[0]);
+    return data.filter(([price]) => price <= maxPrice);
+  }
+
+
+  function externalTooltipHandler(context) {
+    const { chart, tooltip } = context;
+    let tooltipEl = document.getElementById('chartjs-tooltip');
+    if (tooltipEl) tooltipEl.remove();
+    if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) return;
+
+    const point = tooltip.dataPoints[0].raw;
+    const canvasRect = chart.canvas.getBoundingClientRect();
+
+    tooltipEl = document.createElement('div');
+    tooltipEl.id = 'chartjs-tooltip';
+    tooltipEl.style.position = 'absolute';
+    tooltipEl.style.left = canvasRect.left + window.pageXOffset + tooltip.caretX + 'px';
+    tooltipEl.style.top = canvasRect.top + window.pageYOffset + tooltip.caretY + 'px';
+    tooltipEl.style.background = '#fff';
+    tooltipEl.style.border = '1px solid #ccc';
+    tooltipEl.style.borderRadius = '6px';
+    tooltipEl.style.padding = '8px';
+    tooltipEl.style.pointerEvents = 'none';
+    tooltipEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+    tooltipEl.style.fontSize = '12px';
+    tooltipEl.style.zIndex = 1000;
+    tooltipEl.style.maxWidth = '300px';
+
+    if (point.y) {
+      tooltipEl.innerHTML = `
+        <div style="font-weight:bold; margin-bottom:6px;">$${point.y.toFixed(2)}</div>
+        <table style="width:100%; border-collapse:collapse;">
+          <tr>
+            <td style="width:60px; vertical-align:top;">
+              <img src="${point.thumb}" style="width:60px; height:auto; border-radius:4px;" />
+            </td>
+            <td style="padding-left:8px; vertical-align:top;">
+              <div><strong>Price:</strong> $${point.y.toFixed(2)}</div>
+              <div><strong>Item:</strong> ${point.title}</div>
+            </td>
+          </tr>
+        </table>
+      `;
+    } else {
+      const binTop = parseFloat(tooltip.dataPoints[0].label);
+      const binBottom = binTop - 0.99;
+      tooltipEl.innerHTML = `
+        <div style="font-weight:bold;">Bin: $${binBottom.toFixed(2)} - $${binTop.toFixed(2)}</div>
+        <div>Bucket listings: ${point}</div>
+      `;
+    }
+
+    document.body.appendChild(tooltipEl);
+  }
+
+  function buildChart(dataSet, maxPrice) {
+    const prices = dataSet.map(p => p[0]);
+    const soldPrices = soldPriceData.map(p => p[0]);
+    //const maxListedPrice = Math.max(...prices);
+    
+    const filteredSoldPriceData = soldPriceData.filter(([price]) => {
+      const val = parseFloat(price);
+      return !isNaN(val) && val <= maxPrice;
+    });
+    console.log("filteredSold", filteredSoldPriceData)
+
+    const bins = {};
+    const soldBins = {};
+    for (let i = 0; i <= maxPrice; i++) {
+      const binLabel = `${(i + 0.99).toFixed(2)}`;
+      bins[binLabel] = 0;
+      soldBins[binLabel] = 0;
+    }
+
+
+    dataSet.forEach(([price]) => {
+      const binLabel = `${Math.floor(price) + 0.99}`;
+      if (bins[binLabel] !== undefined) bins[binLabel] += 1;
+    });
+
+    filteredSoldPriceData.forEach(([price]) => {
+      const binLabel = `${Math.floor(price) + 0.99}`;
+      if (soldBins[binLabel] !== undefined) soldBins[binLabel] += 1;
+    });
+
+    const histogramLabels = Object.keys(bins);
+    const histogramData = Object.values(bins);
+    const soldHistogramData = histogramLabels.map(label => soldBins[label]);
+
+    const scatterData = dataSet.map(([price, title, thumb]) => ({
+      x: `${Math.floor(price) + 0.99}`,
+      y: price,
+      title,
+      thumb
+    }));
+
+    const soldScatterData = filteredSoldPriceData.map(([price, title, thumb]) => ({
+      x: `${Math.floor(price) + 0.99}`,
+      y: price,
+      title,
+      thumb
+    }));
+
+    chart.data.labels = histogramLabels;
+    chart.data.datasets = [
+      {
+        label: 'Sold Count per Price Bin',
+        data: soldHistogramData,
+        backgroundColor: 'rgba(9, 196, 40, 0.2)',
+        borderColor: 'rgba(9, 196, 40, 0.8)',
+        borderWidth: 1,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Item Count per Price Bin',
+        data: histogramData,
+        backgroundColor: 'rgba(255, 206, 86, 0.2)',
+        borderColor: 'rgba(255, 206, 86, 0.8)',
+        borderWidth: 1,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Actual Prices',
+        data: scatterData,
+        type: 'scatter',
+        backgroundColor: 'rgba(255, 206, 86, 0.8)',
+        pointRadius: 4,
+        yAxisID: 'y1'
+      },
+      {
+        label: 'Sold Prices',
+        data: soldScatterData,
+        type: 'scatter',
+        backgroundColor: 'rgba(9, 196, 40, 0.8)',
+        pointRadius: 4,
+        yAxisID: 'y1'
+      }
+    ];
+
+    chart.options.scales.y1.min = 0;
+    chart.options.scales.y1.max = Math.max(...prices.concat(soldPrices)) + 2;
+    chart.update();
+  }
+
+  // Initial render
+  rebuildChart();
+
+  // Rebuild chart when checkbox toggles
+  checkbox.addEventListener('change', () => {
+    const useFiltered = checkbox.checked;
+    document.getElementById('filteredViewState').value = useFiltered ? 'true' : 'false';
+    rebuildChart();
+  });
+
+  
+
+  // Apply std dev filter from input
+  function rebuildChart() {
+    const maxPrice = parseFloat(document.getElementById('maxPrice-hist').value);
+    const useFiltered = document.getElementById('filteredViewState').value
+    const baseData = useFiltered ? filteredPriceData : allPriceData;
+    const filtered = filterByPrice(baseData, maxPrice);
+    buildChart(filtered, maxPrice);
+  }
+  
+</script>
+</body>
+</html>

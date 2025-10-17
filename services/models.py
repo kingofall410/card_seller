@@ -60,15 +60,6 @@ class SettingsToken(models.Model):
 
     def __str__(self):
         return f"{self.raw_value}"
-    
-    '''def __eq__(self, value):
-        if isinstance(value, str):
-            return any(item.raw_value == value for item in self.get)
-        elif isinstance(value, SettingsToken):
-            return super().__eq__(value)
-    
-    def __hash__(self):
-        return super().__hash__()'''
 
     @property
     def primary_value(self):
@@ -77,16 +68,15 @@ class SettingsToken(models.Model):
     #this method is not called for creation of subclasses if they have overridden
     #don't do anything fancy here
     @classmethod
-    def create(cls, value, settings, field, primary_attrib=None):
-        if primary_attrib is None:
-            primary_attrib = value
-        primary_token = cls.objects.filter(
-            raw_value=primary_attrib, 
-            parent_settings=settings, 
-            field_key=field
-        ).first()
-        print(value, settings, field, primary_attrib)
+    def create(cls, value, settings, field, primary_token=None):
+        
         obj, _ = cls.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
+
+        if primary_token:
+            obj.primary_token = primary_token
+        else:
+            obj.primary_token = obj
+        
         return obj
     
     class Meta:
@@ -271,6 +261,8 @@ class Subset(SettingsToken):
     @classmethod
     def create(cls, value, settings, field, brand):
         subs_obj, _ = Subset.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, parent_brand=brand)
+        subs_obj.primary_token = subs_obj
+        subs_obj.save()
         return subs_obj
     
     class Meta:
@@ -294,6 +286,8 @@ class Team(SettingsToken):
     @classmethod
     def create(cls, value, settings, field, city):
         team_obj, _ = Team.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, home_city=city)
+        team_obj.primary_token = team_obj
+        team_obj.save()
         return team_obj
     
     class Meta:
@@ -308,7 +302,9 @@ class KnownName(SettingsToken):
     
     @classmethod
     def create(cls, value, settings, field, is_first=False, is_last=False):
-        name_obj, _ = KnownName.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, is_full=(value.index(" ") > -1), is_first=is_first, is_last=is_last)
+        name_obj, _ = KnownName.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, is_full=(value.find(" ") > -1), is_first=is_first, is_last=is_last)
+        name_obj.primary_token = name_obj
+        name_obj.save()
         return name_obj
     
     @classmethod    
@@ -351,8 +347,9 @@ class CardAttribute(SettingsToken):
 
     @classmethod
     def create(cls, value, settings, field, primary_attrib=""):
-        name_obj, _ = CardAttribute.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, primary_attrib=primary_attrib)
-        return name_obj
+        attrib_obj, _ = CardAttribute.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
+        attrib_obj.primary_token= CardAttribute.objects.get(raw_value=primary_attrib)
+        return attrib_obj
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")

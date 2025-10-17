@@ -84,6 +84,9 @@ class CroppedImage(models.Model):
             if content is None:
                 with open(save_to_filepath, "rb") as f:
                     instance.img.save(name=name, content=File(f), save=False)
+            elif not isinstance(content, File):
+                with open(content, "rb") as f:
+                    instance.img.save(name=name, content=File(f), save=False)
             else:
                 instance.img.save(name=name, content=content, save=False)
 

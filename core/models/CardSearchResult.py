@@ -1,11 +1,11 @@
 from django.db import models
-import re
+import re, requests, statistics
 from core.models.Cropping import CropParams
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
-import requests
-import statistics
 from services import settings_management as app_settings
+from datetime import datetime
+
 
 class ResultStatus(models.TextChoices):
     NEW="new", "New"
@@ -34,7 +34,7 @@ class OverrideableFieldsMixin(models.Model):
         abstract = True
 
     def add_token_link(self, field, value, select=False, all_field_data={}):
-        print("add token link: ", field, value, select)
+        #print("add token link: ", field, value, select)
         available_tokens_fieldname = f"{field}_available_tokens"
         selected_token_fieldname = f"{field}_selected_token"        
         selected_token = None
@@ -42,10 +42,8 @@ class OverrideableFieldsMixin(models.Model):
         #TODO:This is going to be extra slow of course; don't search through every name every time
         if hasattr(self, available_tokens_fieldname) and hasattr(self, selected_token_fieldname):
             avail_token_manager = getattr(self, available_tokens_fieldname)
-            print(avail_token_manager)
             if avail_token_manager and avail_token_manager.filter(raw_value__iexact=value).exists():
                 selected_token = avail_token_manager.get(raw_value__iexact=value)
-                print("selected existing:", selected_token)
             else:
                 selected_token = app_settings.add_token(field, value, all_field_data, user_settings=None)
                 avail_token_manager.add(selected_token)
@@ -57,7 +55,7 @@ class OverrideableFieldsMixin(models.Model):
         return selected_token
 
     def set_ovr_attribute(self, field, new_field_value, is_manual, all_field_data={}):
-        print("setting over: ", field)
+        #print("setting over: ", field)
         field_to_set = f"{field}_m" if is_manual else field
         is_manual_fieldname = f"{field}_is_manual"
 
@@ -73,15 +71,20 @@ class OverrideableFieldsMixin(models.Model):
         # Coerce boolean
         if isinstance(is_manual, str):
             is_manual = is_manual.lower() in ["true", "1", "yes"]
-    
-        #print("Setting:", field_to_set, "=", value)
-        #print("Setting:", is_manual_fieldname, "=", is_manual)
 
-        setattr(self, field_to_set, new_field_value)
+        print("Setting:", field_to_set, "=", new_field_value)
+        print("Setting:", is_manual_fieldname, "=", is_manual)
+        
+        if new_field_value:
+            setattr(self, field_to_set, new_field_value)
+            
+        else:
+            setattr(self, field_to_set, None)
+
         setattr(self, is_manual_fieldname, is_manual)
 
         #remove this hardcode
-        if not field[:11] == 'title_to_be':
+        if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
 
         try:
@@ -121,7 +124,7 @@ class OverrideableFieldsMixin(models.Model):
         return getattr(self, f"{field}_m")
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
-    
+    #TODO: this class needs to be broken up
     parent_card = models.ForeignKey("core.Card", on_delete=models.CASCADE, default=1, related_name="search_results") 
     #needed for backwards compat until I address the name knot
     name = models.CharField(max_length=100, blank=True)
@@ -146,8 +149,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     brand_available_tokens = models.ManyToManyField(Brand, blank=True, related_name="csr_as_available_brand")
     brand_selected_token = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_brand")
     
-    subset = models.CharField(max_length=100, blank=True)
-    subset_m = models.CharField(max_length=100, blank=True)
+    subset = models.CharField(max_length=100, blank=True, null=True)
+    subset_m = models.CharField(max_length=100, blank=True, null=True)
     subset_is_manual = models.BooleanField(default=False)
     subset_available_tokens = models.ManyToManyField(Subset, blank=True, related_name="csr_as_available_subset")
     subset_selected_token = models.ForeignKey(Subset, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_subset")
@@ -158,8 +161,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     card_number_available_tokens = models.ManyToManyField(CardNumber, blank=True, related_name="csr_as_available_card_number")
     card_number_selected_token = models.ForeignKey(CardNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_number")
 
-    card_name = models.CharField(max_length=100, blank=True)
-    card_name_m = models.CharField(max_length=100, blank=True)
+    card_name = models.CharField(max_length=100, blank=True, null=True)
+    card_name_m = models.CharField(max_length=100, blank=True, null=True)
     card_name_is_manual = models.BooleanField(default=False)
     card_name_available_tokens = models.ManyToManyField(CardName, blank=True, related_name="csr_as_available_card_name")
     card_name_selected_token = models.ForeignKey(CardName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_name")
@@ -176,14 +179,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     city_available_tokens = models.ManyToManyField(City, blank=True, related_name="csr_as_available_city")
     city_selected_token = models.ForeignKey(City, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_city")
     
-    serial_number = models.CharField(max_length=50, blank=True)
-    serial_number_m = models.CharField(max_length=50, blank=True)
+    serial_number = models.CharField(max_length=50, blank=True, null=True)
+    serial_number_m = models.CharField(max_length=50, blank=True, null=True)
     serial_number_is_manual = models.BooleanField(default=False)    
     serial_number_available_tokens = models.ManyToManyField(SerialNumber, blank=True, related_name="csr_as_available_serial_number")
     serial_number_selected_token = models.ForeignKey(SerialNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_serial_number")
     
-    parallel = models.CharField(max_length=50, blank=True)
-    parallel_m = models.CharField(max_length=50, blank=True)
+    parallel = models.CharField(max_length=50, blank=True, null=True)
+    parallel_m = models.CharField(max_length=50, blank=True, null=True)
     parallel_is_manual = models.BooleanField(default=False)    
     parallel_available_tokens = models.ManyToManyField(Parallel, blank=True, related_name="csr_as_available_parallel")
     parallel_selected_token = models.ForeignKey(Parallel, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_parallel")
@@ -191,6 +194,18 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     title_to_be = models.CharField(max_length=100, blank=True)
     title_to_be_m = models.CharField(max_length=100, blank=True)
     title_to_be_is_manual = models.BooleanField(default=False)
+
+    sold_search_string = models.CharField(max_length=100, blank=True, null=True)
+    sold_search_string_m = models.CharField(max_length=100, blank=True, null=True)
+    sold_search_string_is_manual = models.BooleanField(default=False)
+    
+    text_search_string = models.CharField(max_length=100, blank=True, null=True)
+    text_search_string_m = models.CharField(max_length=100, blank=True, null=True)
+    text_search_string_is_manual = models.BooleanField(default=False)
+    
+    filter_terms = models.CharField(max_length=250, blank=True, null=True)
+    filter_terms_m = models.CharField(max_length=250, blank=True, null=True)
+    filter_terms_is_manual = models.BooleanField(default=False)
 
     attributes = models.TextField(blank=True)
     unknown_words = models.TextField(blank=True)   
@@ -204,13 +219,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
     reverse_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_reverse", null=True)
 
-    search_string = models.TextField(max_length=250, blank=True)
-
     #these are listing specific thus far
     sport = models.CharField(max_length=100, blank=True)
     league = models.CharField(max_length=100, blank=True)
-    full_set = models.CharField(max_length=100, blank=True)
-    full_team = models.CharField(max_length=100, blank=True)
     features = models.CharField(max_length=100, blank=True)
     ebay_listing_id = models.CharField(max_length=50, blank=True)
     ebay_item_id = models.CharField(max_length=50, blank=True)
@@ -224,28 +235,43 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_low_price = models.FloatField(default=0.0)
     ebay_high_price = models.FloatField(default=0.0)
 
-    status = models.CharField(max_length=20, choices=ResultStatus.choices,default=ResultStatus.NEW)
-    
+    ebay_low_sold_price = models.FloatField(default=0.0)
+    ebay_high_sold_price = models.FloatField(default=0.0)
+    ebay_last_sold_price = models.FloatField(default=0.0)
+    ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
+    ebay_avg_sold_price = models.FloatField(default=0.0)
+
+    status = models.CharField(max_length=20, choices=ResultStatus.choices,default=ResultStatus.NEW)    
     
     #combine all this into field_definition
-    readonly_fields = ["search_string", "response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
+    readonly_fields = ["response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
 
     overrideable_fields = [
         "full_name", "first_name", "last_name",
         "year", "brand", "subset", "parallel",
-        "card_number", "team", "city", "serial_number", "title_to_be", "card_name"
+        "card_number", "team", "city", "serial_number", 
+        "title_to_be", "card_name", "text_search_string", 
+        "sold_search_string", "filter_terms"
     ]
 
     display_fields = [
-        "year", "brand", "subset", "parallel", "full_name", 
-        "card_number", "card_name", "city", "team", "serial_number", "condition", 
-        "attributes", 
+        "text_search_string", "sold_search_string", "filter_terms", "year", "brand", "subset", "parallel", "full_name", 
+        "card_number", "card_name", "city", "team", "serial_number", "condition", "attributes", 
         #below only needed for expanded --> TBD
-        # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"search_string", "response_count", "first_name", "last_name",
+        # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words", 
     ]
 
-    calculated_fields = ["title_to_be"]
+    spreadsheet_fields = [
+        "id", "title_to_be", "year", "brand", "subset", "parallel", "full_name", 
+        "card_number", "card_name", "city", "team", "serial_number", "filter_terms", "condition", "attributes", 
+        "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price", 
+        "ebay_low_sold_price", "ebay_high_sold_price", "ebay_last_sold_price", "ebay_last_five_avg_sold_price", "ebay_avg_sold_price", 
+        "list_price", "ebay_listing_id", "ebay_item_id", "ebay_offer_id", "ebay_listing_datetime",         
+        "text_search_string", "first_name", "last_name", "unknown_words"         
+    ]
+
+    calculated_fields = ["title_to_be", "text_search_string", "sold_search_string"]#, "filter_terms"]
 
     text_fields = ["unknown_words"]
 
@@ -268,13 +294,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return self.front_crop_params
         
     def save(self, *args, **kwargs):
+        print("saving csr")
+        if not self.title_to_be_is_manual:
+            self.title_to_be = self.build_title()
 
-        if self.title_to_be_m:
-            self.title_to_be = self.title_to_be_m
+        if not self.sold_search_string_is_manual:
+            self.sold_search_string = self.build_title(shorter=True)+" "+self.filter_terms_m
+        
+        if not self.text_search_string_is_manual:
+            self.text_search_string = self.build_title(shorter=True)+" "+self.filter_terms_m
+
         self.sport = ""
         self.league = ""
-        self.full_set = self.build_full_set()
-        self.full_team = self.build_full_team()
+
         #if self.attribute_flags:
             #print(self.attributes)
             #print(self.attribute_flags)
@@ -324,6 +356,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return "names"
         elif key == "condition":
             return "condition"
+        elif key == "required_or_excluded":
+            return "required_or_excluded"
         elif key == "parallel":
             return "parallel"
         elif key == "card_name":
@@ -342,13 +376,24 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     def aggregate_pricing_info(self):
         
-        prices = [listing.ebay_price for listing in self.listings.all()]
-        if len(prices) > 0:
-            self.ebay_mean_price = statistics.mean(prices)
-            self.ebay_median_price = statistics.median(prices)
-            self.ebay_mode_price = statistics.mode(prices)
-            self.ebay_low_price = min(prices)
-            self.ebay_high_price = max(prices)
+        list_prices = [listing.ebay_price for listing in self.open_listings.all()]
+        if len(list_prices) > 0:
+            self.ebay_mean_price = statistics.mean(list_prices)
+            self.ebay_median_price = statistics.median(list_prices)
+            self.ebay_mode_price = statistics.mode(list_prices)
+            self.ebay_low_price = min(list_prices)
+            self.ebay_high_price = max(list_prices)
+
+        sold_data = sorted([(listing.ebay_price, listing.sold_date) for listing in self.sold_listings.all()], key=lambda x: x[1])
+        sold_data = [price for price, _ in sold_data]
+        #print(sold_data)
+        if len(sold_data) > 0:
+            self.ebay_last_five_avg_sold_price = statistics.mean(sold_data[-5:])
+            self.ebay_avg_sold_price = statistics.mean(sold_data)
+            self.ebay_last_sold_price = sold_data[-1]
+            self.ebay_low_sold_price = min(sold_data)
+            self.ebay_high_sold_price = max(sold_data)
+            
         self.save()
 
 
@@ -402,32 +447,40 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             for count, percent, val in entries:
                 print(f"  {val}: {count} ({percent}%)")
 
-        # Step 2: Set most frequent token on model (if applicable)
+        threshold = max(1, int(total * 0.10))  # 10% threshold, minimum of 1
+
         for field_key, counter in aggregate.items():
             field_name = self.stupid_map(field_key)
-            print(f"Processing stupid field: {field_key} smart field: {field_name} with {len(counter)} unique tokens")
 
             if hasattr(self, field_name):
                 field = self._meta.get_field(field_name)
-                #print(type(field), field_name, field)
 
                 if field_name in self.text_fields:
                     final_value = ", ".join(x for x in counter.keys())
+
                 elif field_name in self.checkbox_fields:
-                    #print(counter)
-                    #TODO obviously remove this hardcode; the value 5 should be a % based on occurrence count/total listings
-                    final_value = {key[0]: True for key in counter.items() if key[1] > 5}
+                    final_value = {
+                        key[0]: True
+                        for key in counter.items()
+                        if key[1] >= threshold
+                    }
+
                     if "1st" in final_value:
                         final_value["First"] = final_value["1st"]
                         del final_value["1st"]
-                    field_name = "attribute_flags"#TODO obviously remove this hardcode
-                else:
-                    most_common = counter.most_common(1)
-                    if most_common:
-                        final_value = most_common[0][0]
 
-                print(f"Setting {field_name} to value: {final_value}")
+                    field_name = "attribute_flags"  # TODO: remove hardcode
+
+                else:
+                    
+                    most_common = counter.most_common(1)
+                    if most_common and (most_common[0][1]/total) >= .1:
+                        final_value = most_common[0][0]
+                    else:
+                        final_value = ""
+
                 self.set_ovr_attribute(field_name, final_value, False)
+
         
         self.set_ovr_attribute("title_to_be", self.build_title(), False)
         self.save()
@@ -435,29 +488,47 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return summary
     
     def clean_text(self, text):
-        return (
-            text.replace('\\', '')      # remove backslashes
-                .replace('`', '')       # remove backticks
-                .replace('"', "")      # replace double quotes with single quotes
-                .replace("'", "")      # replace double quotes with single quotes
-                .replace('\n', ' ')     # flatten newlines
-                .replace('/', '-')     # flatten newlines
-                .replace('(', '_')     # flatten newlines.strip()
-                .replace(')', '_')     # flatten newlines
-                .replace('\t', ' ')     # flatten newlines
-                .strip()
-        )
-    
-    def get_prices(self, filtered=False):
-        
-        listing_set = self.listings.all() if not filtered else self.filtered_listings.all()
-        print(listing_set)
-        return [[listing.ebay_price, self.clean_text(listing.title.title), listing.thumb_url] for listing in listing_set]
+        if text:
+            return (
+                text.replace('\\', '')      # remove backslashes
+                    .replace('`', '')       # remove backticks
+                    .replace('"', "")      # replace double quotes with single quotes
+                    .replace("'", "")      # replace double quotes with single quotes
+                    .replace('\n', ' ')     # flatten newlines
+                    .replace('/', '-')     # flatten newlines
+                    .replace('(', '_')     # flatten newlines.strip()
+                    .replace(')', '_')     # flatten newlines
+                    .replace('\t', ' ')     # flatten newlines
+                    .strip()
+            )
+        else: return text
+
+    def get_prices(self, filtered=False, sold=False, listed=False, refined=False, sold_refined=False):
+        if filtered:
+            listing_set = self.filtered_listings.all()
+        elif sold:
+            listing_set = self.sold_listings.all()
+        elif listed:
+            listing_set = self.open_listings.all()
+        elif refined:
+            listing_set = self.refined_listings.all()
+        elif sold_refined:
+            listing_set = self.sold_refined_listings.all()
+        return [
+            [
+                listing.ebay_price,
+                self.clean_text(listing.title.title),
+                listing.thumb_url,
+                listing.display_date if listing.display_date else None  # 👈 convert datetime
+            ]
+            for listing in listing_set
+        ]
+
 
     def update_fields(self, all_field_data):
         print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
-            print(field_name)
+            #print(field_name)
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
             
@@ -499,15 +570,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.parent_card.save()
         print("done3")
 
+    def clear_listings(self):
+        self.listings.all().delete()
+
     @classmethod
     def create_empty(cls, pcard):
-            print(f"Processing 0 search results for card {pcard.id}")
-            csr = CardSearchResult(parent_card = pcard)
-            csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
-            csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())
-            csr.response_count = 0
-            csr.save()
-            return csr   
+        print(f"Processing 0 search results for card {pcard.id}")
+        csr = CardSearchResult(parent_card = pcard)
+        csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
+        csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())
+
+        csr.response_count = 0
+        csr.save()
+        return csr   
     
     def filter_listings(self, all_fields={}, listing_set=[]):
         print("filtering")
@@ -528,18 +603,60 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 filter_tokens.append(getattr(self, selected_token_fieldname))
             
         
-        print("len:", len(filter_tokens))
+        #print("len:", filter_tokens)
         listing_ids = []
 
         for i, listing in enumerate(listing_set):
             tokens = listing.title.get_all_tokens()
-            print("title", i, listing.title)
-            print("tokens:", tokens)
-            print("filtered:", filter_tokens)
+            #print("title", i, listing.title)
+            #print("tokens:", tokens)
+            #print("filtered:", filter_tokens)
             if all(t in tokens for t in filter_tokens):
                 listing_ids.append(listing.id)
+        #print ("final filter:", len(listing_ids), listing_ids)
+                
+        ProductListing.objects.filter(csr_as_filtered=self).exclude(id__in=listing_ids).update(csr_as_filtered=None)
 
-        ProductListing.objects.filter(id__in=listing_ids).update(csr_as_filtered=self)
+        # Step 2: Assign new ones
+        for listing in ProductListing.objects.filter(id__in=listing_ids):
+            listing.csr_as_filtered = self
+            listing.save()
+
+        self.save()
+    
+    def update_pricing(self, sold_listings, is_refined=False):
+        print("UP", len(sold_listings), is_refined)
+        if sold_listings and len(sold_listings) > 0:
+            if is_refined:
+                self.sold_refined_listings.all().delete()
+            else:
+                self.sold_listings.all().delete()
+
+            for item in sold_listings:
+                listing = ProductListing.from_search_results(item, self, tokenize=False)
+                if listing:
+                    if is_refined:
+                        listing.csr_as_sold_refined = self
+                    else:
+                        listing.csr_as_sold = self
+                    listing.save()
+            self.aggregate_pricing_info()
+        print("sold:", sold_listings)
+        self.save()
+
+    def refine_listings(self, refined_listings):
+
+        if refined_listings and len(refined_listings) > 0:
+            self.refined_listings.all().delete()
+
+            for item in refined_listings:
+                listing = ProductListing.from_search_results(item, self, tokenize=False)
+                if listing:
+                    listing.csr_as_refined = self
+                    listing.save()
+            self.aggregate_pricing_info()
+        #print("sold:", sold_listings)
+        self.save()
 
     @classmethod
     def from_search_results(cls, pcard, items=None, tokenize=True, all_fields={}, csr=None):
@@ -547,7 +664,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             csr = cls.create_empty(pcard)
 
         listing_set = []
-        print("words: ", all_fields)
+        print("locked words: ", all_fields)
         if items and len(items) > 0:
             for idx, item in enumerate(items, 1):
                 listing = ProductListing.from_search_results(item, csr, tokenize)
@@ -556,103 +673,83 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             csr.response_count = len(listing_set)
             #print("attribs:", csr.attribute_flags)
 
+            csr.aggregate_pricing_info()
+            csr.status = ResultStatus.SEARCHED
+
             if tokenize:
                 #must pass the listings here to preserve the in memory attributes
                 csr.collapsed_tokens = csr.collapse_token_maps(listing_set)
-                csr.aggregate_pricing_info()
-                csr.status = ResultStatus.SEARCHED
-
-            if all_fields:
-                #TODO: slow but easy? update all fields so we can assume the tokens are already there
-                csr.update_fields(all_fields)
-                csr.filter_listings(all_fields, listing_set)
 
         csr.save()
         return csr
         
-    def build_title(self, fields=None):
-        print("fields:", fields)
-        
-        if not fields:
-            year = self.display_value("year")
-            brand = self.display_value("brand")
-            subset = self.display_value("subset")
-            name = self.display_value("full_name")
-            serial = self.display_value("serial_number")
-            cardnr = self.display_value("card_number")
-            nr = f"#{cardnr}" if cardnr else ""
-            city = self.display_value("city")
-            team = self.display_value("team")
-            print("attribs:", self.attribute_flags)
-            isRC = "RC" if len(self.attribute_flags) > 0 and self.attribute_flags.get("RC") else ""
-            isAuto = "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else ""
-            is1st = "1st" if len(self.attribute_flags) > 0 and self.attribute_flags.get("1st") else ""
-            isHOF = "HOF" if len(self.attribute_flags) > 0 and self.attribute_flags.get("HOF") else ""
-            isAS = "All-Star" if len(self.attribute_flags) > 0 and self.attribute_flags.get("All-Star") else ""
-            isOddball = "Oddball"if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else ""
-
-            condition = self.display_value("condition")
-        
-        else:            
-            year = fields["year"]
-            brand = fields["brand"]
-            subset = fields["subset"]
-            name = fields["full_name"]
-            serial = fields["serial"]
-            nr = fields["nr"]
-            city = fields["city"]
-            team = fields["team"]
-            isRC = "RC" if fields["attributes.RC"] else ""
-            isAuto = "Auto" if fields["attributes.Auto"] else ""
-            is1st = "1st" if fields["attributes.1st"] else ""
-            isHOF = "HOF" if fields["attributes.HOF"] else ""
-            isAS = "All-Star" if fields["attributes.All-Star"] else ""
-            isOddball = "Oddball" if fields["attributes.Oddball"] else ""
-            condition = fields["condition"]
-
-        subset = "" if subset == "-" else subset
-        serial = "" if serial == "-" else serial
-
-        #print (f"hi: {year} {brand} {subset} {name} {serial} #{nr} {city} {team}")
-        return f"{year} {brand} {subset} {name} {isRC} {isHOF} {is1st} {isAuto} {isAS} {serial} #{nr} {city} {team} {condition} {isOddball}".replace("  ", " ")
+    def build_title(self, fields=None, shorter=False, shortest=False, condition_sensitive=False):
+        #print("fields:", fields)
+        #print("shorter", shorter)
+        if shortest:
+            title_parts = [
+                self.display_value("year"),
+                self.display_value("brand"),
+                self.display_value("subset")  if self.display_value("subset") != " " else None,
+                (self.display_value("full_name") or "").strip().split()[1] if len((self.display_value("full_name") or "").strip().split()) > 1 else None,
+                self.display_value("condition") if condition_sensitive else None
+            ]
+        elif shorter:
+            title_parts = [
+                self.display_value("year"),
+                self.display_value("brand"),
+                self.display_value("subset")  if self.display_value("subset") != " " else None,
+                self.display_value("full_name"),
+                f"#{self.display_value('card_number')}" if self.display_value("card_number") else None,
+                self.display_value("condition") if condition_sensitive else None
+            ]
+        else:
+            title_parts = [
+                self.display_value("year"),
+                self.display_value("brand"),
+                self.display_value("subset")  if self.display_value("subset") != " " else None,
+                self.display_value("full_name"),
+                self.display_value("card_name"),
+                "1st" if len(self.attribute_flags) > 0 and self.attribute_flags.get("1st") else None,
+                "RC" if len(self.attribute_flags) > 0 and self.attribute_flags.get("RC") else None,
+                "HOF" if len(self.attribute_flags) > 0 and self.attribute_flags.get("HOF") else None,
+                "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else None,
+                self.display_value("parallel") if self.display_value("parallel") != " " else None,
+                self.display_value("serial_number") if self.display_value("serial_number") != "-" else None,
+                f"#{self.display_value('card_number')}" if self.display_value("card_number") else None,
+                self.display_value("city"),
+                self.display_value("team"),
+                self.display_value("condition") if condition_sensitive else None,
+                "Oddball" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else None
+            ]
+        title = " ".join(part.strip() for part in title_parts if part and part.strip())
+        print("titles:", title)
+        return title
 
     #TODO:these buildable fields should be configurable
-    def build_full_set(self, fields=None):
-        print("fields:", fields)
-        if not fields:
-            year = self.display_value("year")
-            brand = self.display_value("brand")
-            subset = self.display_value("subset")
-        else:            
-            year = fields["year"]
-            brand = fields["brand"]
-            subset = fields["subset"]
-
+    @property
+    def full_set(self):
+        year = self.display_value("year")
+        brand = self.display_value("brand")
+        subset = self.display_value("subset")
+        
         subset = "" if subset == "-" else subset
         print (f"build_full_set: {year} {brand} {subset}")
         return f"{year} {brand} {subset}".strip()
     
     #TODO:these buildable fields should be configurable
-    def build_full_team(self, fields=None):
-        print("fields:", fields)
-        if not fields:
-            city = self.display_value("city")
-            team = self.display_value("team")
-        else:            
-            city = fields["city"]
-            team = fields["team"]
-
+    @property
+    def full_team(self):
+        city = self.display_value("city")
+        team = self.display_value("team")
         print (f"build_full_team: {city} {team}")
         return f"{city} {team}"
     
     #TODO:Too many saves
     def build_sku(self):
-        full_set = self.build_full_set()
+        full_set = self.full_set
         sku = f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
         return sku
-
-    def get_search_strings(self):
-        return self.display_value("title_to_be")
     
     #TODO: This has grown enough now to condense
     def export_to_csv_string(self, field_map):
@@ -702,7 +799,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         #if self.condition
         print("condition:", self.condition)
-        condition_token = Condition.objects.get(raw_value=self.condition)
+        condition = self.condition or "NM"#blank condition = NM
+        condition_token = Condition.objects.get(raw_value=condition)
         condition_descriptor = [
             {
                 "name": 40001,
@@ -720,8 +818,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         }
 
         
-        return filled_template
-    
+        return filled_template   
 
 
     def check_inventory_item_exists(self, sku, token):
@@ -762,7 +859,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def retokenize(self):
         applied_settings = Settings.get_default()
-        print(self)
+        #print(self)
         listing_set = self.listings.all()
         for listing in listing_set:
             #title = listing.title
@@ -777,37 +874,64 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 class ProductListing(models.Model):
 
     item_id = models.CharField(max_length=100, blank=True)
-    listing_date = models.DateTimeField(blank=False)
-    img_url = models.CharField(max_length=250, blank=False)
+    listing_date = models.DateTimeField(blank=False, null=True)
+    sold_date = models.DateTimeField(blank=False, null=True)
+    img_url = models.CharField(max_length=250, null=True, blank=True)
     thumb_url = models.CharField(max_length=250, blank=False)    #title is declared below
     ebay_price = models.FloatField(default=0.0)
+    format = models.CharField(max_length=100, blank=True)
+    qty = models.IntegerField(default=1)
 
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, default=1, related_name="listings")    
-    csr_as_filtered = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="filtered_listings")    
+    csr_as_filtered = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="filtered_listings")
+    csr_as_sold = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="sold_listings")
+    csr_as_open_listing = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="open_listings")
+    csr_as_refined = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="refined_listings")
+    csr_as_sold_refined = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="sold_refined_listings")
     
+    @property
+    def display_date(self):
+        return self.sold_date.isoformat() if self.sold_date else self.listing_date.isoformat()
 
     @classmethod
     def from_search_results(cls, item, parent_csr, tokenize=True):
         listing = cls()
         listing.item_id = item.get("itemId", "N/A")
-        listing.listing_date = item.get("itemCreationDate")
-        listing.img_url = item.get("itemWebUrl", "No thumbnail")
-        listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", "No thumbnail")
-        listing.ebay_price = item.get("price", [{}]).get("value", "-1")
+        listing.listing_date = item.get("itemCreationDate", None)
+        sold_date = item.get("sold_date", None)
+        if sold_date:
+            listing.sold_date = datetime.strptime(sold_date, "%b %d, %Y").strftime("%Y-%m-%d %H:%M:%S")
+        
+        img_url = item.get("itemWebUrl", "No thumbnail")
+        if not img_url:
+            listing.img_url=""
+        elif img_url[:4] == "http":
+            listing.img_url = img_url
+        else:
+            listing.img_url = "http:"+img_url
+
+        listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", listing.img_url)
+        price = item.get("price", [{}])
+        if isinstance(price, str):
+            listing.ebay_price = price.replace('$', '').replace(',', '')
+        else:
+            listing.ebay_price = price.get("value","0")
+        listing.format = item.get("format", "N/A")
+        listing.qty = item.get("qty", "1")
         listing.search_result = parent_csr
+        listing.csr_as_open_listing = parent_csr
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
-        
+        listing.save()        
         #TODO:ultimately this will need to be updated to handle multiple settings objects
         if tokenize:
             listing.title.tokenize(Settings.get_default())
 
         return listing
 
-            
-  
+
 class ListingTitle(models.Model):
-    title = models.CharField(max_length=100, blank=True)
+    title = models.CharField(max_length=100, blank=True, null=True)
     tokens = models.JSONField(default=dict, blank=True)
     
     parent_listing = models.OneToOneField(ProductListing, on_delete=models.CASCADE, default=1, related_name="title")  
@@ -854,21 +978,6 @@ class ListingTitle(models.Model):
         self.season_tokens = []
         self.unknown_tokens = []
 
-    def has_words_as_token(self, words):
-        #by tokenizing again here we're not requiring that the word was originally tokenized, just that it could have been if order was different
-        #TODO: obviously this only works for parallels right now
-        matches = Parallel.match_extract(self.title, {}, "parallel", Settings.get_default(), return_first_match=False)
-        print("###matches:", matches[1])
-
-        words_lower = set(word.lower() for word in words if isinstance(word, str))
-        tokens_lower = set(
-            token.primary_token.raw_value.lower()
-            for token_list in matches[1].values()
-            for token in token_list
-        )
-
-        return all(word in tokens_lower for word in words_lower)
-    
     #TODO: move this somewhere else
     def normalize_word(self, word):
     # Strip leading "#" if it's a card number (e.g. "#23" → "23")
@@ -888,12 +997,12 @@ class ListingTitle(models.Model):
         self.brand_tokens.set(new_tokens)
         #print("New tokens: ", new_tokens)
         #print("old tokens: ", tokens)
-        print("Remaining Title: ", temp_title)
+        #print("Remaining Title: ", temp_title)
         temp_title, tokens, new_tokens = Parallel.match_extract(temp_title, tokens, "parallel", applied_settings)
         self.parallel_tokens.set(new_tokens)
-        print("New tokens: ", new_tokens)
-        print("old tokens: ", tokens)
-        print("Remaining Title: ", temp_title)
+        #print("New tokens: ", new_tokens)
+        #print("old tokens: ", tokens)
+        #print("Remaining Title: ", temp_title)
         temp_title, tokens, new_tokens = KnownName.match_extract(temp_title, tokens, "names", applied_settings)
         self.known_name_tokens.set(new_tokens)
         #print("New tokens: ", new_tokens)
@@ -955,5 +1064,5 @@ class ListingTitle(models.Model):
         #print ("end tokenize: ", self.season_tokens)
 
     def __str__(self):
-        return self.title
+        return self.title or ""
 

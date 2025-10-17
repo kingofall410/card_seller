@@ -1,76 +1,98 @@
-{% load custom_tags %}
-{% get_collections as collections %}
+import os
+import shutil
+import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from django.core.management.base import BaseCommand
+from django.conf import settings
+from core.views import image_views  # adjust if perform_upload is elsewhere
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload an Image</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-        }
-        input[type="file"] {
-            margin-bottom: 10px;
-        }
-        .file-name {
-            font-weight: bold;
-            margin-top: 5px;
-            color: #555;
-        }
-        button {
-            padding: 8px 16px;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    {% include "header.html" %}
-    <h2>📷 Upload an Image</h2>
+WATCHED_DIR = os.path.join(settings.WATCHED_ROOT, 'SaveFile')
+DEST_DIR = os.path.join(settings.MEDIA_ROOT, 'uploads')
 
-    <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
+def get_all_file_paths():
+    return [
+        os.path.join(WATCHED_DIR, f)
+        for f in os.listdir(WATCHED_DIR)
+        if os.path.isfile(os.path.join(WATCHED_DIR, f))
+    ]
 
-    <!-- 📁 Collection Selector -->
-    <label for="collection-select">Choose a Collection:</label>
-    <select name="collection_id" id="collection-select">
+def transfer_files_to_media(file_paths):
+    os.makedirs(DEST_DIR, exist_ok=True)
+    transferred = []
+    for src_path in file_paths:
+        filename = os.path.basename(src_path)
+        dest_path = os.path.join(DEST_DIR, filename)
+        try:
+            shutil.copy2(src_path, dest_path)
+            transferred.append(dest_path)
+        except Exception as e:
+            print(f"Error copying {filename}: {e}")
+    return transferred
 
-        <option value="__Add__" {% if collection_id == "__Add__" %}selected{% endif %}>
-            New Collection...
-        </option>
-        {% for collection in collections %}
-        <option value="{{ collection.id }}" {% if collection.id == collection_id %}selected{% endif %}>
-            Collection #{{ collection.id }}
-        </option>
-        {% endfor %}
-    </select>
+def get_file_objects(file_paths):
+    file_objects = []
+    for path in file_paths:
+        try:
+            file_objects.append(open(path, 'rb'))
+        except Exception as e:
+            print(f"Error opening {path}: {e}")
+    return file_objects
 
-    <br><br>
+class EvenFileCountHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            return
 
-    <!-- 📷 Image Upload -->
-    <input type="file" name="images" id="image-input" accept="image/*" multiple>
-    <div class="file-name" id="file-name-display"></div>
+        file_paths = get_all_file_paths()
+        file_count = len(file_paths)
 
-    <br>
-    <button type="submit">Submit</button>
-    </form>
+        if file_count % 2 == 0:
+            print(f"Even file count ({file_count}) detected. Transferring and uploading.")
+            transferred_paths = transfer_files_to_media(file_paths)
+            file_objects = get_file_objects(transferred_paths)
+            try:
+                image_views.perform_upload(file_objects)
+                print(f"Uploaded {len(file_objects)} files: {[os.path.basename(f.name) for f in file_objects]}")
+            except Exception as e:
+                print(f"Error uploading files: {e}")
+            finally:
+                for f in file_objects:
+                    f.close()
 
-    <script>
-    const input = document.getElementById('image-input');
-    const nameDisplay = document.getElementById('file-name-display');
+class Command(BaseCommand):
+    help = 'Monitor SaveFile folder, transfer to MEDIA_ROOT, and upload when file count is even'
 
-    input.addEventListener('change', () => {
-        const files = input.files;
-        if (files.length > 0) {
-            const names = Array.from(files).map(f => f.name).join(', ');
-            nameDisplay.textContent = `Selected ${files.length} image(s): ${names}`;
-        } else {
-            nameDisplay.textContent = '';
-        }
-    });
-    </script>
+    def handle(self, *args, **options):
+        os.makedirs(WATCHED_DIR, exist_ok=True)
+        os.makedirs(DEST_DIR, exist_ok=True)
+        self.stdout.write(self.style.SUCCESS(f"Watching folder: {WATCHED_DIR}"))
 
+        # Initial scan at startup
+        initial_paths = get_all_file_paths()
+        if len(initial_paths) % 2 == 0 and initial_paths:
+            print(f"Startup: Even file count ({len(initial_paths)}). Transferring and uploading.")
+            transferred_paths = transfer_files_to_media(initial_paths)
+            file_objects = get_file_objects(transferred_paths)
+            try:
+                image_views.perform_upload(file_objects)
+                print(f"Uploaded {len(file_objects)} files.")
+            except Exception as e:
+                print(f"Error during startup upload: {e}")
+            finally:
+                for f in file_objects:
+                    f.close()
 
-</body>
-</html>
+        # Start watchdog observer
+        event_handler = EvenFileCountHandler()
+        observer = Observer()
+        observer.schedule(event_handler, WATCHED_DIR, recursive=False)
+        observer.start()
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+            self.stdout.write(self.style.WARNING("Stopped watching."))
+        observer.join()

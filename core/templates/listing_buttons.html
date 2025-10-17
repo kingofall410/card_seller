@@ -1,0 +1,101 @@
+<div style="margin-top: 20px; display: flex; gap: 10px;">
+    <button id="listing-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    🧾 List
+    </button>
+    <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #8f2eccff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    🚀 Export
+    </button>
+    <button id="stage-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #966e0bff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    🤴 Stage
+    </button>
+    <button id="lock-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #000000; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    🔒 Lock
+    </button>
+    <button id="hold-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #f8a500ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ✋ Hold
+    </button>
+    <button id="hold-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #f8a500ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ✋→ Hold & Next
+    </button>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        
+        const listingBtn = document.getElementById("listing-btn-{{ card_id }}");
+        const exportBtn = document.getElementById("export-btn-{{ card_id }}");
+        const stageBtn = document.getElementById("stage-btn-{{ card_id }}");
+        const lockBtn = document.getElementById("lock-btn-{{ card_id }}");
+        const holdBtn = document.getElementById("hold-btn-{{ card_id }}");
+        const holdNextBtn = document.getElementById("hold-next-btn-{{ card_id }}");
+        const searchResultId = "{{ search_result.id }}"
+        const cardId = "{{ card_id }}";
+
+        
+        listingBtn.addEventListener('click', () => {
+            console.log(` Listing triggered for ${listingBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/list_card/${searchResultId}`)
+                .then(res => res.json())
+                
+        });
+
+        exportBtn.addEventListener('click', () => {
+            console.log(` Export triggered for ${listingBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/export/${searchResultId}/`)
+                .then(res => res.json())
+                
+        });
+
+        stageBtn.addEventListener('click', () => {
+            console.log(` Stage triggered for ${listingBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/list_card/${searchResultId}?publish=False`)
+                .then(res => res.json())
+                
+        });
+
+        lockBtn.addEventListener('click', () => {
+            console.log(` Lock triggered for ${listingBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/list_card/${searchResultId}/`)
+                .then(res => res.json())
+                
+        });
+
+        holdBtn.addEventListener('click', () => {
+            console.log(` Hold triggered for ${holdBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/hold_card/${searchResultId}/`)
+                .then(res => res.json())
+                
+        });
+
+        holdNextBtn.addEventListener('click', () => {
+            console.log(` Hold triggered for ${holdBtn.id}`);
+            console.log(searchResultId);
+            allFields = collectAllFields(cardId);
+            
+            $.ajax({
+                url: `/hold_card/${searchResultId}/`,
+                method: "POST",
+                data: {
+                    ...allFields
+                },
+                success: response => {
+                    {% if page_obj.hasNext %}
+                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}")
+                    {% else %}
+                        submitCardForm(null, null, "")
+                    {% endif %}
+                },
+                error: xhr => {
+                    console.error("Save error:", xhr.responseText);
+                    alert("Error saving changes.");
+                }
+            }); 
+                
+        });
+    });
+</script>

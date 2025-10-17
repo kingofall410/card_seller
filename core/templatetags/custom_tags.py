@@ -1,4 +1,5 @@
 from django import template
+import json
 from core.models.CardSearchResult import CardSearchResult, ResultStatus
 from core.models.Card import Collection
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
@@ -9,7 +10,7 @@ register = template.Library()
 @register.filter
 def get_attribute(obj, attr):
     retval = getattr(obj, attr, None)
-    return retval
+    return retval or ""
 
 @register.filter
 def crop_display_img(obj):
@@ -173,4 +174,16 @@ def get_all_options(field_key, csrId=None, collection_id=None):
             print([ResultStatus.get_icon(status)["icon"] for status in ResultStatus])
             return [ResultStatus.get_icon(status)["icon"] for status in ResultStatus]
 
-        
+@register.filter
+def spreadsheet_rows_from_search_result(cards, field_names):
+    rows = []
+    for card in cards:
+        row = {}
+        for field in field_names:
+            display_attr = f'display_{field}'
+            value = get_attribute(card.active_search_results(), display_attr)
+            row[field] = value if value is not None else ''
+        rows.append(row)
+    return rows
+
+

@@ -5,30 +5,19 @@ import numpy as np
 import cv2
 from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult, ResultStatus
+from django.conf import settings as app_settings
 
-'''think about next steps: many require more ebay api work
-0.test expanding search results
-1. locking specific fields to improve search results
-    a. by setting attribute filters --> don't seem to work
-    b. by filtering based on title tokens
-2. text search
-3. pricing
-    a. ebay listing prices --> pulled regularly and stored for analytics
-    b market movers scrape, 120pt
-long term: market movers, 
-4. listing
-5. Long term selling analytics
-6. google trends'''
 class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
     parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
+    is_default = models.BooleanField(default=False)
     
     notes = models.TextField(blank=True)
     
     @classmethod
     def get_default(cls):
-        return Collection.objects.first()
+        return Collection.objects.get(name="Default")
 
     def get_default_exports(self):
         return (card.active_search_results() for card in self.cards.all())
@@ -59,6 +48,7 @@ class Card(models.Model):
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
     notes = models.TextField(blank=True)
+    listing_details = models.TextField(blank=True)
         
     def next_card(self):
         return self.collection.nxt(self.id)
@@ -86,12 +76,12 @@ class Card(models.Model):
         
     def get_crop_params(self, card_id=None):
         return self.active_search_results().get_crop_params(card_id)
-    
-    def get_search_strings(self):
-        return self.active_search_results().get_search_strings()
 
     def active_search_results(self):
-        return self.search_results.last()
+        if self.pk:
+            return self.search_results.last()
+        else:
+            return None
 
     @property
     def search_count(self):
@@ -131,6 +121,7 @@ class Card(models.Model):
 
     @classmethod
     def from_filename(cls, collection, filepath, crop=True, match_back=True):
+        print("from filename")
         """
         Create and save a Card instance from a file path.
         """
@@ -141,10 +132,19 @@ class Card(models.Model):
         #clean all this up, throw out the paths and just keep files
         #create card object and save front/back images
         card = cls()
+        print("1")
         card.collection = collection
+        print("2")
+
+        #TODO: careful taking this out now seems to
+        #rotated = card.force_rotate(filepath)
         card.save()
+        print("3")
+        #success, rotated = cv2.imencode('.jpg', rotated)
+        print("4")
 
         card.uploaded_image = CroppedImage.create(save_to_filepath=filepath)
+        print("5")
         back_filepath = None
         if match_back:
             back_filepath = card.find_back_by_alpha(filepath)
@@ -155,29 +155,38 @@ class Card(models.Model):
                 card.reverse_image = CroppedImage.create(save_to_filepath=os.path.join("cropped_cards/", back_filepath))
                 match_back_success = True
                 card.reverse_id = str(card.id)+"R"
-                
+        print("6")        
         # Handle cropping if requested
         if crop:
-
-            cropped, portrait, crop_params = card.crop_and_align_card(filepath)            
+            print("7")
+            cropped, portrait, crop_params = card.crop_and_align_card3(filepath) 
+            
+            print("8")           
             if cropped and portrait and crop_params:
+                
+                print("9")
                 # Save cropped image and path
                 base, _ = os.path.splitext(os.path.basename(filepath))
+                print("10")
                 cropped_filename = f"{base}_cropped.jpg"    
+                print("11")
                 print(cropped_filename)
+                print("12")
                 card.cropped_image = CroppedImage.create(save_to_filepath=cropped_filename, content=cropped, crop_params=crop_params)
+                print("13")
 
                 # Save portrait image and path
                 portrait_filename = f"{base}_portrait.jpg"    
                 card.portrait_image = CroppedImage.create(save_to_filepath=portrait_filename, content=portrait)
-                
+                print("13b")
                 card.save()
-                
+                print("13c")
                 if match_back and card.reverse_image:   
-                    
+                    print("14")
                     # Crop and save reverse 
-                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card(card.reverse_image.img.path)
+                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card3(card.reverse_image.img.path)
                     if cropped_back and portrait_back and crop_params_back:
+                        print("15")
                         base, _ = os.path.splitext(os.path.basename(card.reverse_image.img.path))
                         cropped_back_filename = f"{base}_cropped.jpg"    
                         portrait_back_filename = f"{base}_portrait.jpg"
@@ -199,6 +208,79 @@ class Card(models.Model):
 
         return card, match_back_success
     
+    def remove_background_centered(self, image, filename):
+
+        output_path = os.path.join(app_settings.MEDIA_ROOT, "debug")
+        os.makedirs(output_path, exist_ok=True)
+
+        def save_debug(img, label):
+            base = os.path.splitext(os.path.basename(filename))[0]
+            path = os.path.join(output_path, f"{base}_{label}.png")
+            cv2.imwrite(path, img)
+
+        h, w = image.shape[:2]
+        center = (w // 2, h // 2)
+
+        # 🧠 Sample background from a ring around the center
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.circle(mask, center, min(h, w) // 2 - 10, 255, thickness=-1)
+        cv2.circle(mask, center, min(h, w) // 3, 0, thickness=-1)
+        ring_pixels = image[mask == 255]
+        bg_color_rgb = np.median(ring_pixels, axis=0).astype(np.uint8)
+        save_debug(np.full((50, 50, 3), bg_color_rgb[::-1], dtype=np.uint8), "1_debug_bg_swatch")
+
+        # 🎨 Convert to HSV
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        bg_color_hsv = cv2.cvtColor(np.uint8([[bg_color_rgb]]), cv2.COLOR_RGB2HSV)[0][0]
+
+        # 🎯 HSV bounds
+        hue_range = 10
+        sat_range = min(255, bg_color_hsv[1] // 2 + 40)
+        val_range = min(255, bg_color_hsv[2] // 2 + 40)
+        lower = np.maximum(bg_color_hsv - [hue_range, sat_range, val_range], [0, 0, 0]).astype(np.uint8)
+        upper = np.minimum(bg_color_hsv + [hue_range, sat_range, val_range], [179, 255, 255]).astype(np.uint8)
+
+        # 🖼️ Background mask
+        bg_mask = cv2.inRange(hsv, lower, upper)
+        save_debug(cv2.cvtColor(bg_mask, cv2.COLOR_GRAY2BGR), "2_debug_bg_mask")
+
+        # 🧼 Foreground mask
+        fg_mask = cv2.bitwise_not(bg_mask)
+        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        save_debug(cv2.cvtColor(fg_mask, cv2.COLOR_GRAY2BGR), "3_debug_fg_mask_cleaned")
+
+        # 🧱 Largest central region
+        contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        best_contour = None
+        best_distance = float('inf')
+        for cnt in contours:
+            M = cv2.moments(cnt)
+            if M["m00"] == 0: continue
+            cx = int(M["m10"] / M["m00"])
+            cy = int(M["m01"] / M["m00"])
+            dist = np.hypot(cx - center[0], cy - center[1])
+            if dist < best_distance:
+                best_distance = dist
+                best_contour = cnt
+
+        card_mask = np.zeros_like(fg_mask)
+        if best_contour is not None:
+            cv2.drawContours(card_mask, [best_contour], -1, 255, -1)
+        else:
+            print("⚠️ No valid contour found near center")
+
+        save_debug(cv2.cvtColor(card_mask, cv2.COLOR_GRAY2BGR), "4_debug_card_mask")
+
+        # 🧪 Overlay
+        overlay = image.copy()
+        overlay[card_mask > 0] = [255, 0, 0]
+        save_debug(cv2.addWeighted(image, 0.7, overlay, 0.3, 0), "5_debug_overlay")
+
+        # 🧩 Final masked card
+        masked_card = cv2.bitwise_and(image, image, mask=card_mask)
+        save_debug(masked_card, "6_debug_masked_card")
+
+        return masked_card
     def __lt__(self, other):
         return self.id < other.id
 
@@ -285,12 +367,23 @@ class Card(models.Model):
         cv2.drawContours(debug_contours, [largest], -1, (255, 0, 0), 2)         # blue for largest
 
         return cleaned, largest
+    
+    def save_debug_image(self, image, debug_label, output_path, original_filename):
+        base_name = os.path.splitext(os.path.basename(original_filename))[0]
+        filename = f"{base_name}_{debug_label}.png"
+        path = os.path.join(output_path, filename)
+        cv2.imwrite(path, image)
 
-    def remove_background(self, image, bg_color_rgb):
+
+    
+    def remove_background(self, image, bg_color_rgb, filename):
         """
         Removes background using HSV masking, reflection suppression,
         and largest region isolation. Saves debug images at every step.
         """
+        output_path = os.path.join(app_settings.MEDIA_ROOT, "debug")
+        os.makedirs(output_path, exist_ok=True)
+
         # 🔄 Convert to HSV
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(hsv)
@@ -304,7 +397,6 @@ class Card(models.Model):
         sat_range = min(255, bg_color_hsv[1] // 2 + 40)
         val_range = min(255, bg_color_hsv[2] // 2 + 40)
 
-
         lower_bound = np.maximum(bg_color_hsv - [hue_range, sat_range, val_range], [0, 0, 0]).astype(np.uint8)
         upper_bound = np.minimum(bg_color_hsv + [hue_range, sat_range, val_range], [179, 255, 255]).astype(np.uint8)
 
@@ -312,29 +404,29 @@ class Card(models.Model):
 
         # 🖼️ Background mask
         bg_mask = cv2.inRange(hsv, lower_bound, upper_bound)
-        #save_debug_image(cv2.cvtColor(bg_mask, cv2.COLOR_GRAY2BGR), "2_debug_bg_mask", output_path)
+        self.save_debug_image(cv2.cvtColor(bg_mask, cv2.COLOR_GRAY2BGR), "2_debug_bg_mask", output_path, filename)
 
         # ⚡ Reflection mask
-        #reflection_mask = self.highlight_reflections(hsv, 100)
-        #save_debug_image(cv2.cvtColor(reflection_mask, cv2.COLOR_GRAY2BGR), "3_debug_reflection_mask", output_path)
+        reflection_mask = self.highlight_reflections(hsv, 100)
+        self.save_debug_image(cv2.cvtColor(reflection_mask, cv2.COLOR_GRAY2BGR), "3_debug_reflection_mask", output_path, filename)
 
         # 🧃 Combined background mask
-        #combined_mask = cv2.bitwise_or(bg_mask, reflection_mask)
-        #save_debug_image(cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2BGR), "4_debug_combined_mask_raw", output_path)
+        combined_mask = cv2.bitwise_or(bg_mask, reflection_mask)
+        self.save_debug_image(cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2BGR), "4_debug_combined_mask_raw", output_path, filename)
 
-        #combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-        #save_debug_image(cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2BGR), "5_debug_combined_mask_closed", output_path)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        self.save_debug_image(cv2.cvtColor(combined_mask, cv2.COLOR_GRAY2BGR), "5_debug_combined_mask_closed", output_path, filename)
 
         # 🧼 Foreground extraction
         foreground_mask = cv2.bitwise_not(bg_mask)
-        #save_debug_image(cv2.cvtColor(foreground_mask, cv2.COLOR_GRAY2BGR), "6_debug_foreground_mask_raw", output_path)
+        self.save_debug_image(cv2.cvtColor(foreground_mask, cv2.COLOR_GRAY2BGR), "6_debug_foreground_mask_raw", output_path, filename)
 
         cleaned_foreground = cv2.morphologyEx(foreground_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-        #save_debug_image(cv2.cvtColor(cleaned_foreground, cv2.COLOR_GRAY2BGR), "7_debug_foreground_cleaned", output_path)
+        self.save_debug_image(cv2.cvtColor(cleaned_foreground, cv2.COLOR_GRAY2BGR), "7_debug_foreground_cleaned", output_path, filename)
 
         # 🧱 Largest region extraction
         largest_clean_region, largest_contour = self.keep_largest_region(cleaned_foreground)
-        #save_debug_image(cv2.cvtColor(largest_clean_region, cv2.COLOR_GRAY2BGR), "8_debug_largest_clean_region", output_path)
+        self.save_debug_image(cv2.cvtColor(largest_clean_region, cv2.COLOR_GRAY2BGR), "8_debug_largest_clean_region", output_path, filename)
 
         # 🔲 Final mask from contour
         card_mask = np.zeros_like(foreground_mask)
@@ -345,20 +437,193 @@ class Card(models.Model):
 
         coverage = cv2.countNonZero(card_mask)
         print(f"🎯 Final card mask coverage: {coverage} / {card_mask.size} ({coverage / card_mask.size:.2%})")
-        #save_debug_image(cv2.cvtColor(card_mask, cv2.COLOR_GRAY2BGR), "9_debug_card_mask_final", output_path)
+        self.save_debug_image(cv2.cvtColor(card_mask, cv2.COLOR_GRAY2BGR), "9_debug_card_mask_final", output_path, filename)
 
         # 🧪 Overlay visualization
         overlay = image.copy()
         overlay[card_mask > 0] = [255, 0, 0]  # blue highlight
-        #save_debug_image(cv2.addWeighted(image, 0.7, overlay, 0.3, 0), "10_debug_card_mask_overlay", output_path)
+        self.save_debug_image(cv2.addWeighted(image, 0.7, overlay, 0.3, 0), "10_debug_card_mask_overlay", output_path, filename)
 
         # 🧩 Final isolated card area
         masked_card = cv2.bitwise_and(image, image, mask=card_mask)
-        #save_debug_image(masked_card, "11_debug_masked_card", output_path)
+        self.save_debug_image(masked_card, "11_debug_masked_card", output_path, filename)
 
         return masked_card
 
-    def crop_and_align_card(self, filepath, buffer=15, max_rotation=5, create_portrait=True):
+    #TODO added for forced rotation, should prob be removed and merged into mainlinerotation code
+    def force_rotate(self, filepath, angle=0):
+        #read image into mem
+        img = cv2.imread(filepath)
+        if img is None:
+            print("⚠️ Failed to read image.")
+            return None, None, None    
+
+        (h, w) = img.shape[:2]
+        center = (w // 2, h // 2)
+
+        # Get rotation matrix
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+        # Compute new bounding dimensions
+        cos = abs(M[0, 0])
+        sin = abs(M[0, 1])
+        new_w = int((h * sin) + (w * cos))
+        new_h = int((h * cos) + (w * sin))
+
+        # Adjust rotation matrix to account for translation
+        M[0, 2] += (new_w / 2) - center[0]
+        M[1, 2] += (new_h / 2) - center[1]
+
+        # Perform rotation with expanded bounds
+        rotated = cv2.warpAffine(img, M, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        output_path = os.path.join(app_settings.MEDIA_ROOT, "debug")
+        os.makedirs(output_path, exist_ok=True)
+
+        base_name = os.path.splitext(os.path.basename(filepath))[0]
+        debug_filename = f"{base_name}_rotated_{angle}.png"
+        debug_path = os.path.join(output_path, debug_filename)
+        cv2.imwrite(debug_path, rotated)
+
+        return rotated
+
+    def crop_and_align_card3(self, filepath, buffer=15, max_rotation=5):
+
+        print("Processing image for cropping and alignment:", filepath)
+
+        def save_debug(img, label):
+            base = os.path.splitext(os.path.basename(filepath))[0]
+            debug_dir = os.path.join(app_settings.MEDIA_ROOT, "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+            path = os.path.join(debug_dir, f"{base}_{label}.png")
+            cv2.imwrite(path, img)
+
+        img = cv2.imread(filepath)
+        if img is None:
+            print("⚠️ Failed to read image.")
+            return None, None, None
+
+        h, w = img.shape[:2]
+        center = (w // 2, h // 2)
+
+        # 🌗 Radial brightness correction
+        def correct_radial_brightness(image, strength=0.4):
+            h, w = image.shape[:2]
+            center = (w // 2, h // 2)
+            Y, X = np.ogrid[:h, :w]
+            dist = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+            max_dist = np.max(dist)
+
+            # Inverted radial mask: center = 0, corners = 1
+            radial_mask = dist / max_dist
+            radial_mask = cv2.GaussianBlur(radial_mask, (0, 0), sigmaX=0.5 * max_dist)
+
+            # Scale to desired strength and apply as a boost
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            h_ch, s_ch, v_ch = cv2.split(hsv)
+            v_boost = v_ch.astype(np.float32) + (radial_mask * 255 * strength)
+            v_boost = np.clip(v_boost, 0, 255).astype(np.uint8)
+
+            corrected_hsv = cv2.merge([h_ch, s_ch, v_boost])
+            corrected_bgr = cv2.cvtColor(corrected_hsv, cv2.COLOR_HSV2BGR)
+            return corrected_bgr
+
+        corrected = correct_radial_brightness(img)
+        save_debug(corrected, "1_radial_corrected")
+
+        # 🧊 Grayscale + blur
+        gray = cv2.cvtColor(corrected, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        save_debug(blurred, "2_blurred_gray")
+
+        # 🎯 Gradient edge detection
+        grad_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
+        magnitude = cv2.magnitude(grad_x, grad_y)
+        edge_mask = cv2.convertScaleAbs(magnitude)
+        _, edge_mask = cv2.threshold(edge_mask, 40, 255, cv2.THRESH_BINARY)
+        save_debug(edge_mask, "3_raw_edges")
+
+        # 🔧 Morphological cleanup
+        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
+        edge_mask = cv2.dilate(edge_mask, np.ones((5, 5), np.uint8), iterations=1)
+        save_debug(edge_mask, "4_cleaned_edges")
+
+        # 🧱 Contour selection
+        contours, _ = cv2.findContours(edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        selected = None
+        best_score = -1
+        for cnt in contours:
+            rect = cv2.minAreaRect(cnt)
+            (rw, rh) = rect[1]
+            area = rw * rh
+            aspect = max(rw, rh) / min(rw, rh) if min(rw, rh) else 0
+            if 0.5 < aspect < 2.2 and area > 0.6 * h * w:
+                M = cv2.moments(cnt)
+                if M["m00"] == 0: continue
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                dist = np.hypot(cx - center[0], cy - center[1])
+                score = area - dist * 10
+                if score > best_score:
+                    best_score = score
+                    selected = cnt
+
+        if selected is None:
+            print("⚠️ No valid contour found — fallback to full image.")
+            selected = np.array([
+                [[0, 0]], [[w - 1, 0]],
+                [[w - 1, h - 1]], [[0, h - 1]]
+            ])
+
+        rect = cv2.minAreaRect(selected)
+        box = cv2.boxPoints(rect).astype(np.intp)
+        debug_box = img.copy()
+        cv2.drawContours(debug_box, [box], -1, (0, 255, 0), 2)
+        save_debug(debug_box, "5_selected_box")
+
+        angle = rect[2]
+        if angle > 45: angle -= 90
+        skew_angle = angle if abs(angle) < max_rotation else 0
+        print("skew", skew_angle, ": ", angle)
+
+        # 🌀 Rotate and crop
+        M = cv2.getRotationMatrix2D(rect[0], skew_angle, 1.0)
+        rotated = cv2.warpAffine(img, M, (w, h))
+        save_debug(rotated, "6_rotated")
+
+        box_rotated = cv2.transform(np.array([box]), M)[0]
+        x1, y1 = box_rotated.min(axis=0)
+        x2, y2 = box_rotated.max(axis=0)
+        x1 = max(int(x1) - buffer, 0)
+        y1 = max(int(y1) - buffer, 0)
+        x2 = min(int(x2) + buffer, w)
+        y2 = min(int(y2) + buffer, h)
+        cropped = rotated[y1:y2, x1:x2]
+        save_debug(cropped, "7_final_crop")
+
+        # 🔄 Normalize to portrait
+        portrait_img = img.copy()
+        if cropped.shape[1] > cropped.shape[0]:
+            cropped = cv2.rotate(cropped, cv2.ROTATE_90_CLOCKWISE)
+            portrait_img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            save_debug(cropped, "8_rotated_crop")
+
+        # 🧾 Save crop params
+        crop_params = CropParams.objects.create(
+            x=x1, y=y1, width=x2 - x1, height=y2 - y1, rotate=float(skew_angle)
+        )
+        crop_params.save()
+
+        # 📦 Encode
+        success, buffer = cv2.imencode(".jpg", cropped)
+        django_file = ContentFile(buffer.tobytes())
+        success, portrait_encoded = cv2.imencode(".jpg", portrait_img)
+        portrait_file = ContentFile(portrait_encoded.tobytes())
+
+        return django_file, portrait_file, crop_params
+
+
+    def crop_and_align_card(self, filepath, buffer=15, max_rotation=5, fixed_crop=False):
         print("Processing image for cropping and alignment:", filepath)
         #read image into mem
         img = cv2.imread(filepath)
@@ -378,7 +643,7 @@ class Card(models.Model):
         #save_debug_image(reflection_mask, "reflection_mask", output_path)
 
         highlight_suppressed = cv2.bitwise_and(img, img, mask=cv2.bitwise_not(reflection_mask))
-        no_bg_image = self.remove_background(highlight_suppressed, bg_color_rgb)
+        no_bg_image = self.remove_background_centered(highlight_suppressed, filepath[-10:])
 
         # Build an overcomplicated 🎯 Gradient-based edge map
         gray = cv2.cvtColor(no_bg_image, cv2.COLOR_BGR2GRAY)
@@ -519,11 +784,127 @@ class Card(models.Model):
 
         return django_file, portrait_django_file, crop_params
     
+    def crop_and_align_card2(self, filepath, buffer=15, max_rotation=5, fixed_crop=False):
+        print("Processing image for cropping and alignment:", filepath)
+
+        img = cv2.imread(filepath)
+        if img is None:
+            print("⚠️ Failed to read image.")
+            return None, None, None
+
+        original_image_height, original_image_width = img.shape[:2]
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        threshold_v = self.compute_highlight_threshold_v(hsv)
+        reflection_mask = self.highlight_reflections(hsv, threshold_v)
+        highlight_suppressed = cv2.bitwise_and(img, img, mask=cv2.bitwise_not(reflection_mask))
+
+        # 🎯 Gradient-based edge detection
+        gray = cv2.cvtColor(highlight_suppressed, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        grad_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
+        magnitude = cv2.magnitude(grad_x, grad_y)
+        edge_mask = cv2.convertScaleAbs(magnitude)
+        _, edge_mask = cv2.threshold(edge_mask, 40, 255, cv2.THRESH_BINARY)
+        edge_mask = cv2.bitwise_and(edge_mask, cv2.bitwise_not(reflection_mask))
+        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
+        edge_mask = cv2.dilate(edge_mask, np.ones((5, 5), np.uint8), iterations=1)
+
+        contours, _ = cv2.findContours(edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        selected_contour = None
+        max_box_area = 0
+
+        for contour in contours:
+            rect = cv2.minAreaRect(contour)
+            (w, h) = rect[1]
+            box_area = w * h
+            aspect = max(w, h) / min(w, h) if min(w, h) else 0
+
+            if (0.5 < aspect < 2.2 and
+                original_image_width * original_image_height * 0.15 < box_area < original_image_width * original_image_height * 0.98 and
+                box_area > max_box_area):
+                selected_contour = contour
+                max_box_area = box_area
+
+        if selected_contour is None:
+            if contours:
+                print("⚠️ No suitable contour met criteria — falling back to largest.")
+                selected_contour = max(contours, key=cv2.contourArea)
+            else:
+                print("⚠️ No contours found — falling back to boundary.")
+                selected_contour = np.array([
+                    [[0, 0]],
+                    [[original_image_width - 1, 0]],
+                    [[original_image_width - 1, original_image_height - 1]],
+                    [[0, original_image_height - 1]]
+                ])
+
+        rect = cv2.minAreaRect(selected_contour)
+        bounding_box_points = cv2.boxPoints(rect).astype(np.intp)
+        bounding_box_rotation = rect[2]
+        if bounding_box_rotation > 45:
+            bounding_box_rotation -= 90
+        skew_angle = bounding_box_rotation if abs(bounding_box_rotation) < max_rotation else 0
+        print("skew", skew_angle, ": ", bounding_box_rotation)
+
+        skew_matrix = cv2.getRotationMatrix2D(rect[0], skew_angle, 1.0)
+        skewed_original_image = cv2.warpAffine(img, skew_matrix, (original_image_width, original_image_height))
+        skewed_bounding_box_points = cv2.transform(np.array([bounding_box_points]), skew_matrix)[0]
+
+        bb_x1, bb_y1 = skewed_bounding_box_points.min(axis=0)
+        bb_x2, bb_y2 = skewed_bounding_box_points.max(axis=0)
+        bb_x1 = max(int(bb_x1) - buffer, 0)
+        bb_y1 = max(int(bb_y1) - buffer, 0)
+        bb_x2 = min(int(bb_x2) + buffer, skewed_original_image.shape[1])
+        bb_y2 = min(int(bb_y2) + buffer, skewed_original_image.shape[0])
+        final_crop = skewed_original_image[bb_y1:bb_y2, bb_x1:bb_x2]
+
+        portrait_img = img.copy()
+        final_crop_height = portrait_img.shape[0]
+
+        if final_crop.shape[1] > final_crop.shape[0]:
+            final_crop = cv2.rotate(final_crop, cv2.ROTATE_90_CLOCKWISE)
+            portrait_img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+            def rotate_point(x, y, height):
+                return height - y - 1, x
+
+            rotated_points = np.array([rotate_point(x, y, final_crop_height) for x, y in skewed_bounding_box_points])
+            bb_x1, bb_y1 = rotated_points.min(axis=0)
+            bb_x2, bb_y2 = rotated_points.max(axis=0)
+            bb_x1 = max(int(bb_x1) - buffer, 0)
+            bb_y1 = max(int(bb_y1) - buffer, 0)
+            bb_x2 = min(int(bb_x2) + buffer, portrait_img.shape[1])
+            bb_y2 = min(int(bb_y2) + buffer, portrait_img.shape[0])
+
+        crop_params = CropParams.objects.create(
+            x=bb_x1, y=bb_y1,
+            width=bb_x2 - bb_x1,
+            height=bb_y2 - bb_y1,
+            rotate=float(skew_angle)
+        )
+        crop_params.save()
+        print("Cp:", crop_params)
+
+        success, buffer = cv2.imencode(".jpg", final_crop)
+        if not success:
+            raise ValueError("Image encoding failed.")
+        django_file = ContentFile(buffer.tobytes())
+
+        success, encoded_image = cv2.imencode('.jpg', portrait_img)
+        if not success:
+            raise ValueError("Failed to encode portrait image")
+        portrait_django_file = ContentFile(encoded_image.tobytes())
+
+        return django_file, portrait_django_file, crop_params
+
+
     def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None):
         csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr)
 
         return csr
 
+    
     def retokenize(self, csr_id):
         csr = CardSearchResult.objects.get(id=csr_id)
         return csr.retokenize()
@@ -595,4 +976,8 @@ class Card(models.Model):
         self.save()  # Save the updated crop parameters to the database
         return target_image.img.url
 
-    
+    def save(self, *args, **kwargs):
+        
+        self.listing_details = self.active_search_results().title_to_be
+        super().save(*args, **kwargs)
+
