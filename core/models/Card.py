@@ -1,10 +1,11 @@
 import os
 from django.db import models
 from core.models.Cropping import CropParams, CroppedImage
+from core.models.Status import StatusBase
 import numpy as np
 import cv2
 from django.core.files.base import ContentFile
-from core.models.CardSearchResult import CardSearchResult, ResultStatus
+from core.models.CardSearchResult import CardSearchResult
 from django.conf import settings as app_settings
 
 class Collection(models.Model):
@@ -927,12 +928,14 @@ class Card(models.Model):
             crop_params = last_csr.reverse_crop_params
             target_image = self.cropped_reverse
             portrait_image = self.portrait_reverse
+            last_csr.front_cropping_status = StatusBase.MANUAL
         else:
             crop_params = last_csr.front_crop_params
             target_image = self.cropped_image
             portrait_image = self.portrait_image
+            last_csr.back_cropping_status = StatusBase.MANUAL
 
-        last_csr.status = ResultStatus.CROPPED
+        
         last_csr.save()
 
         crop_params.x = crop_x

@@ -1,33 +1,11 @@
 from django.db import models
 import re, requests, statistics
 from core.models.Cropping import CropParams
+from core.models.Status import *
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 from services import settings_management as app_settings
 from datetime import datetime
-
-
-class ResultStatus(models.TextChoices):
-    NEW="new", "New"
-    CROPPED="cropped", "Cropped"
-    SEARCHED="searched","Searched"
-    SAVED="saved", "Saved"
-    LISTED="listed", "Listed"
-    HOLD="hold", "Hold"
-
-    @classmethod
-    def get_icon(cls, value):
-        return {
-            cls.NEW: {'color': '', 'icon': '⭐'},
-            cls.CROPPED: {'color': 'red', 'icon': '🖼️'},
-            cls.SEARCHED: {'color': 'yellow', 'icon': '🔎'},
-            cls.SAVED: {'color': 'green', 'icon': '✔'},
-            cls.LISTED: {'color': 'blue', 'icon': '💲'},
-            cls.HOLD: {'color': 'grey', 'icon': '✋'},
-
-        }.get(value, {})
-
-
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -241,7 +219,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
 
-    status = models.CharField(max_length=20, choices=ResultStatus.choices,default=ResultStatus.NEW)    
+    id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
+    refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
+    pricing_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
+    front_cropping_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
+    back_cropping_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
+    overall_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     
     #combine all this into field_definition
     readonly_fields = ["response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
@@ -299,10 +282,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             self.title_to_be = self.build_title()
 
         if not self.sold_search_string_is_manual:
-            self.sold_search_string = self.build_title(shorter=True)+" "+self.filter_terms_m
+            self.sold_search_string = str(self.build_title(shorter=True))+" "+str(self.filter_terms)
         
         if not self.text_search_string_is_manual:
-            self.text_search_string = self.build_title(shorter=True)+" "+self.filter_terms_m
+            self.text_search_string = str(self.build_title(shorter=True))+" "+str(self.filter_terms)
+
+        self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
 
         self.sport = ""
         self.league = ""
@@ -563,7 +548,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 setattr(self.parent_card, field_name, field_value)
             else:
                 print("still fucking oopsie:", field_name)
-        self.status = ResultStatus.SAVED
         print("done")
         self.save()
         print("done2")
@@ -674,7 +658,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             #print("attribs:", csr.attribute_flags)
 
             csr.aggregate_pricing_info()
-            csr.status = ResultStatus.SEARCHED
 
             if tokenize:
                 #must pass the listings here to preserve the in memory attributes

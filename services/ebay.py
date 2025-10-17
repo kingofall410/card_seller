@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 from datetime import datetime, timedelta
 from requests.exceptions import Timeout, RequestException
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 
 
 CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
@@ -247,7 +247,7 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
         }
 
         category_id = get_dominant_category_id(payload)
-           
+
         offset = (page - 1) * limit
         query_params = [
             f"limit={limit}",
@@ -418,7 +418,7 @@ from playwright.sync_api import TimeoutError
 import time
 
 def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
-    print("keywords:", keywords)
+    print("keywords:", keywords, backup_keywords)
     results = []
     limit = 50
 
@@ -427,7 +427,9 @@ def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
         page = browser.new_page()
         start_date, end_date = get_ebay_date_range(days=180)
-        kw = keywords.replace(" ", "+").replace('#', '') if keywords else ""
+        kw = quote_plus(keywords.replace('#', '')) if keywords else ""
+        bkw = quote_plus(backup_keywords.replace('#', '')) if backup_keywords else ""
+
         base_url = "http://www.ebay.com/sh/research"
         query = {
             "marketplace": "EBAY-US",
@@ -449,8 +451,8 @@ def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
             page_start = time.time()
             if row_count < 5 and page_num == 1:#need to catch the second time around hacky
                 #probably a bad query, switch to backup and start from 0
-                if backup_keywords and query["keywords"] != backup_keywords:
-                    query["keywords"] = backup_keywords
+                if bkw and query["keywords"] != bkw:
+                    query["keywords"] = bkw
                     page_num = 0
                     row_count=limit
                     continue
@@ -469,7 +471,16 @@ def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
                 page.wait_for_timeout(2000)
             except TimeoutError:
                 print(f"Timeout waiting for table on page {page_num}. Skipping.")
-                break
+                if row_count < 5 or page_num == 0:
+                    #probably a bad query, switch to backup and start from 0
+                    if bkw and query["keywords"] != bkw:
+                        query["keywords"] = bkw
+                        page_num = 0
+                        row_count=limit
+                        continue
+
+                    else:
+                        break
 
             rows = page.query_selector_all(".research-table-row")
             row_count = len(rows)

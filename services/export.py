@@ -1,5 +1,6 @@
 import csv, io
-from core.models.CardSearchResult import CardSearchResult, ResultStatus
+from core.models.CardSearchResult import CardSearchResult
+from core.models import Status
 from django.http import HttpResponse
 import zipfile
 from services import ebay
@@ -136,7 +137,7 @@ def export_to_ebay(csrs, publish=False):
             else:
                 "Error response from ebay"
                 csr.ebay_listing_id = ""
-            csr.status = ResultStatus.LISTED
+            csr.status = StatusBase.LISTED
         csr.save()
 
         return True, csr.ebay_offer_id, csr.ebay_listing_id

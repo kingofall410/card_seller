@@ -1,7 +1,8 @@
 from django import template
 import json
-from core.models.CardSearchResult import CardSearchResult, ResultStatus
+from core.models.CardSearchResult import CardSearchResult
 from core.models.Card import Collection
+from core.models.Status import StatusBase
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from django.db.models import F
 
@@ -91,7 +92,7 @@ def get_checkboxes():
 
 @register.filter
 def status_icon_meta(value):
-    return ResultStatus.get_icon(value)
+    return StatusBase.get_meta(value)
 
 @register.simple_tag
 def get_textonly():
@@ -128,7 +129,7 @@ def get_all_options(field_key, csrId=None, collection_id=None):
                 used_values = CardSearchResult.objects.filter(parent_card__collection=collection_id).values_list('parallel', flat=True)
                 return Parallel.objects.filter(raw_value__in=used_values).distinct().order_by
             elif field_key == "status":            
-                return [ResultStatus.get_icon(status)["icon"] for status in ResultStatus]  #all statuses
+                return [StatusBase.get_meta(status)["icon"] for status in StatusBase]  #all statuses
         except CardSearchResult.DoesNotExist as e:
             print("Warning no options for collection:", e)
             return []
@@ -171,8 +172,8 @@ def get_all_options(field_key, csrId=None, collection_id=None):
         elif field_key == "parallel" or field_key == CardSearchResult.stupid_map("parallel"):
             return [obj.raw_value for obj in Parallel.objects.order_by("raw_value")]
         elif field_key == "status":            
-            print([ResultStatus.get_icon(status)["icon"] for status in ResultStatus])
-            return [ResultStatus.get_icon(status)["icon"] for status in ResultStatus]
+            #print([StatusBase.get_meta(status)["icon"] for status in StatusBase])
+            return [StatusBase.get_meta(status)["icon"] for status in StatusBase]
 
 @register.filter
 def spreadsheet_rows_from_search_result(cards, field_names):

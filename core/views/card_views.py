@@ -3,7 +3,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
-from core.models.CardSearchResult import CardSearchResult, ResultStatus
+from core.models.Status import StatusBase
+from core.models.CardSearchResult import CardSearchResult
 from services.models import Settings
 from django.db import models
 from django.core.paginator import Paginator
@@ -125,7 +126,7 @@ def hold_card(request, csr_id):
     if request.method == 'POST':
         field_data = convert_and_sanitize(request.POST.dict(), csr)
         csr.update_fields(field_data)
-    csr.status = ResultStatus.HOLD
+    csr.status = StatusBase.LOCKED
     csr.save()
     return JsonResponse({"success": 'true'}, status=200)
 

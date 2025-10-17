@@ -25,7 +25,7 @@ def image_search(request, card_id):
             all_fields = data.get('required_words', {})
         
     settings = Settings.get_default()
-    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=True, scrape_sold_data=True)
+    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=False, scrape_sold_data=False)
     if search_results:
         return JsonResponse({"success": True, "error": ""})
     return JsonResponse({"error": True, "error": "No results"})

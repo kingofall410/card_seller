@@ -178,17 +178,17 @@
   min-height: 20px;           /* Ensures vertical space is reserved */
   visibility: visible;     
 }
-.card-item.status-cropped {
+.card-item.status-unexecuted {
   background-color: #fff1f0; /* soft red */
   border-color: #ffa39e
 }
 
-.card-item.status-searched {
+.card-item.status-manual {
   background-color: #fffbe6; /* soft yellow */
   border-color: #ffe58f;
 }
 
-.card-item.status-saved {
+.card-item.status-auto {
   background-color: #f6ffed; /* soft green */
   border-color: #b7eb8f;
 }
@@ -350,10 +350,10 @@ function priceCollection(collectionId) {
     {% for card in collection.cards.all %}
       {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" display_team=card.active_search_results|get_attribute:"display_team" display_city=card.active_search_results|get_attribute:"display_city" display_serial=card.active_search_results|get_attribute:"display_serial" %}
       {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
-      {% with meta=card.active_search_results.status|status_icon_meta %}
+      {% with refinement_status=card.active_search_results.refinement_status|status_icon_meta pricing_status=card.active_search_results.pricing_status|status_icon_meta id_status=card.active_search_results.id_status|status_icon_meta%}
       
       <div id="card-{{ card.id }}" class="card">    
-      <div class="card-item status-{{ card.active_search_results.status|lower }}">
+      <div class="card-item status-{{ card.active_search_results.overall_status|lower }}">
         <div class="card-checkbox">
             <input type="checkbox" onchange="updateSelection({{collection.id}})" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}"><br><br>
         </div>
@@ -419,8 +419,7 @@ function priceCollection(collectionId) {
         </div>
 
         <div class="card-actions">
-          <div class="status-icon">{{ meta.icon }}</div>
-          
+                
           <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
               <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
           </div>
@@ -438,6 +437,7 @@ function priceCollection(collectionId) {
               </ul>
           </div>
         </div>
+        <div>{{ id_status.icon }}  {{ refinement_status.icon }}{{ pricing_status.icon }}</div>
 
         {% endwith %}
         {% endwith %}
