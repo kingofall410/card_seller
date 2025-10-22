@@ -26,17 +26,11 @@
 }
 </style>
 
-{% if title %}
-  <h2>{{ title }} ({{ listings.count }})</h2>
-{% else %}
-{% endif %}
-{% if subtitle %}
-  <h3>{{ subtitle }}</h3>
-{% endif %}
-
 <div class="image-grid-wrapper">
+<h3>{{ listing_group.label }} ({{ listing_group.count }}) - {{ listing_group.search_string }}</h3>
+
   <div class="image-grid">
-    {% for listing in listings %}
+    {% for listing in listing_group.listings.all %}
       <div class="listing">
         <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
           <img src="{{ listing.thumb_url }}" alt="Listing Image" class="listing-thumb" title="{{ listing.title|default:'Listing' }}" />

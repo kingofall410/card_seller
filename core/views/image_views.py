@@ -2,11 +2,11 @@ import os
 import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
-from django.conf import settings
+from django.conf import settings as app_settings
 from django.core.files.storage import default_storage
 from django.utils.timezone import now
 from services import lookup
-from services.models import Settings
+from services.models import Settings 
 from core.models.Card import Card, Collection
 from django.views.decorators.csrf import csrf_exempt
 
@@ -24,12 +24,13 @@ def perform_upload(uploaded_files, collection=None):
             filename = uploaded_file.name
             print(f"📂 Uploaded filename: {filename}")
             relative_path = default_storage.save(timestamp_folder + filename, uploaded_file)
-            absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+            absolute_path = os.path.join(app_settings.MEDIA_ROOT, relative_path)
             print("📎 File path:", relative_path, "| Absolute:", absolute_path)
             uploaded_file_paths.append(absolute_path)
         
         # 🔍 Phase 2: Process files after all uploads complete
         skip_next = False
+        settings = Settings.get_default()
         for absolute_path in uploaded_file_paths:
             print("FP", uploaded_file_paths)
             if skip_next:
@@ -39,7 +40,7 @@ def perform_upload(uploaded_files, collection=None):
                 print("not skipping")
                 source_card, skip_next = Card.from_filename(collection, absolute_path, crop=True, match_back=True)
                 print("2")
-                lookup.single_image_lookup(source_card, {}, settings=None, scrape_sold_data=False)
+                lookup.single_image_lookup(source_card, {}, settings, scrape_sold_data=False, result_count_max=settings.id_listings)
 
 @csrf_exempt
 def upload_image(request, collection_id=None):

@@ -32,17 +32,30 @@
 {% load static %}
   <div class="container mt-4">
     <h2>Settings</h2>
-
-   
     
-    <form method="post" action="{% url 'update_settings' %}" style="margin-top: 24px;">
+    <form id="settings-form" method="post" action="{% url 'update_settings' %}" style="margin-top: 24px;">
     {% csrf_token %}
-    <label for="nr_returned_listings" style="font-weight: bold; margin-right: 12px;">
-      Number of Listings to Return:
+    <label for="id_listings" style="font-weight: bold; margin-right: 12px;">
+      Number of ID Listings to Return:
     </label>
-    <input type="number" id="nr_returned_listings" name="nr_returned_listings"
-      value="{{ settings.nr_returned_listings }}" min="1" max="200"
+    <input type="number" id="id_listings" name="id_listings"
+      value="{{ settings.id_listings }}" min="1" max="200"
       style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
+
+    <label for="refined_listings" style="font-weight: bold; margin-right: 12px;">
+      Number of Refined Listings to Return:
+    </label>
+    <input type="number" id="refined_listings" name="refined_listings"
+      value="{{ settings.refined_listings }}" min="1" max="200"
+      style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
+
+    <label for="price_listings" style="font-weight: bold; margin-right: 12px;">
+      Number of Price Listings to Return:
+    </label>
+    <input type="number" id="price_listings" name="price_listings"
+      value="{{ settings.price_listings }}" min="1" max="200"
+      style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
+
     <label for="nr_collection_page_items" style="font-weight: bold; margin-right: 12px;">
       Items per page:
     </label>
@@ -144,4 +157,22 @@ function triggerErrorHighlight(input) {
     input.classList.remove('error');
   }, 2000); // fade out after 2 seconds
 }
+document.getElementById("settings-form").addEventListener("submit", function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+
+  fetch(this.action, {
+    method: "POST",
+    body: formData,
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.status === "success") {
+
+      window.history.back();  // ⬅️ Go to the previous page
+    } else {
+      alert("Error saving settings.");
+    }
+  });
+});
 </script>

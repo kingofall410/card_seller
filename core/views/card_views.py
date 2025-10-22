@@ -38,7 +38,7 @@ def view_card(request, card_id):
     if not first_card:
         first_card = card_list[0] if card_list else None
 
-    print("post2")
+    #print("post2")
     page_number = request.GET.get('page')
         
     #at this point we know the cards in the collection and the current card
@@ -52,14 +52,30 @@ def view_card(request, card_id):
     #print("post3")
 
     card_tuples = []
+    
     #set up the tuples to exclude detailed data for non-current cards
     for i, collection_card in enumerate(card_list):
         cc_asr = collection_card.active_search_results()
+
+        print(cc_asr.id)
+        dataset_configs = []
+        for group in cc_asr.listing_groups.all():
+            dataset_configs.append({
+                "key": f"group-{group.id}",
+                "label": group.label or "Unnamed Group",
+                "color": group.color,
+                "borderWidth": group.border_width,
+                "lineStyle": group.line_style,
+                "data": group.serialize_listings()
+            })
+
+        print(dataset_configs)
+        #TODO: clean up this mess
         if i == int(page_number)-1:
             #print("prices", json.dumps(cc_asr.get_prices(sold=True)))
-            card_tuple = (collection_card, collection_card.id, cc_asr, json.dumps(cc_asr.get_prices(listed=True)), json.dumps(cc_asr.get_prices(sold_refined=True)), json.dumps(cc_asr.get_prices(sold=True)), json.dumps(cc_asr.get_prices(refined=True)))
+            card_tuple = (collection_card, collection_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
         else:
-            card_tuple = (collection_card, collection_card.id, cc_asr, [], [])
+            card_tuple = (collection_card, collection_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
             
         card_tuples.append(card_tuple)
 
@@ -71,31 +87,30 @@ def view_card(request, card_id):
     #print("fin:", page_number, "of", paginator.num_pages, card, card.active_search_results())
     
     return render(request, "card.html", {"page_obj": page_obj, "collection_id": first_card.collection.id, "settings": Settings.get_default(), "filtered":first_card.collection.cards.count()-len(card_list), "card_ids":json.dumps(card_ids)})
-        
-@csrf_exempt
-def crop_review(request, collection_id):
 
-    settings = Settings.get_default()
-    cards = []
-    if not collection_id or collection_id == 'undefined':
-        return JsonResponse({'error': 'Collection ID is required'}, status=400)
-    
+
+@csrf_exempt
+def crop_review(request, collection_id):  
+
     collection = Collection.objects.get(id=collection_id)
-    if request.method == 'POST' and request.body:
-        data = json.loads(request.body)
-        if data:
-            card_ids = data.get('card_ids', [])
-            print("Received card_ids:", card_ids)
-            cards = Card.objects.filter(id__in=card_ids).order_by('id')       
-        
-    if not cards:
-        print("no cards", collection_id)
-        cards = collection.cards.all().order_by('id')
- 
+    if request.method == "POST":
+        try:
+            card_ids = json.loads(request.POST.get('card_ids', '[]'))
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        except json.JSONDecodeError:
+            card_list = list(collection.cards.order_by('id'))
+    else:
+        card_list = list(collection.cards.order_by('id'))
+
+    if not card_list:
+        print("no cards")
+        collection = Collection.objects.get(id=collection_id)
+        card_list = collection.cards.all()
+
     page_number = request.GET.get('page', 1)
     
     #TODO: in these paginated views we need to encapsulate the non-page data better
-    card_tuples = [(card, id_, results) for card in cards for id_ in (card.id, card.reverse_id) for results in [card.active_search_results()]]
+    card_tuples = [(card, id_, results) for card in card_list for id_ in (card.id, card.reverse_id) for results in [card.active_search_results()]]
     #print(card_tuples)
     paginator = Paginator(card_tuples, len(card_tuples))
     page_obj = paginator.get_page(page_number)
@@ -166,9 +181,11 @@ def update_csr_fields(request):
     if request.method != 'POST':
         return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
     
-    data = json.loads(request.body)
-    csr_id = data["csrId"]
-    all_fields = data["allFields"]
+    if request.body:
+        data = json.loads(request.body)
+        csr_id = data["csrId"]
+        all_fields = data["allFields"]
+
     if not csr_id:
         return JsonResponse({"error": True, "message": "Missing or invalid csrId"}, status=400)
     try:
@@ -203,34 +220,34 @@ def price_only(request, csr_id):
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
     csr = CardSearchResult.objects.get(id=csr_id)
-    lookup.price_only(csr)
+    lookup.price_only(csr, Settings.get_default())
 
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
 def price_collection(request, collection_id):  
 
-    csr_ids = []
-    csrs = []
-    cards = None
-    if not collection_id or collection_id == 'undefined':
-        return JsonResponse({'error': 'Collection ID is required'}, status=400)
-    
-    if request.method == 'POST':
-        print("post", request.POST)
-        card_ids = request.POST.getlist('card_ids', '[]')
-        print(card_ids)
-        cards = Card.objects.filter(id__in=card_ids)
-        
-    if not cards:
+    collection = Collection.objects.get(id=collection_id)
+    if request.method == "POST":
+        try:
+            card_ids = json.loads(request.POST.get('card_ids', '[]'))
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        except json.JSONDecodeError:
+            card_list = list(collection.cards.order_by('id'))
+    else:
+        card_list = list(collection.cards.order_by('id'))
+
+    if not card_list:
         print("no cards")
         collection = Collection.objects.get(id=collection_id)
-        cards = collection.cards.all()
+        card_list = collection.cards.all()
  
-    for card in cards:
+    for card in card_list:
         cc_asr = card.active_search_results()
-        lookup.text_refinement(cc_asr, cc_asr.text_search_string)
-        lookup.price_only(card.active_search_results())
+        lookup.text_refinement(cc_asr)
+        lookup.price_only(cc_asr, Settings.get_default())
+        cc_asr.pricing_status = StatusBase.AUTO
+        cc_asr.save()
 
     return JsonResponse({"success": True, "error": ""})
 
@@ -252,11 +269,7 @@ def text_filter(request):
         #TODO: ultimately we'll need to separate this from update_fields to filter by something that's not a current value
         for csr in csrs:
             csr.update_fields(all_fields)
-            lookup.text_refinement(csr, csr.text_search_string, all_fields, Settings.get_default())
-
-    
-
-        print("filtered listings:", csr.id, len(csr.filtered_listings.all()))
+            lookup.text_refinement(csr, "", all_fields, Settings.get_default()) 
         csr.save()
     
     return JsonResponse({"success": True, "error": ""})

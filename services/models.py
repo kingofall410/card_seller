@@ -7,7 +7,9 @@ from urllib.parse import unquote
 
 class Settings(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1, related_name="active_settings")    
-    nr_returned_listings = models.IntegerField(default=10)
+    id_listings = models.IntegerField(default=10)
+    refined_listings = models.IntegerField(default=10)
+    price_listings = models.IntegerField(default=10)
     nr_collection_page_items = models.IntegerField(default=10)
     field_pct_threshold = models.FloatField(default=0.3)
     
@@ -71,6 +73,7 @@ class SettingsToken(models.Model):
     def create(cls, value, settings, field, primary_token=None):
         
         obj, _ = cls.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
+        obj.primary_token=obj
 
         if primary_token:
             obj.primary_token = primary_token

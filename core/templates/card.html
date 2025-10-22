@@ -140,8 +140,7 @@
       <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.previous_page_number }}")'>◀ Previous</button>
     {% endif %}
 
-    <button type="button" onclick="/manage/">⬆ Collection {{ collection_id }} ⬆</button>
-    
+    <a href="{% url 'collection' collection_id %}" class="btn">⬆ Collection {{ collection_id }} ⬆</a>    
     {% if page_obj.has_next %}
       <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}")'>Next ▶</button>
     {% endif %}
@@ -182,7 +181,7 @@
 
     <!-- Price Chart + Listing Details -->
     <div class="uicard price-block">
-      {% include "price_over_time.html" with sold_listings=card_tuple.5 id_listings=card_tuple.3 sold_refined_listings=card_tuple.4 refined_listings=card_tuple.6 title="price v time"%}
+      {% include "price_over_time2.html" with datasetConfigs=card_tuple.11 %}
       {% comment %} include "histogram.html" with all_listings=card_tuple.3 filtered_listings=card_tuple.4 settings=settings title="Listed" sold_listings=card_tuple.5 %}  {% endcomment %}
       {% include "ebay_listing_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
       {% include "listing_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2  %}
@@ -190,10 +189,9 @@
 
     <!-- Product Listings -->
     <div class="uicard listing-block">
-      {% include "product_listings.html" with listings=card_tuple.2.open_listings.all title="ID Listings" %}
-      {% include "product_listings.html" with listings=card_tuple.2.refined_listings.all title="Refined Listings" subtitle=card_tuple.2.text_search_string %}
-      {% include "product_listings.html" with listings=card_tuple.2.sold_listings.all title="Sold Listings"  subtitle=card_tuple.2.sold_search_string %}
-      {% include "product_listings.html" with listings=card_tuple.2.sold_refined_listings.all title="Sold Refined Listings" %}
+    {% for listing_group in card_tuple.2.listing_groups.all %}
+      {% include "product_listings.html" with listing_group=listing_group %}
+    {% endfor %}
     </div>
 
   </div>

@@ -184,6 +184,7 @@ def spreadsheet_rows_from_search_result(cards, field_names):
             display_attr = f'display_{field}'
             value = get_attribute(card.active_search_results(), display_attr)
             row[field] = value if value is not None else ''
+        row["thumb_url"] = card.cropped_image.url()
         rows.append(row)
     return rows
 

@@ -26,11 +26,22 @@
 <div class="spreadsheet-scroll-wrapper">
   <div id="spreadsheet"></div>
 </div>
+<div id="image-tooltip" style="
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  z-index: 1000;
+  border: 1px solid #ccc;
+  background: white;
+  padding: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+">
+  <img id="tooltip-image" src="" alt="Preview" style="max-width: 200px; max-height: 200px;">
+</div>
 
 
 {{ columns|json_script:"card_columns" }}
 {{ cards|spreadsheet_rows_from_search_result:columns|json_script:"card_rows" }}
-
 
 <script>
 let isApplyingServerUpdate = false;
@@ -103,10 +114,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
     }
-
-
-
   });
+  let tooltipTimeout;
+
+  hot.addHook('afterOnCellMouseOver', function(event, coords, TD) {
+    clearTimeout(tooltipTimeout);  // cancel any previous delay
+
+    const row = coords.row;
+    const rowData = hot.getSourceDataAtRow(row);
+    const thumbUrl = rowData.thumb_url;
+
+    if (!thumbUrl) return;
+
+    tooltipTimeout = setTimeout(() => {
+      const tooltip = document.getElementById('image-tooltip');
+      const img = document.getElementById('tooltip-image');
+      img.src = thumbUrl;
+
+      tooltip.style.left = `${event.pageX + 10}px`;
+      tooltip.style.top = `${event.pageY + 10}px`;
+      tooltip.style.max_width = '400px';
+      tooltip.style.max_height = '400px';
+      tooltip.style.width = 'auto';
+      tooltip.style.height = 'auto';      
+      tooltip.style.display = 'block';
+      tooltip.style.object_fit = 'contain';
+    }, 300);  // ⏱ delay in milliseconds
+  });
+
+  hot.addHook('afterOnCellMouseOut', function(event, coords, TD) {
+    clearTimeout(tooltipTimeout);  // cancel if mouse leaves early
+    const tooltip = document.getElementById('image-tooltip');
+    tooltip.style.display = 'none';
+  });
+
+
 });
 function quickEdit(hot, theRow, fields) {
   console.log("QE", hot, theRow);

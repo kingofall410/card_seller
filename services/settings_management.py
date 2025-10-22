@@ -76,7 +76,7 @@ def add_token(field_key, value, all_field_data, user_settings=None):
         user_settings = User.objects.first().active_settings.first()
     
     if field_key == "brands" or field_key == "brand": 
-        new_obj = Brand.create(value=value, settings=user_settings, field=field_key)
+        new_obj = Brand.create(value=value, settings=user_settings, field="brands")
 
     elif field_key == "subsets" or field_key == "subset":
         brand_obj = None
@@ -84,13 +84,13 @@ def add_token(field_key, value, all_field_data, user_settings=None):
             brand_obj = Brand.objects.get(raw_value=all_field_data["brand"], disabled_date=None)
         
         if brand_obj:
-            new_obj = Subset.create(value=value, settings=user_settings, field=field_key, brand=brand_obj)
+            new_obj = Subset.create(value=value, settings=user_settings, field="brands", brand=brand_obj)
         else:
             #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
             new_obj = Subset.objects.filter(raw_value=value).first()
 
     elif field_key == "cities" or field_key == "city":   
-        new_obj = City.create(value=value, settings=user_settings, field=field_key)
+        new_obj = City.create(value=value, settings=user_settings, field="cities")
 
     elif field_key == "teams" or field_key == "team":
 
@@ -100,7 +100,7 @@ def add_token(field_key, value, all_field_data, user_settings=None):
             #print(city_obj)
         
         if city_obj:
-            new_obj = Team.create(value=value, settings=user_settings, field=field_key, city=city_obj)
+            new_obj = Team.create(value=value, settings=user_settings, field="cities", city=city_obj)
         else:
             #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
             new_obj = Team.objects.filter(raw_value=value).first()
@@ -108,7 +108,7 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     elif field_key == "names" or field_key == "full_name":
         new_obj = KnownName.create(value=value, settings=user_settings, field="names")
     elif field_key == "attribs" or field_key == "attributes": 
-        new_obj = CardAttribute.create(value=value, settings=user_settings, field=field_key)
+        new_obj = CardAttribute.create(value=value, settings=user_settings, field="attribs")
     elif field_key == "condition":
         new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "parallel":

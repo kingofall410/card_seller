@@ -109,20 +109,20 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     name_m = models.CharField(max_length=100, blank=True)
     name_is_manual = models.BooleanField(default=False)
     
-    full_name = models.CharField(max_length=100, blank=True)
-    full_name_m = models.CharField(max_length=100, blank=True)
+    full_name = models.CharField(max_length=100, blank=True, null=True)
+    full_name_m = models.CharField(max_length=100, blank=True, null=True)
     full_name_is_manual = models.BooleanField(default=False)
     full_name_available_tokens = models.ManyToManyField(KnownName, blank=True, related_name="csr_as_available_full_name")
     full_name_selected_token = models.ForeignKey(KnownName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_full_name")
     
-    year = models.CharField(max_length=20, blank=True)
-    year_m = models.CharField(max_length=20, blank=True)
+    year = models.CharField(max_length=20, blank=True, null=True)
+    year_m = models.CharField(max_length=20, blank=True, null=True)
     year_is_manual = models.BooleanField(default=False)
     year_available_tokens = models.ManyToManyField(Season, blank=True, related_name="csr_as_available_year")
     year_selected_token = models.ForeignKey(Season, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_year")
     
-    brand = models.CharField(max_length=100, blank=True)
-    brand_m = models.CharField(max_length=100, blank=True)
+    brand = models.CharField(max_length=100, blank=True, null=True)
+    brand_m = models.CharField(max_length=100, blank=True, null=True)
     brand_is_manual = models.BooleanField(default=False)
     brand_available_tokens = models.ManyToManyField(Brand, blank=True, related_name="csr_as_available_brand")
     brand_selected_token = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_brand")
@@ -133,8 +133,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     subset_available_tokens = models.ManyToManyField(Subset, blank=True, related_name="csr_as_available_subset")
     subset_selected_token = models.ForeignKey(Subset, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_subset")
     
-    card_number = models.CharField(max_length=50, blank=True)
-    card_number_m = models.CharField(max_length=50, blank=True)
+    card_number = models.CharField(max_length=50, blank=True, null=True)
+    card_number_m = models.CharField(max_length=50, blank=True, null=True)
     card_number_is_manual = models.BooleanField(default=False)
     card_number_available_tokens = models.ManyToManyField(CardNumber, blank=True, related_name="csr_as_available_card_number")
     card_number_selected_token = models.ForeignKey(CardNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_number")
@@ -145,14 +145,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     card_name_available_tokens = models.ManyToManyField(CardName, blank=True, related_name="csr_as_available_card_name")
     card_name_selected_token = models.ForeignKey(CardName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_name")
 
-    team = models.CharField(max_length=100, blank=True)
-    team_m = models.CharField(max_length=100, blank=True)
+    team = models.CharField(max_length=100, blank=True, null=True)
+    team_m = models.CharField(max_length=100, blank=True, null=True)
     team_is_manual = models.BooleanField(default=False)
     team_available_tokens = models.ManyToManyField(Team, blank=True, related_name="csr_as_available_team")
     team_selected_token = models.ForeignKey(Team, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_team")
     
-    city = models.CharField(max_length=100, blank=True)
-    city_m = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    city_m = models.CharField(max_length=100, blank=True, null=True)
     city_is_manual = models.BooleanField(default=False)
     city_available_tokens = models.ManyToManyField(City, blank=True, related_name="csr_as_available_city")
     city_selected_token = models.ForeignKey(City, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_city")
@@ -219,6 +219,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
 
+    
+
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     pricing_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -269,6 +271,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
+    def create_listing_group(self, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+        return ListingGroup.create(self, label, search_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
+    
+    def get_listing_group(self, label):
+        return self.listing_groups.get(label=label)
+
     
     def get_crop_params(self, card_id=None):
         if card_id == self.parent_card.reverse_id:
@@ -281,11 +289,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not self.title_to_be_is_manual:
             self.title_to_be = self.build_title()
 
+        filter_terms = self.filter_terms or "" if self.filter_terms != "-" else ""
         if not self.sold_search_string_is_manual:
-            self.sold_search_string = str(self.build_title(shorter=True))+" "+str(self.filter_terms)
+            self.sold_search_string = str(self.build_title(shorter=True))+" "+filter_terms
         
         if not self.text_search_string_is_manual:
-            self.text_search_string = str(self.build_title(shorter=True))+" "+str(self.filter_terms)
+            self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms
 
         self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
 
@@ -359,9 +368,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def get_latest_reverse(self):
         return self.parent_card.cropped_reverse.path()
     
-    def aggregate_pricing_info(self):
+    '''def aggregate_pricing_info(self):
         
-        list_prices = [listing.ebay_price for listing in self.open_listings.all()]
+        list_prices = [listing.ebay_price for listing in self.id_listings.all()]
         if len(list_prices) > 0:
             self.ebay_mean_price = statistics.mean(list_prices)
             self.ebay_median_price = statistics.median(list_prices)
@@ -379,7 +388,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             self.ebay_low_sold_price = min(sold_data)
             self.ebay_high_sold_price = max(sold_data)
             
-        self.save()
+        self.save()'''
 
 
     def collapse_token_maps(self, listing_set=None):
@@ -488,28 +497,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             )
         else: return text
 
-    def get_prices(self, filtered=False, sold=False, listed=False, refined=False, sold_refined=False):
-        if filtered:
-            listing_set = self.filtered_listings.all()
-        elif sold:
-            listing_set = self.sold_listings.all()
-        elif listed:
-            listing_set = self.open_listings.all()
-        elif refined:
-            listing_set = self.refined_listings.all()
-        elif sold_refined:
-            listing_set = self.sold_refined_listings.all()
-        return [
-            [
-                listing.ebay_price,
-                self.clean_text(listing.title.title),
-                listing.thumb_url,
-                listing.display_date if listing.display_date else None  # 👈 convert datetime
-            ]
-            for listing in listing_set
-        ]
-
-
     def update_fields(self, all_field_data):
         print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
@@ -559,105 +546,58 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     @classmethod
     def create_empty(cls, pcard):
-        print(f"Processing 0 search results for card {pcard.id}")
+        print(f"Create new CSR for card {pcard.id}")
         csr = CardSearchResult(parent_card = pcard)
         csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
-        csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())
+        csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
+        csr.create_listing_group("id", "", is_img=True)
 
         csr.response_count = 0
         csr.save()
         return csr   
     
-    def filter_listings(self, all_fields={}, listing_set=[]):
-        print("filtering")
-        if len(listing_set) <= 0:
-            listing_set = self.listings.all()
-        filter_tokens = []
-        #TODO: Eventually move to this style for efficiency
-        # Listing.objects.filter(id__in=[1, 2, 3]).update(csr_as_filtered=self)
-        for key, value in all_fields.items():
-            if key.endswith("_is_manual") and value is True:
-                selected_token_fieldname = key.replace("_is_manual", "_selected_token")
-            elif key.startswith("attributes.") and value is True:
-                selected_token_fieldname = key[10:] +  "_selected_token"
-                #we're assuming the token has already been set since we force-save prior to this
-            else:
-                continue
-            if hasattr(self, selected_token_fieldname):
-                filter_tokens.append(getattr(self, selected_token_fieldname))
-            
-        
-        #print("len:", filter_tokens)
-        listing_ids = []
+    #matches map is keyword_string --> (listing variable, [listings])
+    def update_listings(self, matches_map, is_refined=False):
+        print("UP", matches_map)
+        results = []
+        for keywords in matches_map:
+            print(matches_map[keywords])
+            listing_group, listings = matches_map[keywords]
+            if len(listing_group.listings.all()) > 0:
+                listing_group.listings.all().delete()
 
-        for i, listing in enumerate(listing_set):
-            tokens = listing.title.get_all_tokens()
-            #print("title", i, listing.title)
-            #print("tokens:", tokens)
-            #print("filtered:", filter_tokens)
-            if all(t in tokens for t in filter_tokens):
-                listing_ids.append(listing.id)
-        #print ("final filter:", len(listing_ids), listing_ids)
-                
-        ProductListing.objects.filter(csr_as_filtered=self).exclude(id__in=listing_ids).update(csr_as_filtered=None)
+            results = [ProductListing.from_search_results(item, self, tokenize=False) for item in listings]
+            listing_group.listings.set(results)
 
-        # Step 2: Assign new ones
-        for listing in ProductListing.objects.filter(id__in=listing_ids):
-            listing.csr_as_filtered = self
-            listing.save()
-
-        self.save()
-    
-    def update_pricing(self, sold_listings, is_refined=False):
-        print("UP", len(sold_listings), is_refined)
-        if sold_listings and len(sold_listings) > 0:
-            if is_refined:
-                self.sold_refined_listings.all().delete()
-            else:
-                self.sold_listings.all().delete()
-
-            for item in sold_listings:
-                listing = ProductListing.from_search_results(item, self, tokenize=False)
-                if listing:
-                    if is_refined:
-                        listing.csr_as_sold_refined = self
-                    else:
-                        listing.csr_as_sold = self
-                    listing.save()
-            self.aggregate_pricing_info()
-        print("sold:", sold_listings)
-        self.save()
-
-    def refine_listings(self, refined_listings):
-
-        if refined_listings and len(refined_listings) > 0:
-            self.refined_listings.all().delete()
-
-            for item in refined_listings:
-                listing = ProductListing.from_search_results(item, self, tokenize=False)
-                if listing:
-                    listing.csr_as_refined = self
-                    listing.save()
-            self.aggregate_pricing_info()
+            #self.aggregate_pricing_info()
         #print("sold:", sold_listings)
         self.save()
 
     @classmethod
-    def from_search_results(cls, pcard, items=None, tokenize=True, all_fields={}, csr=None):
+    def from_search_results(cls, pcard, items=None, tokenize=True, all_fields={}, csr=None, id_listings=False):
         if not csr:
             csr = cls.create_empty(pcard)
+        elif id_listings:      
+            csr.create_listing_group("id", "", is_img=True)#in case we have a legacy CSR
+            csr.get_listing_group("id").listings.all().delete()
 
         listing_set = []
-        print("locked words: ", all_fields)
+        #print("locked words: ", all_fields)
         if items and len(items) > 0:
             for idx, item in enumerate(items, 1):
                 listing = ProductListing.from_search_results(item, csr, tokenize)
                 if listing:
                     listing_set.append(listing)
+
+                if id_listings:
+                    listing.listing_group = csr.get_listing_group("id")
+                    listing.save()
+
+                        
             csr.response_count = len(listing_set)
             #print("attribs:", csr.attribute_flags)
 
-            csr.aggregate_pricing_info()
+            #csr.aggregate_pricing_info()
 
             if tokenize:
                 #must pass the listings here to preserve the in memory attributes
@@ -853,6 +793,65 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.collapse_token_maps(listing_set)
         self.aggregate_pricing_info()
 
+class ListingGroup(models.Model):
+    search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
+    
+    is_sold = models.BooleanField(default=False)
+    is_refined = models.BooleanField(default=False)
+    is_wide = models.BooleanField(default=False)
+    is_img = models.BooleanField(default=False)
+    label = models.CharField(max_length=100, blank=True, null=True)  # e.g. "Sold Refined Wide"
+    search_string = models.CharField(max_length=255, blank=True, null=True)
+
+    color = models.CharField(max_length=50, default="rgba(204, 153, 0, 0.8)")
+    border_width = models.IntegerField(default=2)
+    line_style = models.CharField(max_length=10, choices=[("solid", "Solid"), ("dotted", "Dotted")], default="solid")
+    display = models.BooleanField(default=False)
+
+    min_price = models.FloatField(default=0.0)
+    max_price = models.FloatField(default=0.0)
+    min_date = models.DateField(null=True)
+    max_date = models.DateField(null=True)
+
+
+
+    @classmethod
+    def create(self, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+        group, _ = self.listing_groups.get_or_create(label=label, search_string=search_string)
+        group.is_refined = is_refined
+        group.is_img = is_img
+        group.is_wide = is_wide
+        group.is_sold = is_sold
+
+        # Base color
+        group.color = "rgba(60, 179, 113, 0.8)" if is_sold else "rgba(204, 153, 0, 0.3)"  # green vs dark yellow
+        group.display = not is_wide
+        # Border width
+        group.border_width = 3 if is_refined else 1
+
+        # Line style
+        group.line_style = "dotted" if is_wide else "solid"
+
+        group.save()
+        return group
+
+
+    def serialize_listings(self):
+        return [
+            [
+                listing.ebay_price,
+                listing.title.title if listing.title else "",
+                listing.thumb_url,
+                listing.display_date
+            ]
+            for listing in self.listings.filter(
+                ebay_price__isnull=False
+            )
+        ]
+
+
+    def __str__(self):
+        return self.label or ""
 
 class ProductListing(models.Model):
 
@@ -864,14 +863,11 @@ class ProductListing(models.Model):
     ebay_price = models.FloatField(default=0.0)
     format = models.CharField(max_length=100, blank=True)
     qty = models.IntegerField(default=1)
-
-    search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, default=1, related_name="listings")    
-    csr_as_filtered = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="filtered_listings")
-    csr_as_sold = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="sold_listings")
-    csr_as_open_listing = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="open_listings")
-    csr_as_refined = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="refined_listings")
-    csr_as_sold_refined = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="sold_refined_listings")
     
+    #legacy
+    search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, default=1, related_name="listings")    
+    listing_group = models.ForeignKey(ListingGroup, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="listings")
+
     @property
     def display_date(self):
         return self.sold_date.isoformat() if self.sold_date else self.listing_date.isoformat()
@@ -899,10 +895,10 @@ class ProductListing(models.Model):
             listing.ebay_price = price.replace('$', '').replace(',', '')
         else:
             listing.ebay_price = price.get("value","0")
+
         listing.format = item.get("format", "N/A")
         listing.qty = item.get("qty", "1")
         listing.search_result = parent_csr
-        listing.csr_as_open_listing = parent_csr
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
         listing.save()        

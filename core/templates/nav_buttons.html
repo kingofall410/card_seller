@@ -6,7 +6,7 @@
     <span class="nav-button disabled">← Previous Card</span>
   {% endif %}
 
-  <button id="prev" class="nav-button up" onclick="handleUp()">⬆ Collection {{ collection_id }} ⬆</button>
+  <button id="prev" class="nav-button up" data-url="{% url 'manage' collection.id %}">⬆ Collection {{ collection_id }} ⬆</button>
 
   {% if next_id %}
     <button id="next" class="nav-button next" data-url="{% url 'view_card' next_id %}" onclick="handleNext()">Next Card →</button>
@@ -66,7 +66,7 @@ function handlePrev() {
 }
 
 function handleUp() {
-
+  console.log("here");
   window.location.href = "/manage";
 }
 </script>

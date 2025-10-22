@@ -78,11 +78,13 @@ class Card(models.Model):
     def get_crop_params(self, card_id=None):
         return self.active_search_results().get_crop_params(card_id)
 
-    def active_search_results(self):
+    def active_search_results(self, cleared=False):
+        csr = None
         if self.pk:
-            return self.search_results.last()
-        else:
-            return None
+            csr = self.search_results.last()
+            if cleared:
+                csr.listings.all().delete()                
+        return csr
 
     @property
     def search_count(self):
@@ -900,8 +902,8 @@ class Card(models.Model):
         return django_file, portrait_django_file, crop_params
 
 
-    def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None):
-        csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr)
+    def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None, id_listings=False):
+        csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr, id_listings=id_listings)
 
         return csr
 
@@ -981,6 +983,6 @@ class Card(models.Model):
 
     def save(self, *args, **kwargs):
         
-        self.listing_details = self.active_search_results().title_to_be
+        self.listing_details = self.active_search_results().title_to_be if self.active_search_results() else ""
         super().save(*args, **kwargs)
 

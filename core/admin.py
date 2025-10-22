@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models.Card import Card, CardSearchResult, Collection
-from core.models.CardSearchResult import ProductListing, ListingTitle
+from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup
 from core.models.Cropping import CropParams, CroppedImage
 
 admin.site.register(Card)
@@ -17,5 +17,6 @@ admin.site.register(ListingTitle)
 admin.site.register(CropParams)
 admin.site.register(CroppedImage)
 admin.site.register(Collection)
+admin.site.register(ListingGroup)
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import time
 from datetime import datetime, timedelta
 from requests.exceptions import Timeout, RequestException
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote, quote_plus, urlencode
 
 
 CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
@@ -179,8 +179,19 @@ def get_access_token(settings, user_auth_code=None):
     
     return settings.ebay_access_token
 
-def text_search(search_string, settings, limit=50, page=1):
-    print("text_search: ", search_string)
+def build_query_params(search_string, limit, offset, category_id, sort="price"):
+    return [
+        f"q={quote_plus(search_string.replace('#', ''))}",
+        f"limit={limit}",
+        f"offset={offset}",
+        f"category_ids={category_id}",
+        f"sort={sort}"
+    ]
+
+def text_search(keyword_strings, settings, limit=50, page=1):
+    print("text_search: ", keyword_strings)
+
+    result_data = {}
     if has_user_consent(settings):
         access_token = get_access_token(settings, settings.ebay_user_auth_code)
 
@@ -191,35 +202,39 @@ def text_search(search_string, settings, limit=50, page=1):
     }
     category_id = get_dominant_category_id(None)
     offset = (page - 1) * limit
-    query_params = [
-        f"q={quote(search_string.replace("#", ""))}",
-        f"limit={limit}",
-        f"offset={offset}",
-        f"category_ids={category_id}",
-        f"sort=price"
-    ]
-    search_url = f"{TXT_SEARCH_URL}?{'&'.join(query_params)}"
 
-    print("Search URL:", search_url)
-    try:
-        response = requests.get(search_url, headers=headers, timeout=10)
-    except Timeout:
-        print("❌ Request timed out while contacting eBay image search API.")
-        return
-    except RequestException as e:
-        print(f"❌ Request failed: {e}")
-    
-    if response and response.status_code == 200:
-        #print(response.json())
-        items = response.json().get("itemSummaries", [])
-        if not items:
-            print("❌ No matches found.")
-            return
+    for keywords in keyword_strings:
+        row_count = 0
+        page_num = 0
+
+        result_data[keywords[0]] = (keywords[1], [])    
+        query_params = build_query_params(keywords[0], limit, offset, category_id)
+        search_url = f"{TXT_SEARCH_URL}?{'&'.join(query_params)}"
+
+        #search_url = f"{TXT_SEARCH_URL}?q={urlencode(keywords[0].replace("#", ""))}{'&'.join(query_params)}"
+        print("Search URL:", search_url)
+
+        try:
+            response = requests.get(search_url, headers=headers, timeout=10)
+        except Timeout:
+            print("❌ Request timed out while contacting eBay image search API.")
+            break
+        except RequestException as e:
+            print(f"❌ Request failed: {e}")
+        
+        if response and response.status_code == 200:
+            #print(response.json())
+            items = response.json().get("itemSummaries", [])
+            if not items:
+                print("❌ No matches found.")
+                break
+            else:
+                print(f"✅ Found {len(items)} matches for the input string.")
+                result_data[keywords[0]][1].extend(items)
         else:
-            print(f"✅ Found {len(items)} matches for the input image.")
-            return items
-    else:
-        print(response.json())
+            print(response.json())
+        
+    return result_data
 
 #TODO: the standard way of getting dominant category has never worked.  It's hardcoded for now
 def get_dominant_category_id(payload):
@@ -417,23 +432,19 @@ def get_ebay_date_range(days=90):
 from playwright.sync_api import TimeoutError
 import time
 
-def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
-    print("keywords:", keywords, backup_keywords)
-    results = []
-    limit = 50
+def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
+    print("keywords:", keyword_strings)
+    result_data = {}
 
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
         page = browser.new_page()
-        start_date, end_date = get_ebay_date_range(days=180)
-        kw = quote_plus(keywords.replace('#', '')) if keywords else ""
-        bkw = quote_plus(backup_keywords.replace('#', '')) if backup_keywords else ""
+        start_date, end_date = get_ebay_date_range(days=90)
 
         base_url = "http://www.ebay.com/sh/research"
         query = {
             "marketplace": "EBAY-US",
-            "keywords": kw,
             "dayRange": "90",
             "categoryId": "0",
             "tabName": "SOLD",
@@ -443,78 +454,59 @@ def scrape_with_profile(keywords, backup_keywords=None, max_pages=3):
             "endDate": end_date,
         }
 
-        row_count = limit
-        page_num = 0
+        for keywords in keyword_strings:
+            row_count = 0
+            page_num = 0
 
-        while row_count > 0 and page_num in range(max_pages):
-        
-            page_start = time.time()
-            if row_count < 5 and page_num == 1:#need to catch the second time around hacky
-                #probably a bad query, switch to backup and start from 0
-                if bkw and query["keywords"] != bkw:
-                    query["keywords"] = bkw
-                    page_num = 0
-                    row_count=limit
-                    continue
+            query["keywords"] = quote_plus(keywords[0])
+            result_data[keywords[0]] = (keywords[1], [])
+            while row_count < limit and page_num < max_pages:
+                
+                query["offset"] = page_num*limit
+                url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
+                print("url", url)
+                page.goto(url, timeout=10000)
 
-            print("rc", row_count, "pn", page_num, "mp", max_pages)
-            offset = 0 if page_num == 0 else offset + limit
+                try:
+                    page.wait_for_selector("table", timeout=15000)
+                    page.wait_for_timeout(2000)
+                except TimeoutError:
+                    #exit after a perfect match between limit and query
+                    print(f"Timeout waiting for table on page {page_num}.")
+                    break
 
-            query["offset"] = str(offset)
-            url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
-            print("url", url)
+                rows = page.query_selector_all(".research-table-row")
+                row_count = len(rows)
+                print("row_count:", len(rows))
 
-            page.goto(url, timeout=10000)
+                rows_data = page.evaluate("""() => {
+                return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
+                    const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                    const img = row.querySelector('img');
+                    const imgUrl = img ? img.src : null;
+                    return { cells, imgUrl };
+                });
+                }""")
 
-            try:
-                page.wait_for_selector("table", timeout=15000)
-                page.wait_for_timeout(2000)
-            except TimeoutError:
-                print(f"Timeout waiting for table on page {page_num}. Skipping.")
-                if row_count < 5 or page_num == 0:
-                    #probably a bad query, switch to backup and start from 0
-                    if bkw and query["keywords"] != bkw:
-                        query["keywords"] = bkw
-                        page_num = 0
-                        row_count=limit
+                for row_data in rows_data:
+                    cells = row_data["cells"]
+                    if len(cells) < 8:
                         continue
 
-                    else:
-                        break
-
-            rows = page.query_selector_all(".research-table-row")
-            row_count = len(rows)
-            print("row_count:", len(rows))
-
-            rows_data = page.evaluate("""() => {
-            return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
-                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
-                const img = row.querySelector('img');
-                const imgUrl = img ? img.src : null;
-                return { cells, imgUrl };
-            });
-            }""")
-
-
-            for row_data in rows_data:
-                cells = row_data["cells"]
-                if len(cells) < 8:
-                    continue
-
-                results.append({
-                    "title": get_split_part_text(cells[0], 0, 1),
-                    "price": get_split_part_text(cells[2], 0, 0),
-                    "format": get_split_part_text(cells[2], 0, 1),
-                    "sold_date": cells[7],
-                    "shipping": get_split_part_text(cells[3], 0, 0),
-                    "qty": cells[4],
-                    "itemWebUrl": row_data["imgUrl"]
-                })
-
-            #print(f"Page End: {time.time()-page_start}")
-            page_num += 1
+                    result_data[keywords[0]][1].append({
+                            "title": get_split_part_text(cells[0], 0, 1),
+                            "price": get_split_part_text(cells[2], 0, 0),
+                            "format": get_split_part_text(cells[2], 0, 1),
+                            "sold_date": cells[7],
+                            "shipping": get_split_part_text(cells[3], 0, 0),
+                            "qty": cells[4],
+                            "itemWebUrl": row_data["imgUrl"]
+                        })
+                    
+                page_num += 1
+                row_count += limit
 
         browser.close()
-    return results
+        return result_data
 
 

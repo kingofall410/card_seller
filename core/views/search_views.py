@@ -14,7 +14,7 @@ def get_dynamic_options(request):
     pass
 
 @csrf_exempt
-def image_search(request, card_id):
+def image_search(request, card_id, create_new_csr=False):
     print("image_searchy", request.body)
     if not card_id:
         return JsonResponse({'error': 'Card ID is required'}, status=400)
@@ -25,7 +25,10 @@ def image_search(request, card_id):
             all_fields = data.get('required_words', {})
         
     settings = Settings.get_default()
-    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=False, scrape_sold_data=False)
+    active_csr = card.active_search_results(cleared=True)
+    csr = active_csr if active_csr and not create_new_csr else None
+    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=False, scrape_sold_data=False, result_count_max=settings.id_listings, csr=csr)
+    
     if search_results:
         return JsonResponse({"success": True, "error": ""})
     return JsonResponse({"error": True, "error": "No results"})
@@ -47,8 +50,9 @@ def image_search_collection(request, collection_id):
     if not card_list:
         return JsonResponse({'error': 'Collection ID is required'}, status=400)
     
+    settings = Settings.get_default()
     for card in card_list:
-        lookup.single_image_lookup(card, {}, Settings.get_default(), scrape_sold_data=True)   
+        lookup.single_image_lookup(card, {}, Settings.get_default(), refine=True, scrape_sold_data=True, result_count_max=settings.id_listings, csr=card.active_search_results())   
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt

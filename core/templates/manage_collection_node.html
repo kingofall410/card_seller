@@ -205,23 +205,24 @@
 
 </style>
 <script>
-    window.submitCardForm = function(collectionId, cardId, targetUrl) {
-    console.log("submit to", targetUrl, cardId, collectionId);
+  window.submitCardForm = function(collectionId, cardId, targetUrl) {
     const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
-    console.log(visibleCards.value);
+    let cardIds = [];
 
-    let cardIds = [];  // Declare outside the block
-    if (visibleCards.value) {
-      cardIds = JSON.parse(visibleCards.value).map(Number);
-    } else {
-      cardIds = [];
+    if (visibleCards && visibleCards.value) {
+      try {
+        cardIds = JSON.parse(visibleCards.value).map(Number);
+      } catch (e) {
+        console.warn("Invalid JSON in visibleCards:", e);
+      }
     }
-    
-    // Optionally attach cardIds to the form as a hidden input
+
     const form = document.getElementById(`view-card-form-${collectionId}`);
-    form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
+    form.action = targetUrl;
+    visibleCards.value = JSON.stringify(cardIds);  // ensure value is set
     form.submit();
-  }
+  };
+
 
 
   
@@ -265,7 +266,7 @@ function priceCollection(collectionId) {
     <button onclick="saveTitle({{ collection.id }})">💾</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
-    <button onclick="priceCollection({{ collection.id }})">💲</button>
+    <button onclick="submitCardForm({{ collection.id }}, null, '/price_collection/{{ collection.id }}/')">💲</button>
     <button onclick="openForAutomaticInput({{ collection.id }})">📬</button>
     
     <div class="dropdown-wrapper">
@@ -334,7 +335,7 @@ function priceCollection(collectionId) {
     <div id="attributePanel" style="display: none; margin: 10px auto; text-align: center;">
       <label><input type="checkbox" class="attr-toggle" value="name" checked> Name</label>
       <label><input type="checkbox" class="attr-toggle" value="thumb" checked> Thumbnail</label>
-      <label><input type="checkbox" class="attr-toggle" value="set" checked> Set</label>
+      <label><input type="checkbox" class="attr-toggle" value="set"> Set</label>
       <label><input type="checkbox" class="attr-toggle" value="nr" >Card #</label>
       <label><input type="checkbox" class="attr-toggle" value="team" >Team</label>
       <label><input type="checkbox" class="attr-toggle" value="serial" >Serial</label><br>
@@ -342,8 +343,8 @@ function priceCollection(collectionId) {
       <label><input type="checkbox" class="attr-toggle" value="highlow" >Ebay Low / High</label>
       <label><input type="checkbox" class="attr-toggle" value="mmm" >Ebay Mean / Meadian / Mode</label>
       <label><input type="checkbox" class="attr-toggle" value="ids" >IDs</label>
-      <label><input type="checkbox" class="attr-toggle" value="highlowsold" checked>Sold Low / High</label>
-      <label><input type="checkbox" class="attr-toggle" value="soldavgs" checked>Last Sale / Last 5 Avg</label>
+      <label><input type="checkbox" class="attr-toggle" value="highlowsold" >Sold Low / High</label>
+      <label><input type="checkbox" class="attr-toggle" value="soldavgs" >Last Sale / Last 5 Avg</label>
       <label><input type="checkbox" class="attr-toggle" value="avgonly" checked>Avg Sale</label>
     </div>
     <div class="card-list">
@@ -437,7 +438,11 @@ function priceCollection(collectionId) {
               </ul>
           </div>
         </div>
-        <div>{{ id_status.icon }}  {{ refinement_status.icon }}{{ pricing_status.icon }}</div>
+        <div>  
+          <span title="ID Status: {{ card.active_search_results.id_status.title }}">{{ id_status.icon }}</span>
+          <span title="Refinement Status: {{ card.active_search_results.refinement_status.title }}">{{ refinement_status.icon }}</span>
+          <span title="Pricing Status: {{ card.active_search_results.pricing_status.title }}">{{ pricing_status.icon }}</span>
+        </div>
 
         {% endwith %}
         {% endwith %}
