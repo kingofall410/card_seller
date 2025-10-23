@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.db.models import Min
 from django.utils.timezone import now
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Condition, Parallel, Season, CardNumber, SerialNumber
+from core.models.CardSearchResult import ListingGroup
 from django.db.models import F, When, Value, Case, BooleanField
 
 from core.models.CardSearchResult import CardSearchResult
@@ -15,14 +16,9 @@ def hello_world(request):
 
 def test_view(request):
     
-    cards = Collection.objects.get(id=86).cards.all()
-    #cards = Card.objects.all().order_by('-id')[:200]
-    display_fields = CardSearchResult.spreadsheet_fields
-    print("done")
-    return render(request, "spreadsheet.html", {"cards":cards, "columns":display_fields})
-
-    
-
+    lgs = ListingGroup.objects.all()
+    for lg in lgs:
+        lg.save()
 
     return JsonResponse({"success":True})
 

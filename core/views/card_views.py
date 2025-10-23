@@ -66,7 +66,12 @@ def view_card(request, card_id):
                 "color": group.color,
                 "borderWidth": group.border_width,
                 "lineStyle": group.line_style,
-                "data": group.serialize_listings()
+                "data": group.serialize_listings(),
+                "min_price": group.min_price,
+                "max_price": group.max_price,
+                "min_date": group.min_date.isoformat() if group.min_date else None,
+                "max_date": group.max_date.isoformat() if group.max_date else None,
+                "display_default": group.display,
             })
 
         print(dataset_configs)

@@ -218,7 +218,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_sold_price = models.FloatField(default=0.0)
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
-
+    ebay_msrp = models.FloatField(default=0.0)
     
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -248,7 +248,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ]
 
     spreadsheet_fields = [
-        "id", "title_to_be", "year", "brand", "subset", "parallel", "full_name", 
+        "id", "title_to_be", "year", "brand", "subset", "parallel", "full_name", "ebay_msrp",
         "card_number", "card_name", "city", "team", "serial_number", "filter_terms", "condition", "attributes", 
         "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price", 
         "ebay_low_sold_price", "ebay_high_sold_price", "ebay_last_sold_price", "ebay_last_five_avg_sold_price", "ebay_avg_sold_price", 
@@ -272,10 +272,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     dynamic_listing_fields = ["front", "back"]
 
     def create_listing_group(self, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
-        return ListingGroup.create(self, label, search_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
+        return ListingGroup.create(search_result=self, label=label, search_string=search_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
     def get_listing_group(self, label):
-        return self.listing_groups.get(label=label)
+        try:
+            return self.listing_groups.get(label=label)
+        except ListingGroup.DoesNotExist:
+            return None
 
     
     def get_crop_params(self, card_id=None):
@@ -297,6 +300,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms
 
         self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
+        
+        #super.ugly
+        super().save(*args, **kwargs)
+        self.aggregate_pricing_data()
+
 
         self.sport = ""
         self.league = ""
@@ -368,9 +376,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def get_latest_reverse(self):
         return self.parent_card.cropped_reverse.path()
     
-    '''def aggregate_pricing_info(self):
+    def aggregate_pricing_data(self):
         
-        list_prices = [listing.ebay_price for listing in self.id_listings.all()]
+        listing_group = self.get_listing_group("sold refined")
+        if listing_group and not listing_group.listings.exists():
+            listing_group = self.get_listing_group("sold")
+        self.ebay_msrp = listing_group.max_price if listing_group else 0.0
+            
+        '''list_prices = [listing.ebay_price for listing in self.id_listings.all()]
         if len(list_prices) > 0:
             self.ebay_mean_price = statistics.mean(list_prices)
             self.ebay_median_price = statistics.median(list_prices)
@@ -380,15 +393,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         sold_data = sorted([(listing.ebay_price, listing.sold_date) for listing in self.sold_listings.all()], key=lambda x: x[1])
         sold_data = [price for price, _ in sold_data]
-        #print(sold_data)
+        
         if len(sold_data) > 0:
             self.ebay_last_five_avg_sold_price = statistics.mean(sold_data[-5:])
             self.ebay_avg_sold_price = statistics.mean(sold_data)
             self.ebay_last_sold_price = sold_data[-1]
             self.ebay_low_sold_price = min(sold_data)
-            self.ebay_high_sold_price = max(sold_data)
-            
-        self.save()'''
+            self.ebay_high_sold_price = max(sold_data)'''
 
 
     def collapse_token_maps(self, listing_set=None):
@@ -498,7 +509,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         else: return text
 
     def update_fields(self, all_field_data):
-        print("afd", all_field_data)
+        #print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
             #print(field_name)
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
@@ -558,16 +569,17 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     #matches map is keyword_string --> (listing variable, [listings])
     def update_listings(self, matches_map, is_refined=False):
-        print("UP", matches_map)
+        #print("UP", matches_map)
         results = []
         for keywords in matches_map:
-            print(matches_map[keywords])
+            #print(matches_map[keywords])
             listing_group, listings = matches_map[keywords]
             if len(listing_group.listings.all()) > 0:
                 listing_group.listings.all().delete()
 
             results = [ProductListing.from_search_results(item, self, tokenize=False) for item in listings]
             listing_group.listings.set(results)
+            listing_group.save()
 
             #self.aggregate_pricing_info()
         #print("sold:", sold_listings)
@@ -793,6 +805,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.collapse_token_maps(listing_set)
         self.aggregate_pricing_info()
 
+
+#vanguard confirmation number:w54e075777
+
 class ListingGroup(models.Model):
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
     
@@ -813,19 +828,19 @@ class ListingGroup(models.Model):
     min_date = models.DateField(null=True)
     max_date = models.DateField(null=True)
 
-
+    class Meta:
+        unique_together = ("search_result", "is_sold", "is_refined", "is_wide", "is_img")
 
     @classmethod
-    def create(self, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
-        group, _ = self.listing_groups.get_or_create(label=label, search_string=search_string)
-        group.is_refined = is_refined
-        group.is_img = is_img
-        group.is_wide = is_wide
-        group.is_sold = is_sold
-
+    def create(cls, search_result, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+        search_result.save()
+        group, _ = search_result.listing_groups.get_or_create(search_result=search_result, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
+        group.label = label
+        group.search_string = search_string
+        
         # Base color
         group.color = "rgba(60, 179, 113, 0.8)" if is_sold else "rgba(204, 153, 0, 0.3)"  # green vs dark yellow
-        group.display = not is_wide
+        group.display = not is_wide and not is_img
         # Border width
         group.border_width = 3 if is_refined else 1
 
@@ -835,6 +850,19 @@ class ListingGroup(models.Model):
         group.save()
         return group
 
+    def save(self, *args, **kwargs):
+        if self.pk and self.listings.exists():
+            listing_list = self.listings.all()
+            self.min_price = min(listing.ebay_price for listing in listing_list)
+            self.max_price = max(listing.ebay_price for listing in listing_list)
+
+            min_datetime = min(listing.display_date for listing in listing_list)
+            self.min_date = datetime.fromisoformat(min_datetime.replace("Z", "+00:00")).date()
+
+            max_datetime = max(listing.display_date for listing in listing_list)
+            self.max_date = datetime.fromisoformat(max_datetime.replace("Z", "+00:00")).date()
+
+        super().save(*args, **kwargs)
 
     def serialize_listings(self):
         return [
@@ -866,7 +894,7 @@ class ProductListing(models.Model):
     
     #legacy
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, default=1, related_name="listings")    
-    listing_group = models.ForeignKey(ListingGroup, on_delete=models.DO_NOTHING, null=True, blank=True, related_name="listings")
+    listing_group = models.ForeignKey(ListingGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="listings")
 
     @property
     def display_date(self):

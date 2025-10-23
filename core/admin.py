@@ -8,7 +8,7 @@ admin.site.register(Card)
 class CardSearchResultAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         model_fields = [f.name for f in self.model._meta.fields]
-        exclude_fields = [f for f in model_fields if f.startswith('available')]
+        exclude_fields = [f for f in model_fields if f.find('available') > 0]
         kwargs['exclude'] = exclude_fields
         return super().get_form(request, obj, **kwargs)
 

@@ -50,7 +50,6 @@ def dict_get(d, key):
         options = d.get(key, False)
         return options
     except (TypeError, AttributeError):
-        print ("f")
         return None
 
 @register.filter
@@ -101,7 +100,7 @@ def get_textonly():
 @register.simple_tag
 def get_all_options(field_key, csrId=None, collection_id=None):
 
-    print("key", field_key, ',', csrId, ',', collection_id)
+    #print("key", field_key, ',', csrId, ',', collection_id)
     if collection_id:
         #if no specific CSR Is passed, we just return everything
         try:
