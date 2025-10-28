@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title }} – Sold Price Over Time</title>
+
+  <!-- Chart.js and plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+
+  <style>
+    .chart-container {
+      width: 1200px;
+      height: 400px;
+      margin: 40px auto;
+    }
+    .title-header {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .controls {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .controls label {
+      margin-right: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-header">{{ title }} – Sold Price Over Time</div>
+
+  <div class="controls">
+    <label for="maxPrice-time">Max Price:</label>
+    <input type="number" oninput="updateChartWrapper()" id="maxPrice-time" value="10" step="1" min="0" style="width: 60px;">
+
+    <label for="movingAvgWindow-time">Moving Avg:</label>
+    <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="20" step="1" min="1" style="width: 60px;">
+
+    <div id="toggle-container" style="margin-top: 12px;"></div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="priceTimeChart-{{ title }}"></canvas>
+  </div>
+
+<script>
+  (function() {
+      const datasetConfigs = JSON.parse(`{{ datasetConfigs|escapejs }}`);
+
+      const ctxTime = document.getElementById(`priceTimeChart-{{ title }}`).getContext('2d');
+      let timeChart;
+     
+
+      window.updateChartWrapper = function() {
+        updateChart();
+      };
+
+      datasetConfigs.forEach(({ key, label, display_default }) => {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = `toggle-${key}`;
+        checkbox.checked = display_default;
+        checkbox.onchange = updateChartWrapper;
+
+        const labelEl = document.createElement("label");
+        labelEl.appendChild(checkbox);
+        labelEl.appendChild(document.createTextNode(` ${label}`));
+        labelEl.style.marginRight = "12px";
+
+        document.getElementById("toggle-container").appendChild(labelEl);
+      });
+
+      function filterByPrice(data, maxPrice) {
+        return data.filter(([price]) => price <= maxPrice);
+      }
+
+      function buildSeries(rawData, windowSize = 1) {
+        const groupedByDay = {};
+        rawData.forEach(([price, title, thumb, date]) => {
+          const day = new Date(date).toISOString().split('T')[0];
+          if (!groupedByDay[day]) groupedByDay[day] = [];
+          groupedByDay[day].push({ price, title, thumb, date });
+        });
+
+        const dailyHighs = Object.entries(groupedByDay).map(([day, entries]) => {
+          const highest = entries.reduce((max, entry) => entry.price > max.price ? entry : max, entries[0]);
+          return {
+            x: new Date(day).toISOString(),
+            y: highest.price,
+            title: highest.title,
+            thumb: highest.thumb
+          };
+        });
+
+        const sorted = dailyHighs.sort((a, b) => new Date(a.x) - new Date(b.x));
+
+        if (windowSize > 1) {
+          return sorted.map((point, i, arr) => {
+            const start = Math.max(0, i - Math.floor(windowSize / 2));
+            const end = Math.min(arr.length, i + Math.ceil(windowSize / 2));
+            const window = arr.slice(start, end);
+            const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
+            return { ...point, y: avg };
+          });
+        }
+
+        return sorted;
+      }
+
+      function getToggleState(key) {
+        const el = document.getElementById(`toggle-${key}`);
+        return el ? el.checked : false;
+      }
+
+      window.updateChart = function() {
+        const maxPrice = parseFloat(document.getElementById("maxPrice-time").value);
+        const windowSize = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
+        const datasets = [];
+
+        let latestDate = null;
+
+        datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
+          if (!getToggleState(key)) return;
+
+          const filtered = filterByPrice(data, maxPrice);
+          const series = buildSeries(filtered, windowSize);
+
+          // Track latest date across all datasets
+          if (series.length) {
+            const lastPointDate = new Date(series[series.length - 1].x);
+            if (!latestDate || lastPointDate > latestDate) {
+              latestDate = lastPointDate;
+            }
+          }
+
+          datasets.push({
+            label,
+            data: series,
+            fill: false,
+            backgroundColor: color.replace("0.8", "0.2"),
+            borderColor: color,
+            tension: 0.6,
+            borderWidth,
+            pointRadius: 0,
+            borderDash: lineStyle === "dotted" ? [6, 4] : []
+          });
+        });
+
+        datasetConfigs.forEach(({ key, max_date }) => {
+          if (!getToggleState(key)) return;
+
+          const date = new Date(max_date);
+          if (!latestDate || date > latestDate) {
+            latestDate = date;
+          }
+        });
+
+        let minDate = undefined;
+        if (latestDate) {
+          minDate = new Date(latestDate);
+          minDate.setMonth(minDate.getMonth() - 6);
+        }
+
+
+        if (timeChart) {
+          timeChart.clear();
+          timeChart.destroy();
+          timeChart = null;
+        }
+
+        timeChart = new Chart(ctxTime, {
+          type: 'line',
+          data: { datasets },
+          options: {
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                type: 'time',
+                time: { unit: 'month', tooltipFormat: 'MMM dd, yyyy' },
+                title: { display: true, text: 'Date' },
+                min: minDate
+              },
+              y: {
+                title: { display: true, text: 'Price ($)' },
+                beginAtZero: true
+              }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const point = context.raw;
+                    return [`Price: $${point.y.toFixed(2)}`, `Item: ${point.title}`];
+                  }
+                }
+              },
+              zoom: {
+                pan: { enabled: true, mode: 'x' },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: 'x'
+                }
+              }
+            }
+          }
+        });
+      };
+
+      updateChartWrapper(); // Initial render
+    })();
+  </script>
+</body>
+</html>
