@@ -16,9 +16,11 @@ def hello_world(request):
 
 def test_view(request):
     
-    lgs = ListingGroup.objects.all()
-    for lg in lgs:
-        lg.save()
+    collection = Collection.objects.get(id=93)
+    for card in collection.cards.all():
+        csr = card.active_search_results()
+        csr.aggregate_pricing_data()
+        csr.save()
 
     return JsonResponse({"success":True})
 

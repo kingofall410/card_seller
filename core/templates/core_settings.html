@@ -49,6 +49,20 @@
       value="{{ settings.refined_listings }}" min="1" max="200"
       style="padding: 6px 10px; width: 80px; border-radius: 4px; border: 1px solid #ccc;" /><br><br>
 
+      <label for="run_refine_after_id" style="font-weight: bold; margin-right: 12px;">
+        Automatically run refinement following collection ID:
+      </label>
+      <input type="checkbox" id="run_refine_after_id" name="run_refine_after_id"
+        {% if settings.run_refine_after_id %}checked{% endif %}
+        style="transform: scale(1.2); margin-right: 12px;" /><br><br>
+
+      <label for="run_pricing_after_refine" style="font-weight: bold; margin-right: 12px;">
+        Automatically run pricing following collection refinement:
+      </label>
+      <input type="checkbox" id="run_pricing_after_refine" name="run_pricing_after_refine"
+        {% if settings.run_pricing_after_refine %}checked{% endif %}
+        style="transform: scale(1.2); margin-right: 12px;" /><br><br>
+
     <label for="price_listings" style="font-weight: bold; margin-right: 12px;">
       Number of Price Listings to Return:
     </label>

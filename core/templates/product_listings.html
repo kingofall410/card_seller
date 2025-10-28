@@ -1,14 +1,16 @@
 <style>
-.image-grid-wrapper {
-  max-height: calc(2 * 112px); /* 100px image + 12px gap */
-  overflow-y: auto;
-  padding-right: 6px; /* optional scrollbar buffer */
-}
-
 .image-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  margin-top: 12px;
+}
+
+.listing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100px;
 }
 
 .listing-thumb {
@@ -18,16 +20,41 @@
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
-.subtitle {
-  margin-top: -8px;
+
+.listing-caption {
+  margin-top: 0px;
+  font-size: 0.85rem;
+  color: #333;
+  text-align: center;
+}
+
+details.listing-group {
   margin-bottom: 16px;
-  font-size: 0.95rem;
-  color: #555;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f9f9f9;
+}
+
+summary.listing-summary {
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  list-style: revert; /* restores triangle */
+  display: list-item; /* ensures native marker appears */
+}
+
+.search-string {
+  font-size: 1rem;
+  color: #060505ff;
+  margin: 4px 0 12px 22px; /* indent to align with summary arrow */
 }
 </style>
-
-<div class="image-grid-wrapper">
-<h3>{{ listing_group.label }} ({{ listing_group.count }}) - {{ listing_group.search_string }}</h3>
+<details class="listing-group">
+  <summary class="listing-summary">
+    {{ listing_group.label }} ({{ listing_group.listings.count }})
+  </summary>
+  <div class="search-string">{{ listing_group.id_string }} {{ listing_group.filter_terms }}</div>
 
   <div class="image-grid">
     {% for listing in listing_group.listings.all %}
@@ -35,10 +62,57 @@
         <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
           <img src="{{ listing.thumb_url }}" alt="Listing Image" class="listing-thumb" title="{{ listing.title|default:'Listing' }}" />
         </a>
+        <div class="listing-caption">
+          {{ listing.ebay_price }}
+        </div>
       </div>
     {% empty %}
       <p>No listings found.</p>
     {% endfor %}
   </div>
-</div>
+</details>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const listingGroups = document.querySelectorAll(".listing-group");
 
+  listingGroups.forEach(group => {
+    const grid = group.querySelector(".image-grid");
+    const listings = Array.from(grid.querySelectorAll(".listing"));
+
+    listings.sort((a, b) => {
+      const priceA = parseFloat(a.querySelector(".listing-caption").textContent) || 0;
+      const priceB = parseFloat(b.querySelector(".listing-caption").textContent) || 0;
+      return priceB - priceA;
+    });
+
+    listings.forEach(listing => {
+      grid.appendChild(listing);
+
+      const img = listing.querySelector("img");
+      const listingId = listing.dataset.listingId;
+
+      img.addEventListener("click", function (event) {
+        event.preventDefault();
+
+        listing.classList.add("excluded");
+        listing.dataset.excluded = "true";
+
+        fetch("/exclude-listing/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            listing_id: listingId,
+            excluded: true
+          })
+        }).then(response => {
+          if (!response.ok) {
+            console.error("Failed to update exclusion");
+          }
+        });
+      });
+    });
+  });
+});
+</script>

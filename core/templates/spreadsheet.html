@@ -46,7 +46,6 @@
 <script>
 let isApplyingServerUpdate = false;
 
-
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('spreadsheet');
   const columns = JSON.parse(document.getElementById('card_columns').textContent);
@@ -115,17 +114,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+  
   let tooltipTimeout;
 
   hot.addHook('afterOnCellMouseOver', function(event, coords, TD) {
+    
     clearTimeout(tooltipTimeout);  // cancel any previous delay
+    
+    const sourceData = hot.getSourceDataArray()
+    const visibleRowIndex = coords.row;
+    const visibleRowData = hot.getDataAtRow(visibleRowIndex);
+    
+    //console.log(visibleRowData)
+    
+    const hoverCsr = visibleRowData[0];
+    const sourceDataIndex = sourceData.findIndex(row => row[0] == hoverCsr);
+    //console.log("dummy", hoverCsr, sourceDataIndex)
+    //console.log(hot.getDataAtRow(visibleRowIndex))
+    //console.log(sourceData)
+    const rows = JSON.parse(document.getElementById('card_rows').textContent);
+    //console.log(rows)
+    const sourceRow = rows[sourceDataIndex];
+    if (sourceRow == null) return;
 
-    const row = coords.row;
-    const rowData = hot.getSourceDataAtRow(row);
-    const thumbUrl = rowData.thumb_url;
-
+    const thumbUrl = sourceRow["thumb_url"]
     if (!thumbUrl) return;
-
+    
     tooltipTimeout = setTimeout(() => {
       const tooltip = document.getElementById('image-tooltip');
       const img = document.getElementById('tooltip-image');
@@ -150,49 +164,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 });
-function quickEdit(hot, theRow, fields) {
-  console.log("QE", hot, theRow);
-  const rowData = hot.getSourceDataAtRow(theRow);
-  const csrId = rowData.id;
+function quickEdit(hot, visualRow, updatedFields) {
+  console.log("QE", hot, visualRow);
 
+  // Step 1: Get visible row data
+  const visibleRowData = hot.getDataAtRow(visualRow);
+  const csrId = visibleRowData[0]; // assuming ID is in column 0
+
+  // Step 2: Resolve source index using getSourceDataArray
+  const sourceData = hot.getSourceDataArray();
+  const sourceRowIndex = sourceData.findIndex(row => String(row[0]) == csrId);
+
+  if (sourceRowIndex < 0) {
+    console.warn("Source row not found for csrId:", csrId);
+    return;
+  }
+
+  // Step 3: Send update to server
   $.ajax({
     url: "/update_csr_fields/",
     method: "POST",
     contentType: "application/json",
     data: JSON.stringify({
       csrId: csrId,
-      allFields: fields
+      allFields: updatedFields
     }),
     success: response => {
-
       const updatedFields = response.search_result;
-
-      const sourceData = hot.getSourceData();
-      const rowIndex = sourceData.findIndex(row => row.id === csrId);
-      console.log("csrId:", csrId, "rowIndex:", rowIndex, "sourceData:", sourceData);
-      if (rowIndex < 0) {
-        console.warn("Row not found for csrId:", csrId);
+      const visualRowIndex = hot.toVisualRow(sourceRowIndex);
+      console.log(visualRowIndex)
+      if (visualRowIndex < 0) {
+        console.warn("Visual row not found for csrId:", csrId);
         return;
       }
 
+      // Step 4: Apply updates to visible table
       Object.entries(updatedFields).forEach(([field, value]) => {
-        if (!field || typeof field !== 'string') {
-          console.warn("Invalid field name:", field);
-          return;
-        }
+        if (!field || typeof field !== 'string') return;
 
         const columnExists = hot.getSettings().columns.some(col => col.data === field);
-        if (!columnExists) {
-          console.warn("Field not found in column definitions:", field);
-          return;
-        }
-
+        if (!columnExists) return;
 
         isApplyingServerUpdate = true;
-        hot.setDataAtRowProp(rowIndex, field, value);
+        hot.setDataAtRowProp(visualRowIndex, field, value);
         isApplyingServerUpdate = false;
       });
-
     },
     error: xhr => {
       console.error("Save error:", xhr.responseText);
@@ -200,6 +216,7 @@ function quickEdit(hot, theRow, fields) {
     }
   });
 }
+
 
 </script>
 

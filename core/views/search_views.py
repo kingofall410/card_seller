@@ -27,7 +27,7 @@ def image_search(request, card_id, create_new_csr=False):
     settings = Settings.get_default()
     active_csr = card.active_search_results(cleared=True)
     csr = active_csr if active_csr and not create_new_csr else None
-    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=False, scrape_sold_data=False, result_count_max=settings.id_listings, csr=csr)
+    search_results = lookup.single_image_lookup(card, all_fields, settings, refine=settings.run_refine_after_id, scrape_sold_data=settings.run_pricing_after_refine, result_count_max=settings.id_listings, csr=csr)
     
     if search_results:
         return JsonResponse({"success": True, "error": ""})
@@ -52,7 +52,7 @@ def image_search_collection(request, collection_id):
     
     settings = Settings.get_default()
     for card in card_list:
-        lookup.single_image_lookup(card, {}, Settings.get_default(), refine=True, scrape_sold_data=True, result_count_max=settings.id_listings, csr=card.active_search_results())   
+        lookup.single_image_lookup(card, {}, Settings.get_default(), refine=settings.run_refine_after_id, scrape_sold_data=settings.run_pricing_after_refine, result_count_max=settings.id_listings, csr=card.active_search_results())   
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt

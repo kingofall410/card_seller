@@ -34,7 +34,7 @@ def view_card(request, card_id):
     else:
         card_list = Card.objects.filter(id__in=card_ids).order_by('id')
     
-    print(card_list)
+    #print(card_list)
     if not first_card:
         first_card = card_list[0] if card_list else None
 
@@ -51,47 +51,32 @@ def view_card(request, card_id):
             page_number = 1
     #print("post3")
 
-    card_tuples = []
-    
-    #set up the tuples to exclude detailed data for non-current cards
-    for i, collection_card in enumerate(card_list):
-        cc_asr = collection_card.active_search_results()
+    #above is neutered for now until paging is re-implemented
 
-        print(cc_asr.id)
-        dataset_configs = []
-        for group in cc_asr.listing_groups.all():
-            dataset_configs.append({
-                "key": f"group-{group.id}",
-                "label": group.label or "Unnamed Group",
-                "color": group.color,
-                "borderWidth": group.border_width,
-                "lineStyle": group.line_style,
-                "data": group.serialize_listings(),
-                "min_price": group.min_price,
-                "max_price": group.max_price,
-                "min_date": group.min_date.isoformat() if group.min_date else None,
-                "max_date": group.max_date.isoformat() if group.max_date else None,
-                "display_default": group.display,
-            })
+    cc_asr = first_card.active_search_results()
 
-        print(dataset_configs)
-        #TODO: clean up this mess
-        if i == int(page_number)-1:
-            #print("prices", json.dumps(cc_asr.get_prices(sold=True)))
-            card_tuple = (collection_card, collection_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
-        else:
-            card_tuple = (collection_card, collection_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
+    #print(cc_asr.id)
+    dataset_configs = []
+    for group in cc_asr.listing_groups.all():
+        dataset_configs.append({
+            "key": f"group-{group.id}",
+            "label": group.label or "Unnamed Group",
+            "color": group.color,
+            "borderWidth": group.border_width,
+            "lineStyle": group.line_style,
+            "data": group.serialize_listings(),
+            "min_price": group.min_price,
+            "max_price": group.max_price,
+            "min_date": group.min_date.isoformat() if group.min_date else None,
+            "max_date": group.max_date.isoformat() if group.max_date else None,
+            "display_default": group.display,
+        })
+
+        card_tuple = (first_card, first_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
             
-        card_tuples.append(card_tuple)
-
     #print(card_tuples)
-    paginator = Paginator(card_tuples, 1)
-    page_obj = paginator.get_page(page_number)
-
-
-    #print("fin:", page_number, "of", paginator.num_pages, card, card.active_search_results())
     
-    return render(request, "card.html", {"page_obj": page_obj, "collection_id": first_card.collection.id, "settings": Settings.get_default(), "filtered":first_card.collection.cards.count()-len(card_list), "card_ids":json.dumps(card_ids)})
+    return render(request, "card.html", {"card_tuple": card_tuple, "collection_id": first_card.collection.id, "settings": Settings.get_default(), "filtered":first_card.collection.cards.count()-len(card_list), "card_ids":json.dumps(card_ids)})
 
 
 @csrf_exempt

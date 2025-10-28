@@ -12,7 +12,10 @@ class Settings(models.Model):
     price_listings = models.IntegerField(default=10)
     nr_collection_page_items = models.IntegerField(default=10)
     field_pct_threshold = models.FloatField(default=0.3)
-    
+    run_refine_after_id = models.BooleanField(default=False)
+    run_pricing_after_refine = models.BooleanField(default=False)
+
+
     #TODO: this should be broken into separate classes, especially now I need one for sandbox
     ebay_user_auth_code = models.CharField(blank=True)
     ebay_refresh_token = models.CharField(blank=True)
@@ -21,6 +24,7 @@ class Settings(models.Model):
     ebay_access_token_expiration = models.FloatField(default=0.0)
     ebay_user_auth_consent = models.CharField(max_length=250, blank=True, null=True)
     ebay_auth_code_unescaped = models.CharField(blank=True)
+
 
     nr_std_devs = models.FloatField(default=2.0)
 

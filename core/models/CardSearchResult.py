@@ -1,5 +1,6 @@
 from django.db import models
-import re, requests, statistics
+from scipy.stats import trim_mean
+import re, requests
 from core.models.Cropping import CropParams
 from core.models.Status import *
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
@@ -50,8 +51,8 @@ class OverrideableFieldsMixin(models.Model):
         if isinstance(is_manual, str):
             is_manual = is_manual.lower() in ["true", "1", "yes"]
 
-        print("Setting:", field_to_set, "=", new_field_value)
-        print("Setting:", is_manual_fieldname, "=", is_manual)
+        #print("Setting:", field_to_set, "=", new_field_value)
+        #print("Setting:", is_manual_fieldname, "=", is_manual)
         
         if new_field_value:
             setattr(self, field_to_set, new_field_value)
@@ -218,7 +219,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_sold_price = models.FloatField(default=0.0)
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
-    ebay_msrp = models.FloatField(default=0.0)
+    ebay_msrp = models.FloatField(default=0.0, null=True)
     
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -241,18 +242,18 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     display_fields = [
         "text_search_string", "sold_search_string", "filter_terms", "year", "brand", "subset", "parallel", "full_name", 
-        "card_number", "card_name", "city", "team", "serial_number", "condition", "attributes", 
+        "card_number", "card_name", "city", "team", "serial_number", "condition", "attributes", "ebay_msrp"
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words", 
     ]
 
     spreadsheet_fields = [
-        "id", "title_to_be", "year", "brand", "subset", "parallel", "full_name", "ebay_msrp",
+        "id", "title_to_be", "list_price", "ebay_msrp", "year", "brand", "subset", "parallel", "full_name", 
         "card_number", "card_name", "city", "team", "serial_number", "filter_terms", "condition", "attributes", 
         "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price", 
         "ebay_low_sold_price", "ebay_high_sold_price", "ebay_last_sold_price", "ebay_last_five_avg_sold_price", "ebay_avg_sold_price", 
-        "list_price", "ebay_listing_id", "ebay_item_id", "ebay_offer_id", "ebay_listing_datetime",         
+        "ebay_listing_id", "ebay_item_id", "ebay_offer_id", "ebay_listing_datetime",         
         "text_search_string", "first_name", "last_name", "unknown_words"         
     ]
 
@@ -271,8 +272,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
-    def create_listing_group(self, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
-        return ListingGroup.create(search_result=self, label=label, search_string=search_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
+    def create_listing_group(self, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+        return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
     def get_listing_group(self, label):
         try:
@@ -378,10 +379,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     def aggregate_pricing_data(self):
         
-        listing_group = self.get_listing_group("sold refined")
-        if listing_group and not listing_group.listings.exists():
-            listing_group = self.get_listing_group("sold")
-        self.ebay_msrp = listing_group.max_price if listing_group else 0.0
+        sold_refined_group = self.get_listing_group("sold refined")
+        sold_group = self.get_listing_group("sold")
+        #print("lg:", sold_refined_group, sold_group)
+        listing_group = sold_refined_group or sold_group
+        #print("final:", listing_group, listing_group.max_price)
+        self.ebay_msrp = trim_mean([listing.ebay_price for listing in listing_group.listings.all()], proportiontocut=0.1) or 0.0
             
         '''list_prices = [listing.ebay_price for listing in self.id_listings.all()]
         if len(list_prices) > 0:
@@ -416,7 +419,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 list(listing.title.condition_tokens.all()) + list(listing.title.parallel_tokens.all()) + list(listing.title.card_name_tokens.all()) + \
                 listing.title.serial_number_tokens + listing.title.card_number_tokens + listing.title.season_tokens      
 
-            print("raw: ", token_list)
+            #print("raw: ", token_list)
             for token in token_list:
                 if token.primary_token:#tokens without primarytokens are garbage words
                     aggregate[token.field_key][token.primary_value] += 1
@@ -517,10 +520,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             
             #check for compound names (checkbox groups, etc)
             if hasattr(self, field_name) or hasattr(self, field_name[:field_name.find('.')]):
-                print("has attr", field_name, field_value, self.overrideable_fields)
+                #print("has attr", field_name, field_value, self.overrideable_fields)
             
                 if field_name in self.overrideable_fields:    
-                    print("over")
+                    #print("over")
                     #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
                     is_manual = all_field_data.get(f"{field_name}_is_manual", True)
                     self.set_ovr_attribute(field_name, field_value, is_manual, all_field_data)
@@ -531,8 +534,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     if group_name == 'attributes':
                         if field_name == "1st":
                             field_name = "First"
-                        print(self.attribute_flags)
-                        print(field_name, type(field_value), field_value)
+                        #print(self.attribute_flags)
+                        #print(field_name, type(field_value), field_value)
                         #if field_name in self.attribute_flags:
                         if isinstance(field_value, str):
                             self.attribute_flags[field_name] = (field_value.lower() == 'true')
@@ -540,17 +543,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                             self.attribute_flags[field_name] = field_value
 
                 else:
-                    print("setting: ", field_name, field_value)
+                    #print("setting: ", field_name, field_value)
                     setattr(self, field_name, field_value)
             elif hasattr(self.parent_card, field_name):
                 setattr(self.parent_card, field_name, field_value)
-            else:
-                print("still fucking oopsie:", field_name)
-        print("done")
+        #print("done")
         self.save()
-        print("done2")
+        #print("done2")
         self.parent_card.save()
-        print("done3")
+        #print("done3")
 
     def clear_listings(self):
         self.listings.all().delete()
@@ -561,7 +562,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         csr = CardSearchResult(parent_card = pcard)
         csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
         csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
-        csr.create_listing_group("id", "", is_img=True)
+        csr.ebay_msrp = 0.0
+        csr.create_listing_group("id", "", "", is_img=True)
 
         csr.response_count = 0
         csr.save()
@@ -590,7 +592,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not csr:
             csr = cls.create_empty(pcard)
         elif id_listings:      
-            csr.create_listing_group("id", "", is_img=True)#in case we have a legacy CSR
+            csr.create_listing_group("id", "", "", is_img=True)#in case we have a legacy CSR
             csr.get_listing_group("id").listings.all().delete()
 
         listing_set = []
@@ -658,7 +660,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 "Oddball" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else None
             ]
         title = " ".join(part.strip() for part in title_parts if part and part.strip())
-        print("titles:", title)
+        #print("titles:", title)
         return title
 
     #TODO:these buildable fields should be configurable
@@ -669,7 +671,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         subset = self.display_value("subset")
         
         subset = "" if subset == "-" else subset
-        print (f"build_full_set: {year} {brand} {subset}")
+        #print (f"build_full_set: {year} {brand} {subset}")
         return f"{year} {brand} {subset}".strip()
     
     #TODO:these buildable fields should be configurable
@@ -677,7 +679,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def full_team(self):
         city = self.display_value("city")
         team = self.display_value("team")
-        print (f"build_full_team: {city} {team}")
+        #print (f"build_full_team: {city} {team}")
         return f"{city} {team}"
     
     #TODO:Too many saves
@@ -816,7 +818,9 @@ class ListingGroup(models.Model):
     is_wide = models.BooleanField(default=False)
     is_img = models.BooleanField(default=False)
     label = models.CharField(max_length=100, blank=True, null=True)  # e.g. "Sold Refined Wide"
-    search_string = models.CharField(max_length=255, blank=True, null=True)
+    search_string = models.CharField(max_length=500, blank=True, null=True)
+    filter_terms = models.CharField(max_length=250, blank=True, null=True)
+    id_string = models.CharField(max_length=250, blank=True, null=True)
 
     color = models.CharField(max_length=50, default="rgba(204, 153, 0, 0.8)")
     border_width = models.IntegerField(default=2)
@@ -832,11 +836,13 @@ class ListingGroup(models.Model):
         unique_together = ("search_result", "is_sold", "is_refined", "is_wide", "is_img")
 
     @classmethod
-    def create(cls, search_result, label, search_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+    def create(cls, search_result, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
         search_result.save()
         group, _ = search_result.listing_groups.get_or_create(search_result=search_result, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
         group.label = label
-        group.search_string = search_string
+        group.filter_terms = filter_terms
+        group.id_string = id_string
+        group.search_string = id_string+" "+filter_terms
         
         # Base color
         group.color = "rgba(60, 179, 113, 0.8)" if is_sold else "rgba(204, 153, 0, 0.3)"  # green vs dark yellow
@@ -994,7 +1000,7 @@ class ListingTitle(models.Model):
 
     def tokenize(self, applied_settings):
         tokens = {}
-        print(self.id)
+        #print(self.id)
         #this logic relies on the fact that the "key" must match something defined by reading in settings.  Thus, don't change these
         temp_title, tokens, self.season_tokens = Season.match_extract(self.title, tokens, "year", applied_settings, return_first_match=False)
         #print("New tokens: ", self.season_tokens)

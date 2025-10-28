@@ -130,28 +130,6 @@
 </script>
 <body>
   {% include "header.html" %}
-  <div class="pagination" style="text-align:center; margin-top:40px;">
-    
-    <form id="view-card-form" method="POST" style="display: none;">
-      <input type="hidden" name="card_ids" id="visible-cards" value='{{ card_ids|safe }}'>
-    </form>
-    <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1")'>⏪ First</button>
-    {% if page_obj.has_previous %}
-      <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.previous_page_number }}")'>◀ Previous</button>
-    {% endif %}
-
-    <a href="{% url 'collection' collection_id %}" class="btn">⬆ Collection {{ collection_id }} ⬆</a>    
-    {% if page_obj.has_next %}
-      <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}")'>Next ▶</button>
-    {% endif %}
-    <button type="button" onclick='submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.paginator.num_pages }}")'>Last ⏩</button>
-    <br>
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-    <span>({{ filtered }} filtered)</span><br>  
-    
-  </form>
-  </div><br>
-  {% for card_tuple in page_obj %}
   <div class="overview-wrapper">
 
     <!-- Info Block: Search Results + Portrait + Buttons -->
@@ -195,6 +173,5 @@
     </div>
 
   </div>
-  {% endfor %}
 </body>
 </html>

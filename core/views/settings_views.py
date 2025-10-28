@@ -12,20 +12,21 @@ from django.db import models
 # Settings-related views
 
 def view_settings(request):
-    settings = Settings.objects.first()
+    settings = Settings.get_default()
     return render(request, "core_settings.html", {"settings": settings})
 
 def update_settings(request):
     if request.method == 'POST':
-        settings = Settings.objects.first() or Settings()
+        settings = Settings.get_default()
 
         for field in Settings._meta.get_fields():
+            print(field)
             if not isinstance(field, models.Field):
                 continue
 
             field_name = field.name
             raw_value = request.POST.get(field_name)
-
+            print(raw_value)
             if raw_value is None or field_name == "ebay_user_auth_code":
                 continue
 
