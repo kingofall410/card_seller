@@ -2,6 +2,9 @@
     <button id="listing-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
     🧾 List
     </button>
+    <button id="add-to-group-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    🧾 List in {{search_result.display_full_name}} Group
+    </button>
     <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #8f2eccff; color: white; border: none; border-radius: 6px; cursor: pointer;">
     🚀 Export
     </button>
@@ -23,6 +26,7 @@
     document.addEventListener("DOMContentLoaded", function () {
         
         const listingBtn = document.getElementById("listing-btn-{{ card_id }}");
+        const groupBtn = document.getElementById("add-to-group-btn-{{ card_id }}");
         const exportBtn = document.getElementById("export-btn-{{ card_id }}");
         const stageBtn = document.getElementById("stage-btn-{{ card_id }}");
         const lockBtn = document.getElementById("lock-btn-{{ card_id }}");
@@ -36,6 +40,14 @@
             console.log(` Listing triggered for ${listingBtn.id}`);
             console.log(searchResultId);
             fetch(`/list_card/${searchResultId}`)
+                .then(res => res.json())
+                
+        });
+
+        groupBtn.addEventListener('click', () => {
+            console.log(` Group lilsting triggered for ${listingBtn.id}`);
+            console.log(searchResultId);
+            fetch(`/list_card/${searchResultId}?group=True`)
                 .then(res => res.json())
                 
         });

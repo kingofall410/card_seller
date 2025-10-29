@@ -310,6 +310,21 @@ def create_inventory_item(sku, item_data, access_token):
     print("Inventory response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
 
+def create_inventory_group(group_id, group_data, access_token):
+    #get_user_auth()
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+    
+    url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
+    response = requests.put(url, headers=headers, json=group_data)
+    print("Inventory response: ", response, response.text)
+    return response.status_code == 200 or response.status_code == 204
+
 def get_or_create_offer(offer_data, access_token, sku=None):
 
     headers = {

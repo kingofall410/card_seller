@@ -74,10 +74,42 @@ def test_create_ebay_location():
     if ebay.has_user_consent(settings):
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         ebay.create_location(access_token)
-import random
+
+def add_to_variation_group(csrs, group_name=None):
+    #TODO:check to see if the group exists before overwriting it once we create django objects
+    group_name = group_name or csrs[0].display_full_name
+    settings = Settings.get_default()
+    
+    if ebay.has_user_consent(settings):
+
+        variant_skus = [csr.sku for csr in csrs]
+        variant_card_titles = [csr.title_to_be for csr in csrs]
+        variant_fronts = [upload_to_cloudinary(csr.shareable_link_front for csr in csrs)]
+
+        inventory_group_data = {
+            "aspects": {"card_title": variant_card_titles},
+            "description": "test descriptions for variation",
+            #"imageUrls": variant_fronts,
+            "inventoryItemGroupKey": group_name,
+            "subtitle": "",
+            "title": group_name,
+            "variantSKUs": variant_skus,
+            "variesBy": {
+                "aspectsImageVariesBy": [
+                    "card_title"
+                ],
+                "specifications": [
+                {
+                    "name": "card_title",
+                    "values": variant_card_titles
+                }
+                ]
+            }
+        }
+
 
 #TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csrs, publish=False):
+def export_to_ebay(csrs, publish=False, group=False):
     
     print("ebay export")
     settings = Settings.get_default()
@@ -89,15 +121,15 @@ def export_to_ebay(csrs, publish=False):
         #shareable_link_reverse = uploader.upload_and_share(csr.get_latest_reverse(), csr.title_to_be)
         #TODO:abstract away google vs imagur vs postimage etc
         
-        shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
-        shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
+        csr.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
+        csr.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
         csr.ebay_item_id = csr.build_sku()
         print("SKU:", csr.ebay_item_id)
-        print("🔗 Public link:", shareable_link_front)
-        print("🔗 Public link:", shareable_link_reverse)
+        print("🔗 Public link:", csr.shareable_link_front)
+        print("🔗 Public link:", csr.shareable_link_reverse)
 
-        item_data = csr.export_to_template(csr.ebay_item_id, ebay.ebay_item_data_template, [shareable_link_front, shareable_link_reverse])
-        print(item_data)
+        item_data = csr.export_to_template(csr.ebay_item_id, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
+        #print(item_data)
         offer_data = {
             "sku": csr.ebay_item_id,
             "marketplaceId": "EBAY_US",
@@ -130,15 +162,19 @@ def export_to_ebay(csrs, publish=False):
             #item was created successfully
             #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
             offer_id, status = ebay.get_or_create_offer(offer_data, access_token, csr.ebay_item_id)
-            print(offer_id, status)
-            if status == 201 and publish:
-                csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+            print(offer_id, status, publish)
+            if status == 201:
+                #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
                 csr.ebay_offer_id = offer_id
             else:
                 "Error response from ebay"
                 csr.ebay_listing_id = ""
-            csr.status = StatusBase.LISTED
-        csr.save()
+            
+            if publish:
+                if group:
+                    add_to_variation_group([csr])
+                csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+            csr.save()
 
         return True, csr.ebay_offer_id, csr.ebay_listing_id
     

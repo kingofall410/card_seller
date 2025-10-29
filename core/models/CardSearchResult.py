@@ -1,6 +1,6 @@
 from django.db import models
 from scipy.stats import trim_mean
-import re, requests
+import re, requests, random
 from core.models.Cropping import CropParams
 from core.models.Status import *
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
@@ -101,6 +101,10 @@ class OverrideableFieldsMixin(models.Model):
     def manual_value(self, field):
         #print("manuel", self, field)
         return getattr(self, f"{field}_m")
+
+
+class ProductGroup(models.Model):
+    name = models.CharField(max_length=100)
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO: this class needs to be broken up
@@ -220,7 +224,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
     ebay_msrp = models.FloatField(default=0.0, null=True)
-    
+    ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="current_product_group")
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -229,6 +233,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     back_cropping_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     overall_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     
+    shareable_link_front=models.CharField(max_length=250, null=True, blank=True)
+    shareable_link_reverse=models.CharField(max_length=250, null=True, blank=True)
+
+
     #combine all this into field_definition
     readonly_fields = ["response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
 
@@ -684,8 +692,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     #TODO:Too many saves
     def build_sku(self):
-        full_set = self.full_set
-        sku = f"{full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+        
+        if not self.sku or self.sku == "":
+            sku = f"{self.full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+            sku += str(random.randint(100,999))
         return sku
     
     #TODO: This has grown enough now to condense
@@ -806,9 +816,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         self.collapse_token_maps(listing_set)
         self.aggregate_pricing_info()
-
-
-#vanguard confirmation number:w54e075777
 
 class ListingGroup(models.Model):
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
