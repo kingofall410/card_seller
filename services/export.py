@@ -1,5 +1,5 @@
 import csv, io
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ProductGroup
 from core.models import Status
 from django.http import HttpResponse
 import zipfile
@@ -75,41 +75,53 @@ def test_create_ebay_location():
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         ebay.create_location(access_token)
 
-def add_to_variation_group(csrs, group_name=None):
+def add_to_variation_group(csrs, access_token, group_name=None, publish=False):
     #TODO:check to see if the group exists before overwriting it once we create django objects
     group_name = group_name or csrs[0].display_full_name
     settings = Settings.get_default()
     
-    if ebay.has_user_consent(settings):
+    #find or create django group object
+    group, _ = ProductGroup.objects.get_or_create(name=group_name)
+    for csr in csrs:
+        csr.ebay_product_group = group
+        csr.save()
 
+    listing_id = None
+    if ebay.has_user_consent(settings):
+        csrs = [csr for csr in group.products.all()]
         variant_skus = [csr.sku for csr in csrs]
-        variant_card_titles = [csr.title_to_be for csr in csrs]
-        variant_fronts = [upload_to_cloudinary(csr.shareable_link_front for csr in csrs)]
+        variant_card_titles = [csr.variation_title for csr in csrs]
+        variant_fronts = [csr.shareable_link_front for csr in csrs]
 
         inventory_group_data = {
-            "aspects": {"card_title": variant_card_titles},
-            "description": "test descriptions for variation",
-            #"imageUrls": variant_fronts,
+            "aspects": {"Sport": ["Baseball"]},
+            "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
+            "imageUrls": [csrs[0].shareable_link_front],
             "inventoryItemGroupKey": group_name,
-            "subtitle": "",
+            #"subtitle": "",
             "title": group_name,
             "variantSKUs": variant_skus,
             "variesBy": {
                 "aspectsImageVariesBy": [
-                    "card_title"
+                    "Card"
                 ],
                 "specifications": [
                 {
-                    "name": "card_title",
+                    "name": "Card",
                     "values": variant_card_titles
                 }
                 ]
             }
         }
+        
+        if ebay.create_inventory_group(group_name, inventory_group_data, access_token):
+            if publish:
+                listing_id = ebay.publish_inventory_group(group_name, access_token)
+    return listing_id
 
 
 #TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csrs, publish=False, group=False):
+def export_to_ebay(csrs, publish=False, group=None):
     
     print("ebay export")
     settings = Settings.get_default()
@@ -120,18 +132,21 @@ def export_to_ebay(csrs, publish=False, group=False):
         #shareable_link_front = uploader.upload_and_share(csr.get_latest_front(), csr.title_to_be)
         #shareable_link_reverse = uploader.upload_and_share(csr.get_latest_reverse(), csr.title_to_be)
         #TODO:abstract away google vs imagur vs postimage etc
-        
+        #print("here i am", csr.sku)
         csr.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
         csr.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
-        csr.ebay_item_id = csr.build_sku()
-        print("SKU:", csr.ebay_item_id)
+        #print("am i here", csr.sku)
+        csr.sku = csr.build_sku()
+        #print("am i here", csr.sku)
+        print("SKU:", csr.sku)
         print("🔗 Public link:", csr.shareable_link_front)
         print("🔗 Public link:", csr.shareable_link_reverse)
 
-        item_data = csr.export_to_template(csr.ebay_item_id, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
+        print(csr.list_price)
+        item_data = csr.export_to_template(csr.sku, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
         #print(item_data)
         offer_data = {
-            "sku": csr.ebay_item_id,
+            "sku": csr.sku,
             "marketplaceId": "EBAY_US",
             "format": "FIXED_PRICE",
             "listingDescription": csr.parent_card.listing_details,
@@ -147,21 +162,25 @@ def export_to_ebay(csrs, publish=False, group=False):
             #"conditionId":4000,
             #"storeCategoryId": "",
             "listingPolicies": {
-                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_USPS_GROUND,
+                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if csr.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND,
                 "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
                 "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
             },
             "merchantLocationKey": "Freeport"
 
         }
-        print(offer_data)
+        #print(csr.list_price)
+        print("Offer data:", offer_data)
+        if csr.list_price <= 0:
+            return False, None, None#kick out before corrupting the group with a 0 price offer
+        
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #create_ebay_location(access_token)
         #csr.check_category_metadata("261328",access_token)
-        if ebay.create_inventory_item(csr.ebay_item_id, item_data, access_token):
+        if ebay.create_inventory_item(csr.sku, item_data, access_token):
             #item was created successfully
             #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
-            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, csr.ebay_item_id)
+            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, csr.sku)
             print(offer_id, status, publish)
             if status == 201:
                 #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
@@ -170,10 +189,11 @@ def export_to_ebay(csrs, publish=False, group=False):
                 "Error response from ebay"
                 csr.ebay_listing_id = ""
             
-            if publish:
-                if group:
-                    add_to_variation_group([csr])
+            if group:
+                csr.ebay_listing_id = add_to_variation_group([csr], access_token, group_name=group, publish=publish)
+            elif publish:
                 csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+
             csr.save()
 
         return True, csr.ebay_offer_id, csr.ebay_listing_id

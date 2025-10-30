@@ -109,6 +109,7 @@
     }
   </style>
 </head>
+{% comment %}
 <script>
     window.submitCardForm = function(collectionId, cardId, targetUrl) {
     console.log("submit to", targetUrl, cardId, collectionId);
@@ -128,6 +129,7 @@
     form.submit();
   }
 </script>
+{% endcomment %}
 <body>
   {% include "header.html" %}
   <div class="overview-wrapper">

@@ -72,14 +72,30 @@ def manage_collection(request):
     settings = Settings.get_default()    
     return render_collection_list(request, collections, settings.nr_collection_page_items)
 
+def spreadsheet_rows_from_search_result(cards, field_names):
+    rows = []
+    for card in cards:
+        row = {}
+        for field in field_names:
+            display_attr = f'display_{field}'
+            value = getattr(card.active_search_results(), display_attr)
+            row[field] = value if value is not None else ''
+        row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
+        row["card_id"] = card.id
+        rows.append(row)
+    return rows
+
 #view single collections
 #TODO: should do this based on specific next_collection calls, pagniator is just messy
 #TODO: fuck the paginator for now
 def view_collection(request, collection_id):
-    collections = Collection.objects.all().order_by('id')
+    collections = []#Collection.objects.all().order_by('id')
     collection = Collection.objects.get(id=collection_id)
-    settings = Settings.get_default()    
-    return render(request, "collection.html", {"collection":collection, "settings":settings, "collections":collections, "columns":CardSearchResult.spreadsheet_fields})
+    settings = Settings.get_default()
+
+    columns = CardSearchResult.mini_spreadsheet_fields
+    rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
+    return render(request, "collection.html", {"collection":collection, "settings":settings, "collections":collections, "columns":columns, "rows":rows})
 
 def set_default_collection(request, collection_id):
     collection = get_object_or_404(Collection, id=collection_id)

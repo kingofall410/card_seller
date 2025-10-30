@@ -8,6 +8,7 @@
 
 <script src="{% static 'js/search_results.js' %}"></script>
 
+
 <style>
   input:disabled {
     background-color: #f9f9f9;
@@ -38,18 +39,25 @@
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
 
 <tbody>
-  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
+  {% with card_counter=card_id title=search_result|get_attribute:"display_title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
     <!-- 🏷️ Title Row -->
     <tr>
       <td colspan="4" style="padding: 8px 6px; font-weight: bold; background-color: #4c96d7;"> 
+      <input type="checkbox"
+                id="title_to_be_is_manual-{{ card_counter }}"
+                name="title_to_be_is_manual"
+                {% if search_result|get_attribute:"title_to_be_is_manual" %}checked{% endif %}
+                onchange="handleOverrideToggle('title_to_be', {{ card_counter }})">
+      
       <input type="text"
                 id="field_title_to_be-{{ card_counter }}"
                 name="title_to_be_m"
                 value="{{ title }}"
-                style="width: 100%; box-sizing: border-box; font-size: 1.25em; padding: 5px; 8px; border: 2px solid #ccc; border-radius: 6px;"
+                style="width: 95%; box-sizing: border-box; font-size: 1.25em; padding: 5px; 8px; border: 2px solid #ccc; border-radius: 6px;"
                 data-default="{{ title }}"
                 data-maxlength="80"
-                oninput="rebuildTitle('title_to_be', {{ card_counter }})">
+                oninput="rebuildTitle('title_to_be', {{ card_counter }})"
+                {% if not search_result|get_attribute:"title_to_be_is_manual" %}disabled{% endif %}>
       </td>
     </tr>
     
@@ -89,7 +97,7 @@
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
                 oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})"
-                onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})"
+                {% comment %} onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})" {% endcomment %} 
                 onblur="handleEnterPress('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})"
                 {% if not search_result|get_attribute:manual_flag %}disabled{% endif %}>
           

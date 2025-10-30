@@ -43,14 +43,38 @@
                 .then(res => res.json())
                 
         });
-
+        
         groupBtn.addEventListener('click', () => {
-            console.log(` Group lilsting triggered for ${listingBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/list_card/${searchResultId}?group=True`)
+            // Create input box if it doesn't exist
+            let inputBox = document.getElementById('group-name-input');
+            if (!inputBox) {
+                console.log("create box")
+                inputBox = document.createElement('input');
+                inputBox.type = 'text';
+                inputBox.id = 'group-name-input';
+                inputBox.placeholder = 'Enter group name';
+                inputBox.style.margin = '10px';
+                groupBtn.parentNode.insertBefore(inputBox, groupBtn.nextSibling);
+                return; // wait for user to enter name and click again
+            }
+
+            const groupName = inputBox.value.trim();
+            if (!groupName) {
+                alert("Please enter a group name.");
+                return;
+            }
+
+            console.log(`Group listing triggered for ${listingBtn.id}`);
+            console.log("SearchResult ID:", searchResultId);
+            console.log("Group Name:", groupName);
+
+            fetch(`/list_card/${searchResultId}?publish=True&group=${encodeURIComponent(groupName)}`)
                 .then(res => res.json())
-                
+                .then(data => {
+                    console.log("Response:", data);
+                });
         });
+
 
         exportBtn.addEventListener('click', () => {
             console.log(` Export triggered for ${listingBtn.id}`);

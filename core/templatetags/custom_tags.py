@@ -173,18 +173,3 @@ def get_all_options(field_key, csrId=None, collection_id=None):
         elif field_key == "status":            
             #print([StatusBase.get_meta(status)["icon"] for status in StatusBase])
             return [StatusBase.get_meta(status)["icon"] for status in StatusBase]
-
-@register.filter
-def spreadsheet_rows_from_search_result(cards, field_names):
-    rows = []
-    for card in cards:
-        row = {}
-        for field in field_names:
-            display_attr = f'display_{field}'
-            value = get_attribute(card.active_search_results(), display_attr)
-            row[field] = value if value is not None else ''
-        row["thumb_url"] = card.cropped_image.url()
-        rows.append(row)
-    return rows
-
-

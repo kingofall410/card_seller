@@ -65,11 +65,6 @@ class OverrideableFieldsMixin(models.Model):
         #remove this hardcode
         if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
-
-        try:
-            self.save()
-        except Exception as e:
-            print(f"❌ Save failed: {e}")
     
     def __getattr__(self, name):
         #print("getattr", name)
@@ -104,7 +99,7 @@ class OverrideableFieldsMixin(models.Model):
 
 
 class ProductGroup(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO: this class needs to be broken up
@@ -207,7 +202,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     league = models.CharField(max_length=100, blank=True)
     features = models.CharField(max_length=100, blank=True)
     ebay_listing_id = models.CharField(max_length=50, blank=True)
-    ebay_item_id = models.CharField(max_length=50, blank=True)
+    sku = models.CharField(max_length=50, blank=True)
     ebay_offer_id = models.CharField(max_length=50, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
@@ -224,7 +219,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
     ebay_avg_sold_price = models.FloatField(default=0.0)
     ebay_msrp = models.FloatField(default=0.0, null=True)
-    ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="current_product_group")
+    ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="products")
+    variation_title = models.CharField(max_length=50, blank=True, null=True)
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -238,7 +234,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
 
     #combine all this into field_definition
-    readonly_fields = ["response_count", "ebay_item_id",  "ebay_listing_id", "ebay_offer_id"]
+    readonly_fields = ["response_count", "sku",  "ebay_listing_id", "ebay_offer_id"]
 
     overrideable_fields = [
         "full_name", "first_name", "last_name",
@@ -261,8 +257,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         "card_number", "card_name", "city", "team", "serial_number", "filter_terms", "condition", "attributes", 
         "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price", 
         "ebay_low_sold_price", "ebay_high_sold_price", "ebay_last_sold_price", "ebay_last_five_avg_sold_price", "ebay_avg_sold_price", 
-        "ebay_listing_id", "ebay_item_id", "ebay_offer_id", "ebay_listing_datetime",         
-        "text_search_string", "first_name", "last_name", "unknown_words"         
+        "ebay_listing_id", "sku", "ebay_offer_id", "ebay_listing_datetime",         
+        "text_search_string", "unknown_words"         
+    ]
+
+    mini_spreadsheet_fields = [
+        "id", "title_to_be", "list_price", "ebay_msrp", "year", "brand", "subset", "parallel", "full_name", 
+        "card_number", "card_name", "city", "team", "serial_number", "filter_terms", "condition", 
+        "ebay_listing_id", "sku", "ebay_offer_id", "ebay_listing_datetime",         
+        "text_search_string"       
     ]
 
     calculated_fields = ["title_to_be", "text_search_string", "sold_search_string"]#, "filter_terms"]
@@ -297,9 +300,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return self.front_crop_params
         
     def save(self, *args, **kwargs):
-        print("saving csr")
+        print("saving csr", self.id, self.card_name, self.card_name_m, self.card_name_is_manual)
         if not self.title_to_be_is_manual:
             self.title_to_be = self.build_title()
+
+        self.variation_title = self.build_title(variation_title=True)
 
         filter_terms = self.filter_terms or "" if self.filter_terms != "-" else ""
         if not self.sold_search_string_is_manual:
@@ -309,7 +314,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms
 
         self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
-        
+        if self.ebay_listing_id != "":
+            self.overall_status = StatusBase.LISTED
         #super.ugly
         super().save(*args, **kwargs)
         self.aggregate_pricing_data()
@@ -392,7 +398,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #print("lg:", sold_refined_group, sold_group)
         listing_group = sold_refined_group or sold_group
         #print("final:", listing_group, listing_group.max_price)
-        self.ebay_msrp = trim_mean([listing.ebay_price for listing in listing_group.listings.all()], proportiontocut=0.1) or 0.0
+        if listing_group:
+            self.ebay_msrp = trim_mean([listing.ebay_price for listing in listing_group.listings.all()], proportiontocut=0.1) or 0.0
+        else:
+            self.ebay_msrp = 0.0
             
         '''list_prices = [listing.ebay_price for listing in self.id_listings.all()]
         if len(list_prices) > 0:
@@ -522,22 +531,22 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def update_fields(self, all_field_data):
         #print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
-            #print(field_name)
+            print(field_name)
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
             
             #check for compound names (checkbox groups, etc)
             if hasattr(self, field_name) or hasattr(self, field_name[:field_name.find('.')]):
-                #print("has attr", field_name, field_value, self.overrideable_fields)
+                print("has attr", field_name, field_value, self.overrideable_fields)
             
                 if field_name in self.overrideable_fields:    
-                    #print("over")
-                    #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
+                    print("over")
+                    print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
                     is_manual = all_field_data.get(f"{field_name}_is_manual", True)
                     self.set_ovr_attribute(field_name, field_value, is_manual, all_field_data)
                 elif field_name.find('.') > 0:#checkbox groups
                     group_name, field_name = field_name.split('.')                     
-                    #print(group_name, field_name)
+                    print(group_name, field_name)
                     #TODO: need to make this more generic to handle additional checkhbox fields
                     if group_name == 'attributes':
                         if field_name == "1st":
@@ -551,11 +560,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                             self.attribute_flags[field_name] = field_value
 
                 else:
-                    #print("setting: ", field_name, field_value)
+                    print("setting: ", field_name, field_value)
                     setattr(self, field_name, field_value)
             elif hasattr(self.parent_card, field_name):
                 setattr(self.parent_card, field_name, field_value)
-        #print("done")
+        print("done")
         self.save()
         #print("done2")
         self.parent_card.save()
@@ -628,9 +637,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         csr.save()
         return csr
         
-    def build_title(self, fields=None, shorter=False, shortest=False, condition_sensitive=False):
+    def build_title(self, fields=None, shorter=False, shortest=False, condition_sensitive=False, variation_title=False):
+        print("build title")
         #print("fields:", fields)
-        #print("shorter", shorter)
+        print("shorter", shorter)
+        print("shortest", shortest)
+        print("condition_sensitive", condition_sensitive)
+        print("variation_title", variation_title)
         if shortest:
             title_parts = [
                 self.display_value("year"),
@@ -645,6 +658,16 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 self.display_value("brand"),
                 self.display_value("subset")  if self.display_value("subset") != " " else None,
                 self.display_value("full_name"),
+                f"#{self.display_value('card_number')}" if self.display_value("card_number") else None,
+                self.display_value("condition") if condition_sensitive else None
+            ]
+        elif variation_title:
+            title_parts = [
+                self.display_value("year"),
+                self.display_value("brand"),
+                self.display_value("subset")  if self.display_value("subset") != " " else None,
+                self.display_value("parallel") if self.display_value("parallel") != " " else None,
+                self.display_value("serial_number") if self.display_value("serial_number") != "-" else None,
                 f"#{self.display_value('card_number')}" if self.display_value("card_number") else None,
                 self.display_value("condition") if condition_sensitive else None
             ]
@@ -694,9 +717,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def build_sku(self):
         
         if not self.sku or self.sku == "":
-            sku = f"{self.full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
-            sku += str(random.randint(100,999))
-        return sku
+            self.sku = f"{self.full_set} {self.display_value('full_name')}".replace(" ", "-").upper()
+            self.sku += str(random.randint(100,999))
+        return self.sku
     
     #TODO: This has grown enough now to condense
     def export_to_csv_string(self, field_map):

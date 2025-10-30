@@ -11,9 +11,9 @@
 {% include "header.html" %}
 {% include "refresh_timer.html" %}
 <div id="collection-tree">
-    {% include "manage_collection_node.html" with collection=collection settings=settings collections=collections %}
+   {% comment %} {% include "manage_collection_node.html" with collection=collection settings=settings collections=collections %} {% endcomment %}
 </div>
-{% include "spreadsheet.html" with columns=columns cards=collection.cards.all %}
+{% include "spreadsheet.html" with columns=columns rows=rows %}
 
 </body>
 </html>

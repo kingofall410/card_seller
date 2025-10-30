@@ -345,7 +345,8 @@ function priceCollection(collectionId) {
       <label><input type="checkbox" class="attr-toggle" value="ids" >IDs</label>
       <label><input type="checkbox" class="attr-toggle" value="highlowsold" >Sold Low / High</label>
       <label><input type="checkbox" class="attr-toggle" value="soldavgs" >Last Sale / Last 5 Avg</label>
-      <label><input type="checkbox" class="attr-toggle" value="avgonly" checked>Avg Sale</label>
+      <label><input type="checkbox" class="attr-toggle" value="avgonly">Avg Sale</label>
+      <label><input type="checkbox" class="attr-toggle" value="msrp" checked>MSRP</label>
     </div>
     <div class="card-list">
     {% for card in collection.cards.all %}
@@ -388,6 +389,10 @@ function priceCollection(collectionId) {
           ${{ card.active_search_results.list_price|floatformat:2 }}
         </div>
 
+        <div class="card-meta" data-attr="msrp">
+          ${{ card.active_search_results.ebay_msrp|floatformat:2 }}
+        </div>
+
         <div class="card-meta" data-attr="highlow">
           ${{ card.active_search_results.ebay_low_price|floatformat:2 }} / ${{ card.active_search_results.ebay_high_price|floatformat:2 }}
         </div>
@@ -414,8 +419,8 @@ function priceCollection(collectionId) {
           
         <div class="image-wrapper" data-attr="thumb">
           <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">
-            <img src="{{ card.cropped_image.url }}" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
-            <img src="{{ card.cropped_reverse.url }}" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
+            <img src="{{ card.cropped_image.url }}" loading="lazy" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
+            <img src="{{ card.cropped_reverse.url }}" loading="lazy" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
           </button>
         </div>
 

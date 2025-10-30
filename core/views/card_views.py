@@ -170,8 +170,8 @@ def convert_and_sanitize(field_data, csr):
 def update_csr_fields(request):
     if request.method != 'POST':
         return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
-    
-    if request.body:
+    print("here", request)
+    if request.body and len(request.body) > 0 :
         data = json.loads(request.body)
         csr_id = data["csrId"]
         all_fields = data["allFields"]

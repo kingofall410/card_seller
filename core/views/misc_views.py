@@ -6,7 +6,7 @@ from services.models import Brand, Subset, Team, City, KnownName, CardAttribute,
 from core.models.CardSearchResult import ListingGroup
 from django.db.models import F, When, Value, Case, BooleanField
 
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ProductGroup
 from core.models.Card import Card, Collection
 from services import ebay
 # Miscellaneous views
@@ -16,11 +16,21 @@ def hello_world(request):
 
 def test_view(request):
     
-    collection = Collection.objects.get(id=93)
-    for card in collection.cards.all():
-        csr = card.active_search_results()
-        csr.aggregate_pricing_data()
-        csr.save()
+    pgs = ProductGroup.objects.all()
+    for pg in pgs:
+        for product in pg.products.all():
+            product.ebay_product_group = None
+            product.save()
+    pgs.delete()
 
-    return JsonResponse({"success":True})
+
+
+
+    '''collection = Collection.objects.get(id=91)
+    for card in collection.cards.all():
+        card.active_search_results().save()'''
+    
+
+    return JsonResponse({"success": True, "message": "Completed successfully"})
+
 

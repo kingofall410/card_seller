@@ -29,6 +29,32 @@ category_id = None
 
 #TODO: ultimately need to get this from the taxonomy API or excel file upload
 
+ebay_item_group_template = {
+    "aspects": {}, #"pattern": ["solid"]
+    "description": "string",
+    "imageUrls": [
+        "string"
+    ],
+    "inventoryItemGroupKey": "string",
+    "subtitle": "string",
+    "title": "string",
+    "variantSKUs": [
+        "string"
+    ],
+    "variesBy": {
+    "aspectsImageVariesBy": [
+        "string"
+    ],
+    "specifications": [
+        {
+        "name": "string",
+        "values": [
+            "string"
+        ]
+        }
+    ]
+    },
+}
 ebay_item_data_template = {
     "condition":"Ungraded",
     "availability": {
@@ -40,6 +66,7 @@ ebay_item_data_template = {
         "title":"title_to_be",
         "imageUrls":"image_links",
         "aspects": {
+            "Card": "variation_title",
             "Sport": "sport",
             "Player/Athlete": "full_name",
             "Card Name": "card_name",
@@ -312,6 +339,7 @@ def create_inventory_item(sku, item_data, access_token):
 
 def create_inventory_group(group_id, group_data, access_token):
     #get_user_auth()
+    #delete_inventory_group(group_id, access_token)
     
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -322,7 +350,23 @@ def create_inventory_group(group_id, group_data, access_token):
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
     response = requests.put(url, headers=headers, json=group_data)
-    print("Inventory response: ", response, response.text)
+    print("Inventory Group response: ", response, response.text)
+    return response.status_code == 200 or response.status_code == 204
+
+
+def delete_inventory_group(group_id, access_token):
+    #get_user_auth()
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+    
+    url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
+    response = requests.delete(url, headers=headers)
+    print("Inventory Delete response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
 
 def get_or_create_offer(offer_data, access_token, sku=None):
@@ -345,6 +389,7 @@ def get_or_create_offer(offer_data, access_token, sku=None):
     if response.status_code == 201:#offer created
         offer_id = data.get('offerId', None)
     elif response.status_code == 400 and sku:#offer already exists, delete it
+        #TODO:ultimately the right thing to do here is update the offer, not delete, but fine for now
         offer_id = data['errors'][0]['parameters'][0]['value']
         delete_url = url + f"/{offer_id}"        
         response = requests.delete(delete_url, headers=headers, json=offer_data)
@@ -371,6 +416,25 @@ def publish_offer(offer_id, access_token):
     print ("Publish response", response.text)
     return response.json()["listingId"]
 
+def publish_inventory_group(group_name, access_token):
+    print("PIG:", group_name)
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = f"https://api.ebay.com/sell/inventory/v1/offer/publish_by_inventory_item_group"
+    
+    inventory_group_listing_data = {
+        "inventoryItemGroupKey": group_name,
+        "marketplaceId": "EBAY_US"
+    }
+    response = requests.post(url, json=inventory_group_listing_data, headers=headers)
+    print ("PIG response", response.text)
+    return response.json()["listingId"]
 
 def create_location(access_token, merchant_location_key="Freeport"):
     url = "https://api.ebay.com/sell/inventory/v1/location/"+merchant_location_key

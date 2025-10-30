@@ -182,11 +182,9 @@ function handleOverrideToggle(fieldName, cardId) {
 
   if (checkbox.checked) {
     input.removeAttribute("disabled");
-    input.value = ""
   } else {
     input.setAttribute("disabled", "disabled");
     const defaultValue = input.getAttribute("data-default");
-    input.value = defaultValue || "-";
   }
 }
 
@@ -250,73 +248,78 @@ function rebuildTitle(fieldName, cardId) {
 } 
 
 //TODO:this needs to be combined with quickedit on spreadsheet.html
+let debounceTimers = {};
+
 function handleEnterPress(fieldName, cardId, csrId) {
+  const key = `${fieldName}-${cardId}`;
+  clearTimeout(debounceTimers[key]);
 
-  const inputId = `field_${fieldName}-${cardId}`;
-  const inputEl = document.getElementById(inputId);
-  let value = inputEl?.value;
-  console.log(inputEl)
-  if (!inputEl) {
-    console.warn(`Input element not found for ${inputId}`);
-    return;
-  }
-  if (fieldName.startsWith("attrib")) {
-    fieldName = fieldName.replace("-", ".")
-    value = inputEl.checked
-  } else {
-    inputEl.blur();
-  }
-
-  // Get brand and city values from their respective inputs
-  const brandInput = document.getElementById(`field_brand-${cardId}`);
-  const cityInput = document.getElementById(`field_city-${cardId}`);
-
-  const brand = brandInput?.value || "";
-  const city = cityInput?.value || "";
-
-  const brandChanged = brandInput?.disabled === false;
-  const cityChanged = cityInput?.disabled === false;
-
-  const fields = {
-    [fieldName]: value,
-    [`${fieldName}_is_manual`]: true,
-    brand: brand,
-    brand_is_manual: brandChanged,
-    city: city,
-    city_is_manual: cityChanged
-  };
-
-  $.ajax({
-    url: "/update_csr_fields/",
-    method: "POST",
-    contentType: "application/json",
-    data: JSON.stringify({
-      csrId: csrId,
-      allFields: fields
-    }),
-    success: response => {
-      const updatedFields = response.search_result;
-      console.log("✅ Server response:", updatedFields);
-
-      Object.entries(updatedFields).forEach(([key, val]) => {
-        const fieldInput = document.getElementById(`field_${key}-${cardId}`);
-        if (fieldInput) {
-          if (fieldInput.tagName === "TEXTAREA" || fieldInput.type === "text") {
-            fieldInput.value = val;
-          } else if (fieldInput.type === "checkbox") {
-            fieldInput.checked = !!val;
-          }
-        }
-
-        const manualCheckbox = document.getElementById(`${key}_is_manual-${cardId}`);
-        if (manualCheckbox && typeof updatedFields[`${key}_is_manual`] !== "undefined") {
-          manualCheckbox.checked = !!updatedFields[`${key}_is_manual`];
-        }
-      });
-    },
-    error: xhr => {
-      console.error("❌ Save error:", xhr.responseText);
-      alert("Error saving changes.");
+  debounceTimers[key] = setTimeout(() => {
+    const inputId = `field_${fieldName}-${cardId}`;
+    const inputEl = document.getElementById(inputId);
+    let value = inputEl?.value;
+    console.log("handle Enter:", inputEl);
+    if (!inputEl) {
+      console.warn(`Input element not found for ${inputId}`);
+      return;
     }
-  });
+    if (fieldName.startsWith("attrib")) {
+      fieldName = fieldName.replace("-", ".");
+      value = inputEl.checked;
+    } else {
+      inputEl.blur();
+    }
+
+    const brandInput = document.getElementById(`field_brand-${cardId}`);
+    const cityInput = document.getElementById(`field_city-${cardId}`);
+
+    const brand = brandInput?.value || "";
+    const city = cityInput?.value || "";
+
+    const brandChanged = brandInput?.disabled === false;
+    const cityChanged = cityInput?.disabled === false;
+
+    const fields = {
+      [fieldName]: value,
+      [`${fieldName}_is_manual`]: true,
+      brand: brand,
+      brand_is_manual: brandChanged,
+      city: city,
+      city_is_manual: cityChanged
+    };
+
+    $.ajax({
+      url: "/update_csr_fields/",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({
+        csrId: csrId,
+        allFields: fields
+      }),
+      success: response => {
+        const updatedFields = response.search_result;
+        console.log("✅ Server response:", updatedFields);
+
+        Object.entries(updatedFields).forEach(([key, val]) => {
+          const fieldInput = document.getElementById(`field_${key}-${cardId}`);
+          if (fieldInput) {
+            if (fieldInput.tagName === "TEXTAREA" || fieldInput.type === "text") {
+              fieldInput.value = val;
+            } else if (fieldInput.type === "checkbox") {
+              fieldInput.checked = !!val;
+            }
+          }
+
+          const manualCheckbox = document.getElementById(`${key}_is_manual-${cardId}`);
+          if (manualCheckbox && typeof updatedFields[`${key}_is_manual`] !== "undefined") {
+            manualCheckbox.checked = !!updatedFields[`${key}_is_manual`];
+          }
+        });
+      },
+      error: xhr => {
+        console.error("❌ Save error:", xhr.responseText);
+        alert("Error saving changes.");
+      }
+    });
+  }, 300); // debounce delay in ms
 }

@@ -93,11 +93,10 @@
             $.ajax({
                 url: "/update_csr_fields/",
                 method: "POST",
-                data: {
+                    data: JSON.stringify({
                     csrId: searchResultId,
-                    ...allFields,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
+                    allFields: allFields
+                }),
                 success: response => {
                     console.log("Saved:", response);
                     alert("Changes saved successfully.");
@@ -174,25 +173,5 @@
                 console.error("Save error", error);
             });
         });
-        /*temp using this as image_search_with_req
-            console.log("🔤 Text Search triggered");
-            
-            // Show loading indicator
-            textSearchBtn.innerHTML = "🔄 Searching...";
-            textSearchBtn.disabled = true;
-
-            fetch(`/text_search/${cardId}/`, { 
-                method: 'POST',
-            }).then(response => {
-                console.log("Successfully");
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-                
-                // Restore button state on error
-                textSearchBtn.innerHTML = "🔍 Text Search";
-                textSearchBtn.disabled = false;
-            });
-        });*/
     });
 </script>

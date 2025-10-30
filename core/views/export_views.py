@@ -22,8 +22,9 @@ def export_card(request, csr_id):
 def list_card(request, csr_id):
     settings = Settings.get_default()
     publish = request.GET.get('publish', False)
-    group = request.GET.get('group', False)
-    print("pub", publish)
+    group = request.GET.get('group', None)
+    print("pub, group", publish, group)
+    
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
     csr = CardSearchResult.objects.get(id=csr_id)
