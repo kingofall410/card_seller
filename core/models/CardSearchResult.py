@@ -268,6 +268,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         "text_search_string"       
     ]
 
+    listing_spreadsheet_fields = [
+        "ebay_listing_id", "id", "title_to_be", "list_price", "ebay_msrp", "sku", "ebay_offer_id", "ebay_listing_datetime",
+        "id_status", "pricing_status", "refinement_status"
+    ]
+
     calculated_fields = ["title_to_be", "text_search_string", "sold_search_string"]#, "filter_terms"]
 
     text_fields = ["unknown_words"]

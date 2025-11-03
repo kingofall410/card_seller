@@ -26,3 +26,4 @@ admin.site.register(ListingGroup)
 admin.site.register(ProductGroup)
 
 
+#-gold -chrome -yellow -green -red -blue -refractor -psa -sgc -cgc -purple -rainbow -foil -aqua -wave -raywave -logofractor -x-fractor

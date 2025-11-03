@@ -162,7 +162,7 @@ class Card(models.Model):
         # Handle cropping if requested
         if crop:
             print("7")
-            cropped, portrait, crop_params = card.crop_and_align_card3(filepath) 
+            cropped, portrait, crop_params = card.crop_and_align_card4(filepath) 
             
             print("8")           
             if cropped and portrait and crop_params:
@@ -187,7 +187,7 @@ class Card(models.Model):
                 if match_back and card.reverse_image:   
                     print("14")
                     # Crop and save reverse 
-                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card3(card.reverse_image.img.path)
+                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card4(card.reverse_image.img.path)
                     if cropped_back and portrait_back and crop_params_back:
                         print("15")
                         base, _ = os.path.splitext(os.path.basename(card.reverse_image.img.path))
@@ -544,7 +544,7 @@ class Card(models.Model):
         magnitude = cv2.magnitude(grad_x, grad_y)
         edge_mask = cv2.convertScaleAbs(magnitude)
         _, edge_mask = cv2.threshold(edge_mask, 40, 255, cv2.THRESH_BINARY)
-        #save_debug(edge_mask, "3_raw_edges")
+        save_debug(edge_mask, "3_raw_edges")
 
         # 🔧 Morphological cleanup
         edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
@@ -662,6 +662,102 @@ class Card(models.Model):
             raise ValueError("Failed to encode portrait image")      
 
         return django_file, portrait_django_file, crop_params
+    
+    def crop_and_align_card4(self, filepath, buffer=15, max_rotation=5):
+        print("Processing image for cropping and alignment:", filepath)
+
+        def save_debug(img, label):
+            base = os.path.splitext(os.path.basename(filepath))[0]
+            debug_dir = os.path.join(app_settings.MEDIA_ROOT, "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+            path = os.path.join(debug_dir, f"{base}_{label}.png")
+            cv2.imwrite(path, img)
+
+        img = cv2.imread(filepath)
+        if img is None:
+            print("⚠️ Failed to read image.")
+            return None, None, None
+
+        h, w = img.shape[:2]
+        center = (w // 2, h // 2)
+
+        # 🌗 Radial brightness correction
+        def correct_radial_brightness(image, strength=0.4):
+            h, w = image.shape[:2]
+            center = (w // 2, h // 2)
+            Y, X = np.ogrid[:h, :w]
+            dist = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+            max_dist = np.max(dist)
+            radial_mask = dist / max_dist
+            radial_mask = cv2.GaussianBlur(radial_mask, (0, 0), sigmaX=0.5 * max_dist)
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            h_ch, s_ch, v_ch = cv2.split(hsv)
+            v_boost = v_ch.astype(np.float32) + (radial_mask * 255 * strength)
+            v_boost = np.clip(v_boost, 0, 255).astype(np.uint8)
+            corrected_hsv = cv2.merge([h_ch, s_ch, v_boost])
+            corrected_bgr = cv2.cvtColor(corrected_hsv, cv2.COLOR_HSV2BGR)
+            return corrected_bgr
+
+        corrected = correct_radial_brightness(img)
+        save_debug(corrected, "1_radial_corrected")
+
+        # 🧊 Grayscale + blur
+        gray = cv2.cvtColor(corrected, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        # 🎯 Edge detection
+        edges = cv2.Canny(blurred, 50, 150)
+        save_debug(edges, "2_canny_edges")
+
+        # 🔧 Morphological cleanup
+        kernel = np.ones((5, 5), np.uint8)
+        cleaned = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+        cleaned = cv2.dilate(cleaned, kernel, iterations=1)
+        save_debug(cleaned, "3_cleaned_edges")
+
+        # 🧱 Contour extraction
+        contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        card_boxes = []
+        min_area = 0.02 * h * w
+        aspect_range = (0.5, 1.8)
+
+        debug_image = corrected.copy()
+        cv2.drawContours(debug_image, contours, -1, (255, 0, 0), 1)  # 🔷 All contours
+
+        for cnt in contours:
+            rect = cv2.minAreaRect(cnt)
+            (rw, rh) = rect[1]
+            area = rw * rh
+            if area < min_area or min(rw, rh) == 0:
+                continue
+            aspect = max(rw, rh) / min(rw, rh)
+            if not (aspect_range[0] < aspect < aspect_range[1]):
+                continue
+            box = cv2.boxPoints(rect)
+            box = box.astype(np.int32)
+            card_boxes.append(box)
+            cv2.drawContours(debug_image, [box], 0, (0, 255, 0), 2)  # 🟩 Valid card box
+
+        # 🔴 Fallback if no cards found
+        if not card_boxes:
+            print("⚠️ No valid card-like contours found — fallback to full image.")
+            fallback = np.array([
+                [[0, 0]], [[w - 1, 0]],
+                [[w - 1, h - 1]], [[0, h - 1]]
+            ])
+            card_boxes = [fallback]
+            cv2.drawContours(debug_image, [fallback], 0, (0, 0, 255), 2)
+
+        # 🏷️ Label each card
+        for i, box in enumerate(card_boxes):
+            cx = int(np.mean(box[:, 0]))
+            cy = int(np.mean(box[:, 1]))
+            cv2.putText(debug_image, f"Card {i+1}", (cx - 30, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        save_debug(debug_image, "4_detected_card_boxes")
+
+        return card_boxes, corrected, debug_image
+
 
 
     def crop_and_align_card(self, filepath, buffer=15, max_rotation=5, fixed_crop=False):

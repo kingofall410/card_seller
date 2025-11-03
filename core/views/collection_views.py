@@ -78,7 +78,11 @@ def spreadsheet_rows_from_search_result(cards, field_names):
         row = {}
         for field in field_names:
             display_attr = f'display_{field}'
-            value = getattr(card.active_search_results(), display_attr)
+            asr = card.active_search_results()
+            if asr:
+                value = getattr(card.active_search_results(), display_attr)
+            else:
+                value = None
             row[field] = value if value is not None else ''
         row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
         row["card_id"] = card.id
@@ -96,6 +100,19 @@ def view_collection(request, collection_id):
     columns = CardSearchResult.mini_spreadsheet_fields
     rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
     return render(request, "collection.html", {"collection":collection, "settings":settings, "collections":collections, "columns":columns, "rows":rows})
+
+def listing_view(request):
+    columns = CardSearchResult.listing_spreadsheet_fields
+
+    cards = Card.objects.filter(
+        Q(search_results__ebay_listing_id__isnull=False) & ~Q(search_results__ebay_listing_id='') |
+        Q(search_results__sku__isnull=False) & ~Q(search_results__sku='') |
+        Q(search_results__ebay_offer_id__isnull=False) & ~Q(search_results__ebay_offer_id='') & ~Q(search_results__ebay_offer_id='None' )|
+        Q(search_results__ebay_listing_datetime__isnull=False)
+    ).distinct()
+    rows = spreadsheet_rows_from_search_result(cards, columns)
+        
+    return render(request, "spreadsheet_only.html", {"columns":columns, "rows":rows})
 
 def set_default_collection(request, collection_id):
     collection = get_object_or_404(Collection, id=collection_id)

@@ -4,29 +4,45 @@ from django.db.models import Min
 from django.utils.timezone import now
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Condition, Parallel, Season, CardNumber, SerialNumber
 from core.models.CardSearchResult import ListingGroup
-from django.db.models import F, When, Value, Case, BooleanField
+from django.db.models import F, Q, When, Value, Case, BooleanField
 
 from core.models.CardSearchResult import CardSearchResult, ProductGroup
 from core.models.Card import Card, Collection
 from services import ebay
 # Miscellaneous views
 
+from core.views import collection_views
+
 def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
+
+    columns = CardSearchResult.listing_spreadsheet_fields
+
+    cards = Card.objects.filter(
+        Q(search_results__ebay_listing_id__isnull=False) & ~Q(search_results__ebay_listing_id='') |
+        Q(search_results__sku__isnull=False) & ~Q(search_results__sku='') |
+        Q(search_results__ebay_offer_id__isnull=False) & ~Q(search_results__ebay_offer_id='') & ~Q(search_results__ebay_offer_id='None' )|
+        Q(search_results__ebay_listing_datetime__isnull=False)
+    ).distinct()
+
+
+
+
+
+    rows = collection_views.spreadsheet_rows_from_search_result(cards, columns)
     
-    pgs = ProductGroup.objects.all()
+    return render(request, "spreadsheet.html", {"columns":columns, "rows":rows})
+
+    '''pgs = ProductGroup.objects.all()
     for pg in pgs:
         for product in pg.products.all():
             product.ebay_product_group = None
             product.save()
     pgs.delete()
 
-
-
-
-    '''collection = Collection.objects.get(id=91)
+    collection = Collection.objects.get(id=91)
     for card in collection.cards.all():
         card.active_search_results().save()'''
     
