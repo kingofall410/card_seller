@@ -1,6 +1,6 @@
 from django import template
 import json
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ProductGroup
 from core.models.Card import Collection
 from core.models.Status import StatusBase
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
@@ -96,6 +96,10 @@ def status_icon_meta(value):
 @register.simple_tag
 def get_textonly():
     return CardSearchResult.text_fields
+
+@register.simple_tag
+def get_product_groups():
+    return [{"id": pg.id, "name": pg.name} for pg in ProductGroup.objects.all()]
 
 @register.simple_tag
 def get_all_options(field_key, csrId=None, collection_id=None):

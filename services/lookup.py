@@ -1,11 +1,11 @@
-from services import ebay
+from services import ebay, psa
 from services.models import Settings
 from core.models.Card import Card
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 
 
-def single_image_lookup(card: Card, all_fields = {}, settings=None, site="ebay", refine=False, scrape_sold_data=False, retry_limit=5, result_count_max=50, csr=None):
+def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay"], refine=False, scrape_sold_data=False, retry_limit=5, result_count_max=50, csr=None):
     print("SIL")
     settings = settings or Settings.get_default()
     listing_matches = {}
@@ -15,8 +15,12 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, site="ebay",
     resp_count = 0
     
     while (resp_count < result_count_max) and (page <= retry_limit):
-            
-        if site == "ebay":
+        
+        if "psa" in sites:
+            #TODO: ultimately this is backwards, my lookup modules need to be unifying to Card, not vice versa
+            psa_record = psa.scan_and_lookup(card.get_lookup_image())
+            csr = card.parse_psa_record(psa_record)
+        elif "ebay" in sites:
             listing_matches = ebay.image_search(card.get_lookup_image(), limit=result_count_max, page=page, settings=settings)
         
         csr = card.parse_and_tokenize_search_results(listing_matches, all_fields=all_fields, csr=csr, id_listings=True)
@@ -31,7 +35,7 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, site="ebay",
         csr.save()
 
         if refine:
-            text_refinement(csr, csr.text_search_string, all_fields, settings, site, retry_limit)
+            text_refinement(csr, csr.text_search_string, all_fields, settings, site=sites[0], retry_limit=retry_limit)
             csr.refinement_status = StatusBase.AUTO
         else:
             csr.refinement_status = StatusBase.UNEXECUTED
@@ -43,7 +47,7 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, site="ebay",
             csr.pricing_status = StatusBase.UNEXECUTED
             
         page += 1
-        resp_count = csr.response_count
+        resp_count = result_count_max
     
     return csr
 
@@ -123,10 +127,4 @@ def price_only(csr, settings, ss=None):
     csr.update_listings(matches_map)
     csr.pricing_status = StatusBase.MANUAL#default to manual status here, it's overridden during initial import
     csr.save()
-
-'''
-def lookup_collection(collection, settings=None, site="ebay"):
-    if not settings:
-        settings = Settings.get_default()
-    for card in collection.cards:
-        single_image_lookup(card, settings, site)'''
+    

@@ -30,7 +30,9 @@ class OverrideableFieldsMixin(models.Model):
             if select: 
                 setattr(self, selected_token_fieldname, selected_token)
         else:
-            print("link not found", available_tokens_fieldname, selected_token_fieldname)
+            #print("link not found", available_tokens_fieldname, selected_token_fieldname)
+            pass
+
         return selected_token
 
     def set_ovr_attribute(self, field, new_field_value, is_manual, all_field_data={}):
@@ -288,7 +290,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
-    def create_listing_group(self, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
+    def create_listing_group(self, label, filter_terms="", id_string="", is_img=False, is_refined=False, is_wide=False, is_sold=False):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
     def get_listing_group(self, label):
@@ -309,7 +311,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not self.title_to_be_is_manual:
             self.title_to_be = self.build_title()
 
-        self.variation_title = self.build_title(variation_title=True)
+        self.variation_title = self.build_title(variation_title=True, condition_sensitive=True)
 
         filter_terms = self.filter_terms or "" if self.filter_terms != "-" else ""
         if not self.sold_search_string_is_manual:
@@ -447,14 +449,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     aggregate[token.field_key][token.primary_value] += 1
                     self.add_token_link(CardSearchResult.stupid_map(token.field_key), token.primary_value, select=False)
                 else:
-                    print("no primary token:", token)
+                    #print("no primary token:", token)
+                    pass
 
             for token in listing.title.unknown_tokens:
                 aggregate["unknown_words"][token] += 1
 
         # Step 1: Build summary output with percentages
         summary = {}
-        total = self.response_count
+        total = len(listing_set)
         for key, counter in aggregate.items():
             summary[key] = [
                 (count, round((count / total) * 100), val)
@@ -546,7 +549,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             
                 if field_name in self.overrideable_fields:    
                     print("over")
-                    print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
+                    #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
                     is_manual = all_field_data.get(f"{field_name}_is_manual", True)
                     self.set_ovr_attribute(field_name, field_value, is_manual, all_field_data)
                 elif field_name.find('.') > 0:#checkbox groups
@@ -585,9 +588,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
         csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
         csr.ebay_msrp = 0.0
-        csr.create_listing_group("id", "", "", is_img=True)
+        csr.create_listing_group("id", is_img=True)
+        csr.create_listing_group("graded")
 
-        csr.response_count = 0
+        #csr.response_count = 0
         csr.save()
         return csr   
     
@@ -610,6 +614,23 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.save()
 
     @classmethod
+    def from_graded_card_record(cls, pcard, record, csr=None, tokenize=True):
+        if not csr:
+            csr = cls.create_empty(pcard)
+        
+        gg = csr.get_listing_group("graded")
+        gg.listings.all().delete()
+
+        listing = ProductListing.from_graded_card_record(record, csr, tokenize)
+        listing.listing_group = gg
+        listing.save()
+        if tokenize:
+            csr.collapsed_tokens = csr.collapse_token_maps()
+
+        csr.save()
+        return csr
+
+    @classmethod
     def from_search_results(cls, pcard, items=None, tokenize=True, all_fields={}, csr=None, id_listings=False):
         if not csr:
             csr = cls.create_empty(pcard)
@@ -630,7 +651,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     listing.save()
 
                         
-            csr.response_count = len(listing_set)
+            #csr.response_count = len(listing_set)
             #print("attribs:", csr.attribute_flags)
 
             #csr.aggregate_pricing_info()
@@ -645,10 +666,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def build_title(self, fields=None, shorter=False, shortest=False, condition_sensitive=False, variation_title=False):
         print("build title")
         #print("fields:", fields)
-        print("shorter", shorter)
-        print("shortest", shortest)
-        print("condition_sensitive", condition_sensitive)
-        print("variation_title", variation_title)
+        #print("shorter", shorter)
+        #print("shortest", shortest)
+        #print("condition_sensitive", condition_sensitive)
+        #print("variation_title", variation_title)
         if shortest:
             title_parts = [
                 self.display_value("year"),
@@ -845,6 +866,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.collapse_token_maps(listing_set)
         self.aggregate_pricing_info()
 
+
 class ListingGroup(models.Model):
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
     
@@ -940,6 +962,35 @@ class ProductListing(models.Model):
     @property
     def display_date(self):
         return self.sold_date.isoformat() if self.sold_date else self.listing_date.isoformat()
+
+    @classmethod
+    def from_graded_card_record(cls, record, parent_csr, tokenize=True):
+        listing = cls()
+        listing.item_id = record.get("itemId", "N/A")
+        listing.listing_date = "N/A"
+        '''pick this up here - testing the new image retrieval psa function
+
+        img_url = item.get("itemWebUrl", "No thumbnail")
+        if not img_url:
+            listing.img_url=""
+        elif img_url[:4] == "http":
+            listing.img_url = img_url
+        else:
+            listing.img_url = "http:"+img_url
+
+        listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", listing.img_url)
+        price = item.get("price", [{}])
+        if isinstance(price, str):
+            listing.ebay_price = price.replace('$', '').replace(',', '')
+        else:
+            listing.ebay_price = price.get("value","0")
+
+        listing.format = item.get("format", "N/A")
+        listing.qty = item.get("qty", "1")
+        listing.search_result = parent_csr
+        listing.save()
+        listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
+        listing.save() '''
 
     @classmethod
     def from_search_results(cls, item, parent_csr, tokenize=True):

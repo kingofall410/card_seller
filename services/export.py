@@ -90,9 +90,10 @@ def add_to_variation_group(csrs, access_token, group_name=None, publish=False):
     if ebay.has_user_consent(settings):
         csrs = [csr for csr in group.products.all()]
         variant_skus = [csr.sku for csr in csrs]
-        variant_card_titles = [csr.variation_title for csr in csrs]
+        #TODO:every card that was ever part of the group needs to remain valid as a variant for now
+        variant_card_titles = [csr.variation_title for csr in csrs] + ['1990 Topps Kay Bee #29', '1980 O-Pee-Chee #205']
         variant_fronts = [csr.shareable_link_front for csr in csrs]
-
+        print(variant_card_titles)
         inventory_group_data = {
             "aspects": {"Sport": ["Baseball"]},
             "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
@@ -123,7 +124,7 @@ def add_to_variation_group(csrs, access_token, group_name=None, publish=False):
 #TODO: This whole process is cobbled together.  needs to be fixed
 def export_to_ebay(csrs, publish=False, group=None):
     
-    print("ebay export")
+    print("ebay export ", group)
     settings = Settings.get_default()
     #uploader = GoogleDriveUploader()
     if ebay.has_user_consent(settings):
@@ -144,7 +145,7 @@ def export_to_ebay(csrs, publish=False, group=None):
 
         print(csr.list_price)
         item_data = csr.export_to_template(csr.sku, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
-        #print(item_data)
+        print(item_data)
         offer_data = {
             "sku": csr.sku,
             "marketplaceId": "EBAY_US",
@@ -195,6 +196,8 @@ def export_to_ebay(csrs, publish=False, group=None):
                 csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
 
             csr.save()
+        else:
+            ebay.get_inventory_group(group, access_token)
 
         return True, csr.ebay_offer_id, csr.ebay_listing_id
     

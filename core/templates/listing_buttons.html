@@ -1,137 +1,175 @@
-<div style="margin-top: 20px; display: flex; gap: 10px;">
+{% load custom_tags %}
+{% get_product_groups as groups %}
+
+<style>
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+</style>
+
+<div style="margin-top: 20px; position: relative;">
+  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
     <button id="listing-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🧾 List
+      🧾 List as Single
     </button>
-    <button id="add-to-group-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🧾 List in {{search_result.display_full_name}} Group
-    </button>
+
+    <div style="position: relative;">
+      <button id="add-to-group-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🧾 List in Group
+      </button>
+      <div id="group-dropdown-{{ card_id }}" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.1); min-width: 160px;">
+        <!-- Group options will be inserted here -->
+      </div>
+    </div>
+
     <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #8f2eccff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🚀 Export
+      🚀 Export
     </button>
-    <button id="stage-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #966e0bff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🤴 Stage
-    </button>
-    <button id="lock-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #000000; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    🔒 Lock
-    </button>
-    <button id="hold-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #f8a500ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    ✋ Hold
-    </button>
-    <button id="hold-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #f8a500ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    ✋→ Hold & Next
-    </button>
+  </div>
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        
-        const listingBtn = document.getElementById("listing-btn-{{ card_id }}");
-        const groupBtn = document.getElementById("add-to-group-btn-{{ card_id }}");
-        const exportBtn = document.getElementById("export-btn-{{ card_id }}");
-        const stageBtn = document.getElementById("stage-btn-{{ card_id }}");
-        const lockBtn = document.getElementById("lock-btn-{{ card_id }}");
-        const holdBtn = document.getElementById("hold-btn-{{ card_id }}");
-        const holdNextBtn = document.getElementById("hold-next-btn-{{ card_id }}");
-        const searchResultId = "{{ search_result.id }}"
-        const cardId = "{{ card_id }}";
+function showSpinnerOnButton(button) {
+    button.originalText = button.textContent;
+    button.disabled = true;
 
-        
-        listingBtn.addEventListener('click', () => {
-            console.log(` Listing triggered for ${listingBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/list_card/${searchResultId}`)
-                .then(res => res.json())
-                
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    spinner.style.display = 'inline-block';
+    spinner.style.width = '16px';
+    spinner.style.height = '16px';
+    spinner.style.border = '2px solid #ccc';
+    spinner.style.borderTop = '2px solid #333';
+    spinner.style.borderRadius = '50%';
+    spinner.style.animation = 'spin 0.6s linear infinite';
+    spinner.style.marginLeft = '8px';
+    button.textContent = '';
+    button.appendChild(spinner);
+}
+
+function restoreButton(button) {
+    button.textContent = button.originalText || 'List in Group';
+    button.disabled = false;
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const cardId = "{{ card_id }}";
+  const searchResultId = "{{ search_result.id }}";
+
+  const listingBtn = document.getElementById(`listing-btn-${cardId}`);
+  const groupBtn = document.getElementById(`add-to-group-btn-${cardId}`);
+  const dropdown = document.getElementById(`group-dropdown-${cardId}`);
+  const exportBtn = document.getElementById(`export-btn-${cardId}`);
+
+  const groupData = {{ groups|safe }}; // groups is a list of objects with id and name
+
+    let dropdownInitialized = false;
+    
+    // Add dynamic "Add to <full name> group"
+    const fullNameGroup = document.createElement('div');
+    const fullName = "{{ search_result.display_full_name }}";
+    fullNameGroup.textContent = `${fullName} Group`;
+    fullNameGroup.group_id = -1;
+    fullNameGroup.style.padding = '8px 12px';
+    fullNameGroup.style.cursor = 'pointer';
+    fullNameGroup.style.borderBottom = '1px solid #eee';
+    fullNameGroup.addEventListener('mouseover', () => fullNameGroup.style.backgroundColor = '#f0f0f0');
+    fullNameGroup.addEventListener('mouseout', () => fullNameGroup.style.backgroundColor = 'white');
+    fullNameGroup.addEventListener('click', () => {
+
+    dropdown.style.display = 'none';
+
+    fetch(`/list_card/${searchResultId}?publish=True&group=${fullNameGroup.group_id}`)
+        .then(res => res.json())
+        .then(data => {
+        console.log("Response:", data);
         });
-        
-        groupBtn.addEventListener('click', () => {
-            // Create input box if it doesn't exist
-            let inputBox = document.getElementById('group-name-input');
-            if (!inputBox) {
-                console.log("create box")
-                inputBox = document.createElement('input');
-                inputBox.type = 'text';
-                inputBox.id = 'group-name-input';
-                inputBox.placeholder = 'Enter group name';
-                inputBox.style.margin = '10px';
-                groupBtn.parentNode.insertBefore(inputBox, groupBtn.nextSibling);
-                return; // wait for user to enter name and click again
-            }
+    });
+    dropdown.appendChild(fullNameGroup);
 
-            const groupName = inputBox.value.trim();
-            if (!groupName) {
-                alert("Please enter a group name.");
-                return;
-            }
+    // Add dynamic "Add to <full_set> group"
+    const fullSetGroup = document.createElement('div');
+    const fullSet = "{{ search_result.full_set }}";
+    fullSetGroup.textContent = `${fullSet} Group`;
+    fullSetGroup.group_id = -2;
+    fullSetGroup.style.padding = '8px 12px';
+    fullSetGroup.style.cursor = 'pointer';
+    fullSetGroup.style.borderBottom = '1px solid #eee';
+    fullSetGroup.addEventListener('mouseover', () => fullSetGroup.style.backgroundColor = '#f0f0f0');
+    fullSetGroup.addEventListener('mouseout', () => fullSetGroup.style.backgroundColor = 'white');
+    fullSetGroup.addEventListener('click', () => {
 
-            console.log(`Group listing triggered for ${listingBtn.id}`);
-            console.log("SearchResult ID:", searchResultId);
-            console.log("Group Name:", groupName);
+    dropdown.style.display = 'none';
 
-            fetch(`/list_card/${searchResultId}?publish=True&group=${encodeURIComponent(groupName)}`)
+    fetch(`/list_card/${searchResultId}?publish=True&group=${fullSetGroup.group_id}`)
+        .then(res => res.json())
+        .then(data => {
+        console.log("Response:", data);
+        });
+    });
+    dropdown.appendChild(fullSetGroup);
+
+    groupBtn.addEventListener('click', () => {
+        if (!dropdownInitialized) {
+            // Add existing groups
+            groupData.forEach(group => {
+            const item = document.createElement('div');
+            item.textContent = group.name;
+            item.group_id = group.id;
+            item.style.padding = '8px 12px';
+            item.style.cursor = 'pointer';
+            item.style.borderBottom = '1px solid #eee';
+            item.addEventListener('mouseover', () => item.style.backgroundColor = '#f0f0f0');
+            item.addEventListener('mouseout', () => item.style.backgroundColor = 'white');
+            item.addEventListener('click', () => {
+              console.log(`Group listing triggered for ${groupBtn.id}`);
+              console.log("SearchResult ID:", item.group_id);
+              console.log("Group Name:", group.name);
+
+              dropdown.style.display = 'none';
+              showSpinnerOnButton(groupBtn);
+
+              fetch(`/list_card/${searchResultId}?publish=True&group=${item.group_id}`)
                 .then(res => res.json())
                 .then(data => {
                     console.log("Response:", data);
+                })
+                .catch(err => {
+                    console.error("Listing failed:", err);
+                })
+                .finally(() => {
+                    restoreButton(groupBtn);
+                    location.reload()
                 });
-        });
+          });
 
+            dropdown.appendChild(item);
+            });
 
-        exportBtn.addEventListener('click', () => {
-            console.log(` Export triggered for ${listingBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/export/${searchResultId}/`)
-                .then(res => res.json())
-                
-        });
+            dropdownInitialized = true;
+        }
 
-        stageBtn.addEventListener('click', () => {
-            console.log(` Stage triggered for ${listingBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/list_card/${searchResultId}?publish=False`)
-                .then(res => res.json())
-                
-        });
-
-        lockBtn.addEventListener('click', () => {
-            console.log(` Lock triggered for ${listingBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/list_card/${searchResultId}/`)
-                .then(res => res.json())
-                
-        });
-
-        holdBtn.addEventListener('click', () => {
-            console.log(` Hold triggered for ${holdBtn.id}`);
-            console.log(searchResultId);
-            fetch(`/hold_card/${searchResultId}/`)
-                .then(res => res.json())
-                
-        });
-
-        holdNextBtn.addEventListener('click', () => {
-            console.log(` Hold triggered for ${holdBtn.id}`);
-            console.log(searchResultId);
-            allFields = collectAllFields(cardId);
-            
-            $.ajax({
-                url: `/hold_card/${searchResultId}/`,
-                method: "POST",
-                data: {
-                    ...allFields
-                },
-                success: response => {
-                    {% if page_obj.hasNext %}
-                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}")
-                    {% else %}
-                        submitCardForm(null, null, "")
-                    {% endif %}
-                },
-                error: xhr => {
-                    console.error("Save error:", xhr.responseText);
-                    alert("Error saving changes.");
-                }
-            }); 
-                
-        });
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
     });
+
+
+  document.addEventListener('click', (e) => {
+    if (!groupBtn.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+
+  listingBtn.addEventListener('click', () => {
+    console.log(` Listing triggered for ${listingBtn.id}`);
+    fetch(`/list_card/${searchResultId}`).then(res => res.json());
+  });
+
+  exportBtn.addEventListener('click', () => {
+    console.log(` Export triggered for ${listingBtn.id}`);
+    fetch(`/export/${searchResultId}/`).then(res => res.json());
+  });
+});
 </script>

@@ -11,7 +11,7 @@
 {% include "header.html" %}
 {% include "refresh_timer.html" %}
 <div id="collection-tree">
-   {% comment %} {% include "manage_collection_node.html" with collection=collection settings=settings collections=collections %} {% endcomment %}
+    {% include "manage_collection_node.html" with collection=collection settings=settings collections=collections %}
 </div>
 {% include "spreadsheet.html" with columns=columns rows=rows %}
 

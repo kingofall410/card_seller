@@ -38,7 +38,8 @@
         name="list_price"
         value="{{ search_result.list_price }}"
         data-default="{{ price }}"
-        data-maxlength="80">
+        data-maxlength="80"
+        onblur="handleEnterPress(this.name, {{ card_id }}, {{ search_result.id }})">
     </td>
     <td><label for="field_ebay_listing_id-{{ card_id }}">eBay Listing ID</label></td>
     <td>

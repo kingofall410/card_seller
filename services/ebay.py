@@ -333,6 +333,7 @@ def create_inventory_item(sku, item_data, access_token):
     }
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
+    
     response = requests.put(url, headers=headers, json=item_data)
     print("Inventory response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
@@ -340,7 +341,7 @@ def create_inventory_item(sku, item_data, access_token):
 def create_inventory_group(group_id, group_data, access_token):
     #get_user_auth()
     #delete_inventory_group(group_id, access_token)
-    
+    get_inventory_group(group_id, access_token)
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -368,6 +369,24 @@ def delete_inventory_group(group_id, access_token):
     response = requests.delete(url, headers=headers)
     print("Inventory Delete response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
+
+
+def get_inventory_group(group_id, access_token):
+    #get_user_auth()
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+    
+    url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
+    response = requests.get(url, headers=headers)
+    print("Inventory Get response: ", response, response.text)
+    return
+    return response.status_code == 200 or response.status_code == 204
+
 
 def get_or_create_offer(offer_data, access_token, sku=None):
 

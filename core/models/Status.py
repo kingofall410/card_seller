@@ -14,7 +14,7 @@ class StatusBase(models.TextChoices):
 
     @classmethod
     def get_meta(cls, value):
-        print(value)
+        #print(value)
         return {
             cls.UNEXECUTED: {"icon": "🚫", "color": "#ffffff"},
             cls.MANUAL: {"icon": "✋", "color": "#fffbe6"},

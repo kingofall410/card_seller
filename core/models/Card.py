@@ -123,7 +123,7 @@ class Card(models.Model):
         return self.reverse_image
 
     @classmethod
-    def from_filename(cls, collection, filepath, crop=True, match_back=True):
+    def from_filename(cls, collection, filepath, crop=True, match_back=True, is_slab=False):
         print("from filename")
         """
         Create and save a Card instance from a file path.
@@ -135,19 +135,19 @@ class Card(models.Model):
         #clean all this up, throw out the paths and just keep files
         #create card object and save front/back images
         card = cls()
-        print("1")
+        #print("1")
         card.collection = collection
-        print("2")
+        #print("2")
 
         #TODO: careful taking this out now seems to
         #rotated = card.force_rotate(filepath)
         card.save()
-        print("3")
+        #print("3")
         #success, rotated = cv2.imencode('.jpg', rotated)
-        print("4")
+        #print("4")
 
         card.uploaded_image = CroppedImage.create(save_to_filepath=filepath)
-        print("5")
+        #print("5")
         back_filepath = None
         if match_back:
             back_filepath = card.find_back_by_alpha(filepath)
@@ -158,13 +158,18 @@ class Card(models.Model):
                 card.reverse_image = CroppedImage.create(save_to_filepath=os.path.join("cropped_cards/", back_filepath))
                 match_back_success = True
                 card.reverse_id = str(card.id)+"R"
-        print("6")        
+        #print("6")        
         # Handle cropping if requested
         if crop:
-            print("7")
-            cropped, portrait, crop_params = card.crop_and_align_card4(filepath) 
+            fixed_crop = None
+            if is_slab:
+                #fixed_crop = (0.15, 0.25, 0.85, 0.925)
+                fixed_crop = (0, 0, 1, 1)
+            print("Cropping Front")
+
+            cropped, portrait, crop_params = card.crop_and_align_card3(filepath, fixed_crop_params=fixed_crop) 
             
-            print("8")           
+            #print("8")           
             if cropped and portrait and crop_params:
                 
                 print("9")
@@ -187,7 +192,7 @@ class Card(models.Model):
                 if match_back and card.reverse_image:   
                     print("14")
                     # Crop and save reverse 
-                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card4(card.reverse_image.img.path)
+                    cropped_back, portrait_back, crop_params_back = card.crop_and_align_card3(card.reverse_image.img.path, fixed_crop_params=fixed_crop)
                     if cropped_back and portrait_back and crop_params_back:
                         print("15")
                         base, _ = os.path.splitext(os.path.basename(card.reverse_image.img.path))
@@ -489,9 +494,8 @@ class Card(models.Model):
 
         return rotated
 
-    def crop_and_align_card3(self, filepath, buffer=15, max_rotation=5):
-
-        print("Processing image for cropping and alignment:", filepath)
+    def crop_and_align_card3(self, filepath, buffer=15, max_rotation=5, fixed_crop_params=None, rotate=0.0):
+        print("Processing image for cropping and alignment:", filepath, fixed_crop_params)
 
         def save_debug(img, label):
             base = os.path.splitext(os.path.basename(filepath))[0]
@@ -500,170 +504,184 @@ class Card(models.Model):
             path = os.path.join(debug_dir, f"{base}_{label}.png")
             cv2.imwrite(path, img)
 
-        img = cv2.imread(filepath)
+        original_img = cv2.imread(filepath)
+        original_h, original_w = original_img.shape[:2]
+        scale_factor = 0.25  # or 0.25 for aggressive speedup
+        img = cv2.resize(original_img, (0, 0), fx=scale_factor, fy=scale_factor)
+
         if img is None:
             print("⚠️ Failed to read image.")
             return None, None, None
 
         h, w = img.shape[:2]
-        center = (w // 2, h // 2)
+        portrait_img = original_img.copy()
 
-        # 🌗 Radial brightness correction
-        def correct_radial_brightness(image, strength=0.4):
-            h, w = image.shape[:2]
-            center = (w // 2, h // 2)
-            Y, X = np.ogrid[:h, :w]
-            dist = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
-            max_dist = np.max(dist)
+        if fixed_crop_params:
+            print("📐 Using fixed crop coordinates.")
+            bb_x1 = int(fixed_crop_params[0]*w)
+            bb_y1 = int(fixed_crop_params[1]*h)
+            bb_x2 = int(fixed_crop_params[2]*w)
+            bb_y2 = int(fixed_crop_params[3]*h)
+            skew_angle = rotate
+            print(bb_x1, bb_y1, bb_x2, bb_y2)
+            if abs(skew_angle) > 0.01:
+                skew_matrix = cv2.getRotationMatrix2D((w // 2, h // 2), skew_angle, 1.0)
+                img = cv2.warpAffine(img, skew_matrix, (w, h))
+                portrait_img = img.copy()
 
-            # Inverted radial mask: center = 0, corners = 1
-            radial_mask = dist / max_dist
-            radial_mask = cv2.GaussianBlur(radial_mask, (0, 0), sigmaX=0.5 * max_dist)
-
-            # Scale to desired strength and apply as a boost
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            h_ch, s_ch, v_ch = cv2.split(hsv)
-            v_boost = v_ch.astype(np.float32) + (radial_mask * 255 * strength)
-            v_boost = np.clip(v_boost, 0, 255).astype(np.uint8)
-
-            corrected_hsv = cv2.merge([h_ch, s_ch, v_boost])
-            corrected_bgr = cv2.cvtColor(corrected_hsv, cv2.COLOR_HSV2BGR)
-            return corrected_bgr
-
-        corrected = correct_radial_brightness(img)
-        #save_debug(corrected, "1_radial_corrected")
-
-        # 🧊 Grayscale + blur
-        gray = cv2.cvtColor(corrected, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        #save_debug(blurred, "2_blurred_gray")
-
-        # 🎯 Gradient edge detection
-        grad_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
-        magnitude = cv2.magnitude(grad_x, grad_y)
-        edge_mask = cv2.convertScaleAbs(magnitude)
-        _, edge_mask = cv2.threshold(edge_mask, 40, 255, cv2.THRESH_BINARY)
-        save_debug(edge_mask, "3_raw_edges")
-
-        # 🔧 Morphological cleanup
-        edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
-        edge_mask = cv2.dilate(edge_mask, np.ones((5, 5), np.uint8), iterations=1)
-        #save_debug(edge_mask, "4_cleaned_edges")
-
-        # 🧱 Contour selection
-        contours, _ = cv2.findContours(edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        selected_contour = None
-        best_score = -1
-        for cnt in contours:
-            rect = cv2.minAreaRect(cnt)
-            (rw, rh) = rect[1]
-            area = rw * rh
-            aspect = max(rw, rh) / min(rw, rh) if min(rw, rh) else 0
-            if 0.5 < aspect < 2.2 and area > 0.6 * h * w:
-                M = cv2.moments(cnt)
-                if M["m00"] == 0: continue
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                dist = np.hypot(cx - center[0], cy - center[1])
-                score = area - dist * 10
-                if score > best_score:
-                    best_score = score
-                    selected_contour = cnt
-
-        if selected_contour is None:
-            print("⚠️ No valid contour found — fallback to full image.")
-            selected_contour = np.array([
-                [[0, 0]], [[w - 1, 0]],
-                [[w - 1, h - 1]], [[0, h - 1]]
-            ])
-
-        rect = cv2.minAreaRect(selected_contour)
-        bounding_box_points = cv2.boxPoints(rect)
-        bounding_box_points = bounding_box_points.astype(np.intp)
-
-        # Normalize OpenCV angle and clamp rotation
-        bounding_box_rotation = rect[2]
-
-        if bounding_box_rotation > 45:
-            bounding_box_rotation -= 90
+            final_crop = img[bb_y1:bb_y2, bb_x1:bb_x2]
             
-        #if we found an angle that is too extreme it's probably not right, just set to 0
-        skew_angle = bounding_box_rotation if abs(bounding_box_rotation) < max_rotation else 0
-        print("skew", skew_angle, ": ", bounding_box_rotation)
+        else:   
+            center = (w // 2, h // 2)   
 
-        # skew full original image and bounding box to align slightly misalgned cards
-        skew_matrix = cv2.getRotationMatrix2D(rect[0], skew_angle, 1.0)
-        skewed_original_image = cv2.warpAffine(img, skew_matrix, (w, h))
-        skewed_bounding_box_points = cv2.transform(np.array([bounding_box_points]), skew_matrix)[0]
+            # 🌗 Radial brightness correction
+            def correct_radial_brightness(image, strength=0.4):
+                h, w = image.shape[:2]
+                center = (w // 2, h // 2)
+                Y, X = np.ogrid[:h, :w]
+                dist = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+                max_dist = np.max(dist)
 
-        # Reduce to min/max points
-        bb_x1, bb_y1 = skewed_bounding_box_points.min(axis=0)
-        bb_x2, bb_y2 = skewed_bounding_box_points.max(axis=0)
-        bb_x1 = max(int(bb_x1) - buffer, 0)
-        bb_y1 = max(int(bb_y1) - buffer, 0)
-        bb_x2 = min(int(bb_x2) + buffer, skewed_original_image.shape[1])
-        bb_y2 = min(int(bb_y2) + buffer, skewed_original_image.shape[0])
+                # Inverted radial mask: center = 0, corners = 1
+                radial_mask = dist / max_dist
+                radial_mask = cv2.GaussianBlur(radial_mask, (0, 0), sigmaX=0.5 * max_dist)
 
-        # Perform the final crop on the skewed image
-        final_crop = skewed_original_image[bb_y1:bb_y2, bb_x1:bb_x2]
-        # Use final image height for coordinate rotation
-        final_crop_height = final_crop.shape[0]
+                # Scale to desired strength and apply as a boost
+                hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+                h_ch, s_ch, v_ch = cv2.split(hsv)
+                v_boost = v_ch.astype(np.float32) + (radial_mask * 255 * strength)
+                v_boost = np.clip(v_boost, 0, 255).astype(np.uint8)
 
-        # Rotate final crop if width > height so that we can ensure we're working on a portrait
-        #why do we do this at the top and bottom?
-        portrait_img = img.copy()
-        final_crop_height = portrait_img.shape[0]
-        
-        if final_crop.shape[1] > final_crop.shape[0]:
+                corrected_hsv = cv2.merge([h_ch, s_ch, v_boost])
+                corrected_bgr = cv2.cvtColor(corrected_hsv, cv2.COLOR_HSV2BGR)
+                return corrected_bgr
+
+            #corrected = correct_radial_brightness(img)
+            #save_debug(corrected, "1_radial_corrected")
+
+            # 🧊 Grayscale + blur
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            #save_debug(blurred, "2_blurred_gray")
+
+            # 🎯 Gradient edge detection
+            grad_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
+            magnitude = cv2.magnitude(grad_x, grad_y)
+            edge_mask = cv2.convertScaleAbs(magnitude)
+            _, edge_mask = cv2.threshold(edge_mask, 40, 255, cv2.THRESH_BINARY)
+            #save_debug(edge_mask, "3_raw_edges")
+
+            # 🔧 Morphological cleanup
+            edge_mask = cv2.morphologyEx(edge_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=2)
+            edge_mask = cv2.dilate(edge_mask, np.ones((5, 5), np.uint8), iterations=1)
+            #save_debug(edge_mask, "4_cleaned_edges")
+
+            # 🧱 Contour selection
+            contours, _ = cv2.findContours(edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            selected_contour = None
+            best_score = -1
+            for cnt in contours:
+                rect = cv2.minAreaRect(cnt)
+                (rw, rh) = rect[1]
+                area = rw * rh
+                aspect = max(rw, rh) / min(rw, rh) if min(rw, rh) else 0
+                if 0.5 < aspect < 2.2 and area > 0.6 * h * w:
+                    M = cv2.moments(cnt)
+                    if M["m00"] == 0: continue
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    dist = np.hypot(cx - center[0], cy - center[1])
+                    score = area - dist * 10
+                    if score > best_score:
+                        best_score = score
+                        selected_contour = cnt
+
+            if selected_contour is None:
+                print("⚠️ No valid contour found — fallback to full image.")
+                selected_contour = np.array([
+                    [[0, 0]], [[w - 1, 0]],
+                    [[w - 1, h - 1]], [[0, h - 1]]
+                ])
+
             
-            final_crop = cv2.rotate(final_crop, cv2.ROTATE_90_CLOCKWISE)
-            portrait_img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            rect = cv2.minAreaRect(selected_contour)
+            bounding_box_points = cv2.boxPoints(rect)
+            bounding_box_points = bounding_box_points.astype(np.intp)
 
-            def rotate_point(x, y, height):
-                return height - y - 1, x
+            # Scale rect center and box points to original resolution
+            rect_center_scaled = (rect[0][0] / scale_factor, rect[0][1] / scale_factor)
+            bounding_box_points_scaled = bounding_box_points.astype(np.float32) / scale_factor
 
-            rotated_points = np.array([rotate_point(x, y, final_crop_height) for x, y in skewed_bounding_box_points])
 
-            #Now switch to using portrait img
-            # Crop rotated bounding box from rotated image
-            bb_x1, bb_y1 = rotated_points.min(axis=0)
-            bb_x2, bb_y2 = rotated_points.max(axis=0)
 
+            # Normalize OpenCV angle and clamp rotation
+            bounding_box_rotation = rect[2]
+
+            if bounding_box_rotation > 45:
+                bounding_box_rotation -= 90
+                
+            #if we found an angle that is too extreme it's probably not right, just set to 0
+            skew_angle = bounding_box_rotation if abs(bounding_box_rotation) < max_rotation else 0
+            #print("skew", skew_angle, ": ", bounding_box_rotation)
+
+            # skew full original image and bounding box to align slightly misalgned cards
+            skew_matrix = cv2.getRotationMatrix2D(rect_center_scaled, skew_angle, 1.0)
+            skewed_original_image = cv2.warpAffine(original_img, skew_matrix, (original_w, original_h))
+            skewed_bounding_box_points = cv2.transform(np.array([bounding_box_points_scaled]), skew_matrix)[0]
+
+
+            # Reduce to min/max points
+            bb_x1, bb_y1 = skewed_bounding_box_points.min(axis=0)
+            bb_x2, bb_y2 = skewed_bounding_box_points.max(axis=0)
             bb_x1 = max(int(bb_x1) - buffer, 0)
             bb_y1 = max(int(bb_y1) - buffer, 0)
-            bb_x2 = min(int(bb_x2) + buffer, portrait_img.shape[1])
-            bb_y2 = min(int(bb_y2) + buffer, portrait_img.shape[0])
+            bb_x2 = min(int(bb_x2) + buffer, skewed_original_image.shape[1])
+            bb_y2 = min(int(bb_y2) + buffer, skewed_original_image.shape[0])
 
+            # Perform the final crop on the skewed image
+            final_crop = skewed_original_image[bb_y1:bb_y2, bb_x1:bb_x2]
 
-        # Check if aspect ratio is too extreme — fallback if so
-        aspect = final_crop.shape[1] / final_crop.shape[0] if final_crop.shape[0] else 0
-        #if aspect > 3.0 or aspect < 0.3:
-            #print("⚠️ Cropped region has unusual aspect ratio — reverting to original image.")
-            #final_crop = img.copy()
-            #crop_params = None
-        #else:
-        crop_params = CropParams.objects.create(x=bb_x1, y=bb_y1, width=bb_x2-bb_x1, height=bb_y2-bb_y1, rotate=float(skew_angle))
-        crop_params.save()
-        print("Cp:",  crop_params)
-        
-        # Encode as jpg
+            # Ensure portrait orientation
+            if final_crop.shape[1] > final_crop.shape[0]:
+                final_crop = cv2.rotate(final_crop, cv2.ROTATE_90_CLOCKWISE)
+                portrait_img = cv2.rotate(original_img, cv2.ROTATE_90_CLOCKWISE)
+
+                def rotate_point(x, y, height):
+                    return height - y - 1, x
+
+                rotated_points = np.array([rotate_point(x, y, original_h) for x, y in skewed_bounding_box_points])
+
+                #Now switch to using portrait img
+                # Crop rotated bounding box from rotated image
+                bb_x1, bb_y1 = rotated_points.min(axis=0)
+                bb_x2, bb_y2 = rotated_points.max(axis=0)
+
+                bb_x1 = max(int(bb_x1) - buffer, 0)
+                bb_y1 = max(int(bb_y1) - buffer, 0)
+                bb_x2 = min(int(bb_x2) + buffer, portrait_img.shape[1])
+                bb_y2 = min(int(bb_y2) + buffer, portrait_img.shape[0])
+
+        # Encode final_crop
         success, buffer = cv2.imencode(".jpg", final_crop)
         if not success:
             raise ValueError("Image encoding failed.")
         django_file = ContentFile(buffer.tobytes())
 
-        
-        #encode the new portrait image
+        # Encode portrait image
         success, encoded_image = cv2.imencode('.jpg', portrait_img)
-        if success:
-            portrait_django_file = ContentFile(encoded_image.tobytes())
-        else:
-            raise ValueError("Failed to encode portrait image")      
+        if not success:
+            raise ValueError("Failed to encode portrait image")
+        portrait_django_file = ContentFile(encoded_image.tobytes())
 
+        crop_params = CropParams.objects.create(x=bb_x1, y=bb_y1, width=bb_x2 - bb_x1, height=bb_y2 - bb_y1, rotate=float(skew_angle))
+        crop_params.save()
+        print("Cp:", crop_params)
         return django_file, portrait_django_file, crop_params
+
+
     
-    def crop_and_align_card4(self, filepath, buffer=15, max_rotation=5):
+    def multi_card_crop_and_align(self, filepath, buffer=15, max_rotation=5):
         print("Processing image for cropping and alignment:", filepath)
 
         def save_debug(img, label):
@@ -848,7 +866,7 @@ class Card(models.Model):
             
         #if we found an angle that is too extreme it's probably not right, just set to 0
         skew_angle = bounding_box_rotation if abs(bounding_box_rotation) < max_rotation else 0
-        print("skew", skew_angle, ": ", bounding_box_rotation)
+       #print("skew", skew_angle, ": ", bounding_box_rotation)
 
         # skew full original image and bounding box to align slightly misalgned cards
         skew_matrix = cv2.getRotationMatrix2D(rect[0], skew_angle, 1.0)
@@ -903,7 +921,7 @@ class Card(models.Model):
         #else:
         crop_params = CropParams.objects.create(x=bb_x1, y=bb_y1, width=bb_x2-bb_x1, height=bb_y2-bb_y1, rotate=float(skew_angle))
         crop_params.save()
-        print("Cp:",  crop_params)
+        #print("Cp:",  crop_params)
         
         # Encode as jpg
         success, buffer = cv2.imencode(".jpg", final_crop)
@@ -1035,6 +1053,8 @@ class Card(models.Model):
 
         return django_file, portrait_django_file, crop_params
 
+    def parse_psa_record(self, psa_record):
+        csr = CardSearchResult.from_graded_card_record(self, record=psa_record)
 
     def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None, id_listings=False):
         csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr, id_listings=id_listings)

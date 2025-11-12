@@ -64,10 +64,12 @@
             });
         });
         priceBtn.addEventListener('click', () => {
+            showSpinnerOnButton(priceBtn);
             fetch(`/price_only/${searchResultId}/`, { 
                 method: 'GET',
             }).then(response => {
                 console.log("Successfully");
+                restoreButton(priceBtn);
                 location.reload()
             }).catch(error => {
                 console.error("Save error", error);

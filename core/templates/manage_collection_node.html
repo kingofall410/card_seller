@@ -486,9 +486,11 @@ function priceCollection(collectionId) {
     {% endfor %}
     
     <div class="card-item add-controls">
-        <button class="add-button" onclick="triggerFileUpload({{ collection.id }})" title="Add Card">➕ Card</button>
+        <button name="card" class="add-button" onclick='triggerFileUpload("cardFileInput_{{ collection.id }}")' title="Add Card">➕ Card</button>
+        <button name="slab" class="add-button" onclick='triggerFileUpload("slabFileInput_{{ collection.id }}")' title="Add Slab">➕ Slab</button>
         <button class="add-button" onclick="addSubcollection({{ collection.id }})" title="Add Subcollection">📁 Subcollection</button>
-        <input type="file" id="fileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadImage({{ collection.id }}, this.files)" multiple>
+        <input type="file" id="cardFileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadImage({{ collection.id }}, this.files)" multiple>
+        <input type="file" id="slabFileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadSlab({{ collection.id }}, this.files)" multiple>
 
     </div>
 
@@ -629,8 +631,8 @@ function updateSelection(collectionId) {
   }
 }
 
-function triggerFileUpload(collectionId) {
-  document.getElementById("fileInput_" + collectionId).click();
+function triggerFileUpload(elementId) {
+  document.getElementById(elementId).click();
 }
 
 function uploadImage(collectionId, files) {
@@ -656,6 +658,29 @@ function uploadImage(collectionId, files) {
   });
 }
 
+function uploadSlab(collectionId, files) {
+  if (!files || files.length === 0) return;
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("images", files[i]); // Django expects 'images' as a list
+  }
+  formData.append("collection_id", collectionId);
+  formData.append("slab", true);
+
+  fetch("/upload_image/", {
+    method: "POST",
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload(); // or dynamically insert new cards
+    } else {
+      alert("Upload failed: " + data.message);
+    }
+  });
+}
 
 function getCSRFToken() {
   return document.querySelector('[name=csrfmiddlewaretoken]').value;
