@@ -27,7 +27,7 @@ class Collection(models.Model):
     def get_size(self):
         return len(self.cards.all())
     
-    def nxt(self, card_id):
+    def next(self, card_id):
         return self.cards.filter(id__gt=card_id).order_by('id').first()
 
     def previous(self, card_id):
@@ -51,10 +51,12 @@ class Card(models.Model):
     notes = models.TextField(blank=True)
     listing_details = models.TextField(blank=True)
         
-    def next_card(self):
-        return self.collection.nxt(self.id)
+    @property
+    def next(self):
+        return self.collection.next(self.id)
     
-    def previous_card(self):
+    @property
+    def previous(self):
         return self.collection.previous(self.id)
 
     def get_lookup_image(self):

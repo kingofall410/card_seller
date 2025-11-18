@@ -99,7 +99,7 @@ def get_textonly():
 
 @register.simple_tag
 def get_product_groups():
-    return [{"id": pg.id, "name": pg.name} for pg in ProductGroup.objects.all()]
+    return [{"id": pg.id, "name": pg.group_title or pg.group_key} for pg in ProductGroup.objects.all().order_by('-id')]
 
 @register.simple_tag
 def get_all_options(field_key, csrId=None, collection_id=None):

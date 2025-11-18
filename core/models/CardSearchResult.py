@@ -101,7 +101,9 @@ class OverrideableFieldsMixin(models.Model):
 
 
 class ProductGroup(models.Model):
-    name = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
+    group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
+    group_title = models.CharField(max_length=50, blank=True, null=True)
+    
 
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO: this class needs to be broken up
@@ -800,11 +802,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         condition_descriptor = [
             {
                 "name": 40001,
-                "values": [int(condition_token.ebay_id_value)]
+                "values": [int(condition_token.primary_token.ebay_id_value)]
             }
         ]
         filled_template["conditionDescriptors"] = condition_descriptor
-        filled_template["product"]["aspects"]["Card Condition"] = condition_token.ebay_string_value
+        filled_template["product"]["aspects"]["Card Condition"] = condition_token.primary_token.ebay_string_value
         filled_template["product"]["aspects"]["Sport"] = "Baseball"
         filled_template["product"]["aspects"]["League"] = "MLB"
         filled_template["product"]["imageUrls"] = image_links

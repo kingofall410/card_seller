@@ -75,56 +75,87 @@ def test_create_ebay_location():
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         ebay.create_location(access_token)
 
-def add_to_variation_group(csrs, access_token, group_name=None, publish=False):
-    #TODO:check to see if the group exists before overwriting it once we create django objects
-    group_name = group_name or csrs[0].display_full_name
-    settings = Settings.get_default()
+def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
+    #TODO:this is stupid just pass the group
+    if group_key == "-1":
+        group_key = csrs[0].display_full_name + "Dollar Bin"
+    elif group_key == "-2":
+        group_key = csrs[0].full_set + "Commons"
     
     #find or create django group object
-    group, _ = ProductGroup.objects.get_or_create(name=group_name)
+    group, _ = ProductGroup.objects.get_or_create(group_key=group_key)
+    group_title = group.group_title or group_key
+    
     for csr in csrs:
         csr.ebay_product_group = group
         csr.save()
 
     listing_id = None
-    if ebay.has_user_consent(settings):
-        csrs = [csr for csr in group.products.all()]
-        variant_skus = [csr.sku for csr in csrs]
-        #TODO:every card that was ever part of the group needs to remain valid as a variant for now
-        variant_card_titles = [csr.variation_title for csr in csrs] + ['1990 Topps Kay Bee #29', '1980 O-Pee-Chee #205']
-        variant_fronts = [csr.shareable_link_front for csr in csrs]
-        print(variant_card_titles)
-        inventory_group_data = {
-            "aspects": {"Sport": ["Baseball"]},
-            "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
-            "imageUrls": [csrs[0].shareable_link_front],
-            "inventoryItemGroupKey": group_name,
-            #"subtitle": "",
-            "title": group_name,
-            "variantSKUs": variant_skus,
-            "variesBy": {
-                "aspectsImageVariesBy": [
-                    "Card"
-                ],
-                "specifications": [
-                {
-                    "name": "Card",
-                    "values": variant_card_titles
-                }
-                ]
+    
+    csrs = [csr for csr in group.products.all()]
+    variant_skus = [csr.sku for csr in csrs]
+    #TODO:every card that was ever part of the group needs to remain valid as a variant for now
+    variant_card_titles = [csr.variation_title for csr in csrs] + ['1990 Topps Kay Bee #29', '1980 O-Pee-Chee #205,' '1988 Topps Tiffany #400 NM',   '1988 Topps Tiffany #400 NM', '1988 Topps Tiffany #400 NM+']
+    
+    inventory_group_data = {
+        "aspects": {"Sport": ["Baseball"]},
+        "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
+        "imageUrls": [csrs[0].shareable_link_front],
+        "inventoryItemGroupKey": group.group_key,
+        #"subtitle": "",
+        "title": group_title,
+        "variantSKUs": variant_skus,
+        "variesBy": {
+            "aspectsImageVariesBy": [
+                "Card"
+            ],
+            "specifications": [
+            {
+                "name": "Card",
+                "values": variant_card_titles
             }
+            ]
         }
-        
-        if ebay.create_inventory_group(group_name, inventory_group_data, access_token):
-            if publish:
-                listing_id = ebay.publish_inventory_group(group_name, access_token)
+    }
+    
+    if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
+        if publish:
+            listing_id = ebay.publish_inventory_group(group.group_key, access_token)
     return listing_id
 
 
+def clear_inventory_group(group_key):
+
+    group, _ = ProductGroup.objects.get_or_create(group_key=group_key)
+    csrs = [csr for csr in group.products.all()]
+    inventory_group_data = {
+        "aspects": {"Sport": ["Baseball"]},
+        "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
+        "imageUrls": ["http://www.google.com"],
+        "inventoryItemGroupKey": group_key,
+        #"subtitle": "",
+        "title": group_key,
+        "variantSKUs": [],
+        "variesBy": {
+            "aspectsImageVariesBy": [
+                "Card"
+            ],
+            "specifications": [
+            {
+                "name": "Card",
+                "values": []
+            }
+            ]
+        }
+    }
+    settings = Settings.get_default()
+    access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
+    ebay.create_inventory_group(group_key, inventory_group_data, access_token)
+
 #TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csrs, publish=False, group=None):
+def export_to_ebay(csrs, publish=False, group_key=None):
     
-    print("ebay export ", group)
+    print("ebay export ", group_key)
     settings = Settings.get_default()
     #uploader = GoogleDriveUploader()
     if ebay.has_user_consent(settings):
@@ -190,14 +221,14 @@ def export_to_ebay(csrs, publish=False, group=None):
                 "Error response from ebay"
                 csr.ebay_listing_id = ""
             
-            if group:
-                csr.ebay_listing_id = add_to_variation_group([csr], access_token, group_name=group, publish=publish)
+            if group_key:
+                csr.ebay_listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
             elif publish:
                 csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
 
             csr.save()
         else:
-            ebay.get_inventory_group(group, access_token)
+            ebay.get_inventory_group(group_key, settings, access_token)
 
         return True, csr.ebay_offer_id, csr.ebay_listing_id
     

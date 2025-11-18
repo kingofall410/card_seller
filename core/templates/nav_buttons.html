@@ -1,18 +1,19 @@
 <div class="nav-buttons">
-  {% if prev_id %}
-    <button id="prev" class="nav-button prev" data-url="{% url 'view_card' prev_id %}" onclick="handlePrev()">← Previous Card</button>
+
+  {% if previous %}
+    <button id="prev" class="nav-button prev" data-url="{% url url_name previous %}" onclick="handlePrev()">← Previous</button>
 
   {% else %}
-    <span class="nav-button disabled">← Previous Card</span>
+    <span class="nav-button disabled">← Previous</span>
   {% endif %}
 
-  <button id="prev" class="nav-button up" data-url="{% url 'manage' collection.id %}">⬆ Collection {{ collection_id }} ⬆</button>
+  <button id="prev" class="nav-button up" data-url="{% url up_url up %}">Up</button>
 
-  {% if next_id %}
-    <button id="next" class="nav-button next" data-url="{% url 'view_card' next_id %}" onclick="handleNext()">Next Card →</button>
+  {% if next %}
+    <button id="next" class="nav-button next" data-url="{% url url_name next %}" onclick="handleNext()">Next →</button>
 
   {% else %}
-    <span class="nav-button disabled">Next Card →</span>
+    <span class="nav-button disabled">Next →</span>
   {% endif %}
 </div>
 

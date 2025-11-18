@@ -341,7 +341,7 @@ def create_inventory_item(sku, item_data, access_token):
 def create_inventory_group(group_id, group_data, access_token):
     #get_user_auth()
     #delete_inventory_group(group_id, access_token)
-    get_inventory_group(group_id, access_token)
+    #get_inventory_group(group_id, access_token)
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -350,14 +350,14 @@ def create_inventory_group(group_id, group_data, access_token):
     }
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
+    print("create_inventory_group:", group_data)
     response = requests.put(url, headers=headers, json=group_data)
     print("Inventory Group response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
 
-
-def delete_inventory_group(group_id, access_token):
+def delete_inventory_group(group_id, settings, access_token=None):
     #get_user_auth()
-    
+    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -371,9 +371,9 @@ def delete_inventory_group(group_id, access_token):
     return response.status_code == 200 or response.status_code == 204
 
 
-def get_inventory_group(group_id, access_token):
+def get_inventory_group(group_id, settings, access_token=None):
     #get_user_auth()
-    
+    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
@@ -383,6 +383,7 @@ def get_inventory_group(group_id, access_token):
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
     response = requests.get(url, headers=headers)
+    print("inventory get request:", group_id)
     print("Inventory Get response: ", response, response.text)
     return
     return response.status_code == 200 or response.status_code == 204

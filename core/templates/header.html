@@ -43,7 +43,7 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       border-radius: 6px;
       overflow: hidden;
-      min-width: 200px;
+      min-width: 420px;
       z-index: 1000;
     ">
       <a href="{% url 'manage_collection' %}" class="nav-link">
@@ -52,7 +52,7 @@
       {% get_collections as collections %}
       {% for collection in collections %}
       <a href="{% url 'collection' collection.id %}" class="nav-link">
-         🗃️ Collection {{ collection.id }} ({{ collection.get_size }})
+        {{ collection.id }}.   {{ collection.name }} ({{ collection.get_size }})
       </a>
       {% endfor %}
 

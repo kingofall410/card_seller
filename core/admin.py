@@ -26,7 +26,7 @@ admin.site.register(ListingGroup)
 
 @admin.register(ProductGroup)
 class ProductGroupAdmin(admin.ModelAdmin):
-    list_display = ['name']
+    list_display = ['id', 'group_key', 'group_title']
 
 
 #-gold -chrome -yellow -green -red -blue -refractor -psa -sgc -cgc -purple -rainbow -foil -aqua -wave -raywave -logofractor -x-fractor

@@ -72,7 +72,7 @@ def view_card(request, card_id):
             "display_default": group.display,
         })
 
-        card_tuple = (first_card, first_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
+    card_tuple = (first_card, first_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
             
     #print(card_tuples)
     
