@@ -32,7 +32,6 @@ logs/
 .idea/
 *.sublime-project
 *.sublime-workspace
-manage.py
 token.json
 service_acct.json
 credentials.json
