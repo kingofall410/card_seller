@@ -4,7 +4,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from services.models import Settings
-from core.models.CardSearchResult import CardSearchResult, ProductGroup
+from core.models.CardSearchResult import CardSearchResult
 from services import export as export_handler
 from django.shortcuts import render, redirect, get_object_or_404
 
@@ -22,15 +22,15 @@ def export_card(request, csr_id):
 @csrf_exempt
 def list_card(request, csr_id):
     settings = Settings.get_default()
-    publish = request.GET.get('publish', False)
-    group = request.GET.get('group', None)
-    print("pub, group", publish, group)
+    publish = request.GET.get('publish', True)
+    group_key = request.GET.get('group_key', None)
+    print("pub, group_key", publish, group_key)
     
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
         
     csr = CardSearchResult.objects.get(id=csr_id)
-    group_key = group if (group == "-1" or group == "-2") else get_object_or_404(ProductGroup, id=group).group_key        
+    print("csr", csr, group_key)
     success, _, _ = export_handler.export_to_ebay([csr], publish=publish, group_key=group_key)
     if success: 
         return JsonResponse({"success": success}, status=200)

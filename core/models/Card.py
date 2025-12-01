@@ -1057,6 +1057,7 @@ class Card(models.Model):
 
     def parse_psa_record(self, psa_record):
         csr = CardSearchResult.from_graded_card_record(self, record=psa_record)
+        return csr
 
     def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None, id_listings=False):
         csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr, id_listings=id_listings)

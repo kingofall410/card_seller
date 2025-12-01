@@ -18,12 +18,26 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
         
         if "psa" in sites:
             #TODO: ultimately this is backwards, my lookup modules need to be unifying to Card, not vice versa
-            psa_record = psa.scan_and_lookup(card.get_lookup_image())
+            psa_record = {
+                "cert_number": "88547026",
+                "grade": "GEM MT 10",
+                "full_name": "CJ STROUD",
+                "set_name": "PANINI DONRUSS",
+                "year": "2023",
+                "card_number": "339",
+                "category": "FOOTBALL CARDS",
+                "population_higher": "0",
+                "total_population": "7786",
+                "spec_id": "10066981",
+                "spec_number": "EMS8006103",
+                "shareable_front_link": "https://d1htnxwo4o0jhw.cloudfront.net/cert/155477432/ILJ4jCk2LEytteWa6a461A.jpg",
+                "shareable_reverse_link": "https://d1htnxwo4o0jhw.cloudfront.net/cert/155477432/znww58_DqEmprmPIy7ck_g.jpg",
+            }
+
             csr = card.parse_psa_record(psa_record)
         elif "ebay" in sites:
             listing_matches = ebay.image_search(card.get_lookup_image(), limit=result_count_max, page=page, settings=settings)
-        
-        csr = card.parse_and_tokenize_search_results(listing_matches, all_fields=all_fields, csr=csr, id_listings=True)
+            csr = card.parse_and_tokenize_search_results(listing_matches, all_fields=all_fields, csr=csr, id_listings=True)
 
         csr.id_status = StatusBase.AUTO
         csr.filter_terms = all_fields["filter_terms"] if "filter_terms" in all_fields else ""

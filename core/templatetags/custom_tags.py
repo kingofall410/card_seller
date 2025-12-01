@@ -1,6 +1,7 @@
 from django import template
 import json
-from core.models.CardSearchResult import CardSearchResult, ProductGroup
+from core.models.CardSearchResult import CardSearchResult
+from core.models.Group import ProductGroup
 from core.models.Card import Collection
 from core.models.Status import StatusBase
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
@@ -99,7 +100,7 @@ def get_textonly():
 
 @register.simple_tag
 def get_product_groups():
-    return [{"id": pg.id, "name": pg.group_title or pg.group_key} for pg in ProductGroup.objects.all().order_by('-id')]
+    return [{"id": pg.group_key, "name": pg.group_title or pg.group_key} for pg in ProductGroup.objects.all().order_by('-id')]
 
 @register.simple_tag
 def get_all_options(field_key, csrId=None, collection_id=None):

@@ -162,10 +162,10 @@
 
     <!-- Price Chart + Listing Details -->
     <div class="uicard price-block">
+      {% include "listing_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2  %}
+      {% include "ebay_listing_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
       {% include "price_over_time2.html" with datasetConfigs=card_tuple.11 %}
       {% comment %} include "histogram.html" with all_listings=card_tuple.3 filtered_listings=card_tuple.4 settings=settings title="Listed" sold_listings=card_tuple.5 %}  {% endcomment %}
-      {% include "ebay_listing_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
-      {% include "listing_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2  %}
     </div>
 
     <!-- Product Listings -->

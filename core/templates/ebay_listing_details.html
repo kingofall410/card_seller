@@ -74,6 +74,18 @@
         disabled>
     </td>
   </tr>
+  <tr>
+    <td><label for="listed_as">Listed Under</label></td>
+    <td>
+      <input type="text"
+        id="listed_as"
+        name="sku"
+        value="{{ search_result.ebay_listed_under_sku.sku }}"
+        data-maxlength="80"
+        >
+    </td>
+    <td></td>
+  </tr>
 </table>
 <script>
 document.addEventListener("DOMContentLoaded", () => {

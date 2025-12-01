@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models.Card import Card, CardSearchResult, Collection
-from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup, ProductGroup
+from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup
+from core.models.Group import ProductGroup
 from core.models.Cropping import CropParams, CroppedImage
 
 admin.site.register(Card)
@@ -26,7 +27,7 @@ admin.site.register(ListingGroup)
 
 @admin.register(ProductGroup)
 class ProductGroupAdmin(admin.ModelAdmin):
-    list_display = ['id', 'group_key', 'group_title']
+    list_display = ['id', 'group_key', 'group_title', 'size']
 
 
 #-gold -chrome -yellow -green -red -blue -refractor -psa -sgc -cgc -purple -rainbow -foil -aqua -wave -raywave -logofractor -x-fractor

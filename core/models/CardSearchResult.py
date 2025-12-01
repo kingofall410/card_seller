@@ -3,6 +3,7 @@ from scipy.stats import trim_mean
 import re, requests, random
 from core.models.Cropping import CropParams
 from core.models.Status import *
+from core.models.Group import *
 from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 from services import settings_management as app_settings
@@ -100,11 +101,6 @@ class OverrideableFieldsMixin(models.Model):
         return getattr(self, f"{field}_m")
 
 
-class ProductGroup(models.Model):
-    group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
-    group_title = models.CharField(max_length=50, blank=True, null=True)
-    
-
 class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO: this class needs to be broken up
     parent_card = models.ForeignKey("core.Card", on_delete=models.CASCADE, default=1, related_name="search_results") 
@@ -194,6 +190,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     collapsed_tokens = models.JSONField(default=dict, blank=True)
     response_count = models.IntegerField(default=0)
     condition = models.CharField(max_length=100, blank=True)
+    number_grade = models.CharField(max_length=10, blank=True, null=True)
 
     attribute_flags = models.JSONField(default=dict)
 
@@ -206,6 +203,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     league = models.CharField(max_length=100, blank=True)
     features = models.CharField(max_length=100, blank=True)
     ebay_listing_id = models.CharField(max_length=50, blank=True)
+    ebay_listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
     sku = models.CharField(max_length=50, blank=True)
     ebay_offer_id = models.CharField(max_length=50, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
@@ -224,7 +222,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_avg_sold_price = models.FloatField(default=0.0)
     ebay_msrp = models.FloatField(default=0.0, null=True)
     ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="products")
-    variation_title = models.CharField(max_length=50, blank=True, null=True)
+    variation_title_base = models.CharField(max_length=50, blank=True, null=True)
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -250,7 +248,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     display_fields = [
         "text_search_string", "sold_search_string", "filter_terms", "year", "brand", "subset", "parallel", "full_name", 
-        "card_number", "card_name", "city", "team", "serial_number", "condition", "attributes", "ebay_msrp"
+        "card_number", "card_name", "city", "team", "serial_number", "condition", "number_grade", "attributes"
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words", 
@@ -313,7 +311,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not self.title_to_be_is_manual:
             self.title_to_be = self.build_title()
 
-        self.variation_title = self.build_title(variation_title=True, condition_sensitive=True)
+        self.variation_title_base = self.build_title(variation_title=True, condition_sensitive=True)
 
         filter_terms = self.filter_terms or "" if self.filter_terms != "-" else ""
         if not self.sold_search_string_is_manual:
@@ -323,7 +321,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms
 
         self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
-        if self.ebay_listing_id != "":
+        if self.ebay_listing_id != "" or self.ebay_listed_under_sku:
             self.overall_status = StatusBase.LISTED
         #super.ugly
         super().save(*args, **kwargs)
@@ -619,16 +617,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def from_graded_card_record(cls, pcard, record, csr=None, tokenize=True):
         if not csr:
             csr = cls.create_empty(pcard)
-        
+        print(csr)
         gg = csr.get_listing_group("graded")
         gg.listings.all().delete()
 
         listing = ProductListing.from_graded_card_record(record, csr, tokenize)
         listing.listing_group = gg
-        listing.save()
-        if tokenize:
-            csr.collapsed_tokens = csr.collapse_token_maps()
+        print(listing.__dict__)
 
+        listing.save()
         csr.save()
         return csr
 
@@ -721,6 +718,60 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         title = " ".join(part.strip() for part in title_parts if part and part.strip())
         #print("titles:", title)
         return title
+    
+    
+    def derive_brand_subset(self, full_set_name: str):
+        """
+        Split a set name into brand and subset.
+        - full_set_name: string with 1–4 words
+        - brand: longest prefix that matches Brand.objects
+        - subset: remainder if it matches Subset.objects
+        Returns dict with 'brand' and 'subset' or None if not found.
+        """
+        tokens = full_set_name.strip().split()
+        n = len(tokens)
+
+        # Try longest prefix first (greedy)
+        for i in range(n, 0, -1):
+            brand_candidate = " ".join(tokens[:i])
+            subset_candidate = " ".join(tokens[i:]) if i < n else None
+
+            # Check brand existence
+            if Brand.objects.filter(raw_value__iexact=brand_candidate).exists():
+                brand = brand_candidate
+
+                # Check subset existence if present
+                subset = None
+                if subset_candidate and Subset.objects.filter(raw_value__iexact=subset_candidate).exists():
+                    subset = subset_candidate
+
+                self.set_ovr_attribute("brand", brand, False)
+                self.set_ovr_attribute("subset", subset, False)
+
+    def derive_grade_condition(self, grade: str):
+        """
+        Split a grade string into condition and number_grade.
+        - grade: string like "GEM MT 10", "NM-MT 8", "PR 1"
+        - condition: textual descriptor (everything before the number)
+        - number_grade: numeric part (int if possible, else string)
+        Returns dict with 'condition' and 'number_grade'.
+        """
+        tokens = grade.strip().split()
+
+        condition_tokens = []
+        number_grade = None
+
+        for tok in tokens:
+            if tok.isdigit():
+                number_grade = int(tok)
+            else:
+                condition_tokens.append(tok)
+
+        condition = " ".join(condition_tokens) if condition_tokens else None
+
+        # Store results in your object if needed
+        self.condition = condition
+        self.number_grade = number_grade
 
     #TODO:these buildable fields should be configurable
     @property
@@ -732,6 +783,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         subset = "" if subset == "-" else subset
         #print (f"build_full_set: {year} {brand} {subset}")
         return f"{year} {brand} {subset}".strip()
+    
     
     #TODO:these buildable fields should be configurable
     @property
@@ -868,7 +920,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.collapse_token_maps(listing_set)
         self.aggregate_pricing_info()
 
-
+#TODO: needs to be refactored into ProductGroup
 class ListingGroup(models.Model):
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
     
@@ -930,6 +982,8 @@ class ListingGroup(models.Model):
         super().save(*args, **kwargs)
 
     def serialize_listings(self):
+        if self.label == "graded":
+            return []
         return [
             [
                 listing.ebay_price,
@@ -946,6 +1000,7 @@ class ListingGroup(models.Model):
     def __str__(self):
         return self.label or ""
 
+#TODO:needs to be split further into types of listings (ebay, psa, etc) and merged with the mess that CSRs has become
 class ProductListing(models.Model):
 
     item_id = models.CharField(max_length=100, blank=True)
@@ -967,32 +1022,15 @@ class ProductListing(models.Model):
 
     @classmethod
     def from_graded_card_record(cls, record, parent_csr, tokenize=True):
-        listing = cls()
-        listing.item_id = record.get("itemId", "N/A")
-        listing.listing_date = "N/A"
-        '''pick this up here - testing the new image retrieval psa function
-
-        img_url = item.get("itemWebUrl", "No thumbnail")
-        if not img_url:
-            listing.img_url=""
-        elif img_url[:4] == "http":
-            listing.img_url = img_url
-        else:
-            listing.img_url = "http:"+img_url
-
-        listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", listing.img_url)
-        price = item.get("price", [{}])
-        if isinstance(price, str):
-            listing.ebay_price = price.replace('$', '').replace(',', '')
-        else:
-            listing.ebay_price = price.get("value","0")
-
-        listing.format = item.get("format", "N/A")
-        listing.qty = item.get("qty", "1")
-        listing.search_result = parent_csr
-        listing.save()
-        listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
-        listing.save() '''
+        listing = cls(search_result=parent_csr)
+        listing.item_id = record.get("cert_number", "N/A")
+        
+        #a lot of this actually happens on the csr itself since we have hard data
+        parent_csr.derive_grade_condition(record.get("grade", None))
+        parent_csr.derive_brand_subset(record.get("set_name", None))
+        parent_csr.update_fields(record)
+        
+        return listing
 
     @classmethod
     def from_search_results(cls, item, parent_csr, tokenize=True):
@@ -1019,7 +1057,7 @@ class ProductListing(models.Model):
             listing.ebay_price = price.get("value","0")
 
         listing.format = item.get("format", "N/A")
-        listing.qty = item.get("qty", "1")
+        listing.qty = item.get("qty", "1").replace(",","")
         listing.search_result = parent_csr
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
@@ -1166,4 +1204,3 @@ class ListingTitle(models.Model):
 
     def __str__(self):
         return self.title or ""
-

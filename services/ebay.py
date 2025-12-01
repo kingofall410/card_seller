@@ -66,7 +66,7 @@ ebay_item_data_template = {
         "title":"title_to_be",
         "imageUrls":"image_links",
         "aspects": {
-            "Card": "variation_title",
+            "Card": "variation_title_base",
             "Sport": "sport",
             "Player/Athlete": "full_name",
             "Card Name": "card_name",
@@ -320,9 +320,24 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
         else:
             print(response.json())
 
+def update_inventory_item_qty(update_data, access_token):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = "https://api.ebay.com/sell/inventory/v1/bulk_update_price_quantity"
+
+    print("URL:", url)
+    print("update_data:", update_data)
+    response = requests.post(url, headers=headers, json=update_data)
+    print("Update Qty response: ", response, response.text)
+    return response.status_code == 200 or response.status_code == 204
 
 #https://auth.ebay.com/oauth2/authorize?client_id=DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10&redirect_uri=Daniel_Crown-DanielCr-Latest-reqvvsrz&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory
-def create_inventory_item(sku, item_data, access_token):
+def create_inventory_item(sku, item_data, access_token, patch=False):
     #get_user_auth()
     
     headers = {
@@ -331,10 +346,16 @@ def create_inventory_item(sku, item_data, access_token):
         "Content-Language": "en-US",
         "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
     }
-    
+   
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
-    
-    response = requests.put(url, headers=headers, json=item_data)
+    print("URL:", url)
+    print("item_data:", item_data)
+    if patch:
+        print("patching")
+        response = requests.patch(url, headers=headers, json=item_data)
+    else:
+        response = requests.put(url, headers=headers, json=item_data)
+    #print("Inventory request: ", response.request.text)
     print("Inventory response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204
 
@@ -350,7 +371,7 @@ def create_inventory_group(group_id, group_data, access_token):
     }
     
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
-    print("create_inventory_group:", group_data)
+    print("Inventory Group request data:", group_data)
     response = requests.put(url, headers=headers, json=group_data)
     print("Inventory Group response: ", response, response.text)
     return response.status_code == 200 or response.status_code == 204

@@ -1,13 +1,11 @@
-import csv, io
-from core.models.CardSearchResult import CardSearchResult, ProductGroup
-from core.models import Status
+import csv
+from core.models.CardSearchResult import CardSearchResult
+from core.models.Group import ProductGroup
 from django.http import HttpResponse
-import zipfile
 from services import ebay
 from services.models import Settings
 from services.google import GoogleDriveUploader
 import requests
-import base64
 
 
 def export_csrs_to_csv(csrs):
@@ -83,40 +81,9 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
         group_key = csrs[0].full_set + "Commons"
     
     #find or create django group object
-    group, _ = ProductGroup.objects.get_or_create(group_key=group_key)
-    group_title = group.group_title or group_key
+    group = ProductGroup.create(group_key, csrs)
     
-    for csr in csrs:
-        csr.ebay_product_group = group
-        csr.save()
-
-    listing_id = None
-    
-    csrs = [csr for csr in group.products.all()]
-    variant_skus = [csr.sku for csr in csrs]
-    #TODO:every card that was ever part of the group needs to remain valid as a variant for now
-    variant_card_titles = [csr.variation_title for csr in csrs] + ['1990 Topps Kay Bee #29', '1980 O-Pee-Chee #205,' '1988 Topps Tiffany #400 NM',   '1988 Topps Tiffany #400 NM', '1988 Topps Tiffany #400 NM+']
-    
-    inventory_group_data = {
-        "aspects": {"Sport": ["Baseball"]},
-        "description": "Every card is pictured, please don't hesitate to reach out with questions.", 
-        "imageUrls": [csrs[0].shareable_link_front],
-        "inventoryItemGroupKey": group.group_key,
-        #"subtitle": "",
-        "title": group_title,
-        "variantSKUs": variant_skus,
-        "variesBy": {
-            "aspectsImageVariesBy": [
-                "Card"
-            ],
-            "specifications": [
-            {
-                "name": "Card",
-                "values": variant_card_titles
-            }
-            ]
-        }
-    }
+    inventory_group_data = group.export_to_ebay_variation_group()
     
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
@@ -156,15 +123,13 @@ def clear_inventory_group(group_key):
 def export_to_ebay(csrs, publish=False, group_key=None):
     
     print("ebay export ", group_key)
+
     settings = Settings.get_default()
     #uploader = GoogleDriveUploader()
     if ebay.has_user_consent(settings):
 
         csr = csrs[0]
-        #shareable_link_front = uploader.upload_and_share(csr.get_latest_front(), csr.title_to_be)
-        #shareable_link_reverse = uploader.upload_and_share(csr.get_latest_reverse(), csr.title_to_be)
-        #TODO:abstract away google vs imagur vs postimage etc
-        #print("here i am", csr.sku)
+        #TODO: update these methods to check before creating new?
         csr.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
         csr.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
         #print("am i here", csr.sku)
@@ -175,8 +140,35 @@ def export_to_ebay(csrs, publish=False, group_key=None):
         print("🔗 Public link:", csr.shareable_link_reverse)
 
         print(csr.list_price)
+
+        item_data = None
+        if group_key:
+            group = ProductGroup.create(group_key, csrs)
+            #print("here")
+            print(csr.variation_title_base)
+            print(group.variation_data)
+            #print("single row:", group.variation_data[csr.variation_title_base])
+            if csr.variation_title_base in group.variation_data:
+                #This is a full dup of something already listed under a diff sku in this group, add 1 to that item instead of creating a new item
+                group.variation_data[csr.variation_title_base][1] += 1
+                group.save()
+                #print("single row:", group.variation_data[csr.variation_title_base])
+                csr_for_sku = group.products.get(sku=group.variation_data[csr.variation_title_base][0])
+                update_data = group.export_to_qty_update(csr_for_sku, group.variation_data[csr.variation_title_base][1])
+                
+                access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
+                if ebay.update_inventory_item_qty(update_data, access_token):
+                    #link to main sku
+                    csr.ebay_listed_under_sku = csr_for_sku
+                    csr.save()
+                    #item was updated successfully
+                    return True, csr_for_sku.ebay_offer_id, csr_for_sku.ebay_listing_id
+            
+        print("not grouping")
+        #if we didn't fill item data above, this needs a new inv item and offer    
         item_data = csr.export_to_template(csr.sku, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
-        print(item_data)
+        print("Item data:", item_data)
+
         offer_data = {
             "sku": csr.sku,
             "marketplaceId": "EBAY_US",
@@ -203,11 +195,11 @@ def export_to_ebay(csrs, publish=False, group_key=None):
         }
         #print(csr.list_price)
         print("Offer data:", offer_data)
+        
         if csr.list_price <= 0:
             return False, None, None#kick out before corrupting the group with a 0 price offer
         
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
-        #create_ebay_location(access_token)
         #csr.check_category_metadata("261328",access_token)
         if ebay.create_inventory_item(csr.sku, item_data, access_token):
             #item was created successfully
