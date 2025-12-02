@@ -29,7 +29,8 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+#MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = os.path.join(BASE_DIR, 'card_seller', 'media')
 WATCHED_ROOT = os.path.join(BASE_DIR, 'watched')
 
 # Application definition
