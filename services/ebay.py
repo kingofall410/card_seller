@@ -514,7 +514,7 @@ import random
 def launch_and_login():
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=True)
         page = browser.new_page()
         page.goto("https://www.ebay.com/signin")
 
@@ -558,7 +558,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
 
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=True)
         page = browser.new_page()
         start_date, end_date = get_ebay_date_range(days=90)
 
