@@ -517,7 +517,7 @@ def launch_and_login():
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)#, args=["--no-sandbox", "--disable-dev-shm-usage"])
         page = browser.new_page()
         page.goto("https://www.ebay.com/signin")
-        page.screenshot("login debug.png")
+        #page.screenshot(path="login debug.png")
         print("Log in manually, then close the browser window.")
         page.wait_for_timeout(120000)  # 60 seconds to log in
         browser.close()
