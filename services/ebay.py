@@ -555,7 +555,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
     print("keywords:", keyword_strings)
     result_data = {}
 
-    launch_and_login()
+    #launch_and_login()
 
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
