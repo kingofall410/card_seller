@@ -587,7 +587,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                 url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
                 print("url", url)
                 page.goto(url, timeout=10000)
-                page.screenshot(path="headless_debug.png")
+                #page.screenshot(path="headless_debug.png")
                 try:
                     page.wait_for_selector("table", timeout=15000)
                     page.wait_for_timeout(2000)
