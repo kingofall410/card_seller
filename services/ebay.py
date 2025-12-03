@@ -527,7 +527,7 @@ def get_split_part_text(text, index, split_index):
         return text.split("\n")[split_index].strip()
     except (IndexError, AttributeError):
         return None
-
+V3kb#NyIaD&v?@1jn25eVEYGFb@Z?&5WPi8TqK#l
 
 def get_ebay_date_range(days=90):
     now = datetime.now()
@@ -555,6 +555,9 @@ import time
 def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
     print("keywords:", keyword_strings)
     result_data = {}
+
+    launch_and_login()
+
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
