@@ -514,8 +514,10 @@ import random
 def launch_and_login():
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         page = browser.new_page()
+        page.set_extra_http_headers({"User-Agent": "Mozilla/5.0 ..."})
+
         page.goto("https://www.ebay.com/signin")
 
         print("Log in manually, then close the browser window.")
@@ -555,11 +557,12 @@ import time
 def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
     print("keywords:", keyword_strings)
     result_data = {}
-
+    
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         page = browser.new_page()
+        #page.set_extra_http_headers({"User-Agent": "Mozilla/5.0 ..."})
         start_date, end_date = get_ebay_date_range(days=90)
 
         base_url = "http://www.ebay.com/sh/research"
@@ -586,7 +589,9 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                 url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
                 print("url", url)
                 page.goto(url, timeout=10000)
-
+                            
+                page.screenshot(path="headless_debug.png")
+                #page.goto("https://example.com", wait_until="networkidle")
                 try:
                     page.wait_for_selector("table", timeout=15000)
                     page.wait_for_timeout(2000)
@@ -626,7 +631,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                 page_num += 1
                 row_count += limit
 
-        browser.close()
-        return result_data
+    browser.close()
+    return result_data
 
 

@@ -131,7 +131,7 @@ def scan_and_lookup(image_path, region=None, angle=0):
         return {"error": "No valid barcode found."}
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context(extra_http_headers=AUTH_HEADERS)
 
         card_info = lookup_psa_cert_playwright(cert, context)
