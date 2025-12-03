@@ -527,7 +527,6 @@ def get_split_part_text(text, index, split_index):
         return text.split("\n")[split_index].strip()
     except (IndexError, AttributeError):
         return None
-V3kb#NyIaD&v?@1jn25eVEYGFb@Z?&5WPi8TqK#l
 
 def get_ebay_date_range(days=90):
     now = datetime.now()
