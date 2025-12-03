@@ -555,8 +555,6 @@ import time
 def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
     print("keywords:", keyword_strings)
     result_data = {}
-    launch_and_login()
-    return
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
