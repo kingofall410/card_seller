@@ -8,12 +8,21 @@ from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult
 from django.conf import settings as app_settings
 
+class CollectionStatus(models.TextChoices):
+    
+    IMPORTED = "imported", "Imported"
+    ID = "identified", "Identified"
+    RTP = "ready to price", "Ready to price"
+    RTL = "ready to list", "Ready to list"
+    LISTED = "listed", "Listed"
+
 class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
     parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
     is_default = models.BooleanField(default=False)
-    
+
+    status = models.CharField(max_length=20, choices=CollectionStatus.choices, default=CollectionStatus.IMPORTED)    
     notes = models.TextField(blank=True)
     
     @classmethod

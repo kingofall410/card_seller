@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from services.models import Settings
 
-from core.models.Card import Collection
+from core.models.Card import Collection, CollectionStatus
 # Miscellaneous views
 
 
@@ -10,12 +10,14 @@ def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
-    settings = Settings.get_default()
+    Collection.objects.update(status=CollectionStatus.IMPORTED)
+
+    '''settings = Settings.get_default()
     collection = Collection.objects.get(id=97).cards.all()
     csrs = [card.active_search_results() for card in collection]
     for csr in csrs:
         csr.save()
-    '''pg = ProductGroup.objects.get(id=21)
+    pg = ProductGroup.objects.get(id=21)
     newpg = ProductGroup.objects.get(id=18)
     for p in pg.products.all():
         p.ebay_product_group = newpg

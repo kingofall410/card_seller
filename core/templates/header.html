@@ -26,6 +26,26 @@
 }
 
 </style>
+<style>
+/* Existing styles… */
+.status-imported      { background-color: #ffffff; }
+.status-listed    { background-color: #e0f7ff; }
+.status-ready-to-price { background-color: #fff4cc; }
+.status-ready-to-list  { background-color: #e8ffe8; }
+.status-identified        { background-color: #ffe6e6; }
+
+.nav-link.status-imported:hover,
+.nav-link.status-identified:hover,
+.nav-link.status-readyprice:hover,
+.nav-link.status-readylist:hover,
+.nav-link.status-listed:hover {
+  filter: brightness(0.95);
+}
+</style>
+
+
+
+
 <nav style="background-color: #333; padding: 16px 24px; display: flex; align-items: center; position: relative;">
   
   <div class="collection-dropdown" style="position: relative;">
@@ -51,10 +71,13 @@
       </a>
       {% get_collections as collections %}
       {% for collection in collections %}
-      <a href="{% url 'collection' collection.id %}" class="nav-link">
-        {{ collection.id }}.   {{ collection.name }} ({{ collection.get_size }})
-      </a>
+        <a href="{% url 'collection' collection.id %}"
+          class="nav-link status-{{ collection.status|slugify }}">
+          {{ collection.id }}. {{ collection.name }} ({{ collection.get_size }})
+        </a>
       {% endfor %}
+
+
 
     </div>
   </div>

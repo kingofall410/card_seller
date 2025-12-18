@@ -2,7 +2,7 @@ from django import template
 import json
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
-from core.models.Card import Collection
+from core.models.Card import Collection, CollectionStatus
 from core.models.Status import StatusBase
 from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from django.db.models import F
@@ -17,6 +17,10 @@ def get_attribute(obj, attr):
 @register.filter
 def crop_display_img(obj):
     return obj.crop_display_img()
+
+@register.simple_tag
+def get_choices():
+    return CollectionStatus.choices
 
 @register.filter
 def str_replace(value, arg):

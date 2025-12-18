@@ -14,28 +14,42 @@ from core.models.CardSearchResult import CardSearchResult
 from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
 from django.db.models import Q, F
+from django.forms.models import model_to_dict
+
 
 @csrf_exempt
 def update_collection(request):
-    if request.method != 'POST':
-        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
-
     collection_id = request.POST.get("collectionId")
-    if not collection_id or not collection_id.isdigit():
-        return JsonResponse({"error": True, "message": "Missing or invalid collectionId"}, status=400)
+    field_name = request.POST.get("field")
+    field_value = request.POST.get("value")
 
+    # 1. Fetch collection safely
     try:
-        collection = Collection.objects.get(id=int(collection_id))
+        collection = Collection.objects.get(id=collection_id)
     except Collection.DoesNotExist:
-        return JsonResponse({"error": True, "message": f"Collection with id {collection_id} not found"}, status=404)
+        return JsonResponse({"error": True, "message": "Collection not found"}, status=404)
 
-    new_name = request.POST.get("name", "").strip()
-    if not new_name:
-        return JsonResponse({"error": True, "message": "Missing collection name"}, status=400)
+    # 2. Ensure the field exists on the model
+    if field_name not in [f.name for f in Collection._meta.get_fields()]:
+        return JsonResponse({"error": True, "message": f"Invalid field '{field_name}'"}, status=400)
 
-    collection.name = new_name
-    collection.save()
-    return JsonResponse({"success": True, "message": "Collection updated successfully"})
+    # 3. Convert field_value to the correct Python type
+    field = Collection._meta.get_field(field_name)
+    try:
+        python_value = field.to_python(field_value)
+    except Exception as e:
+        return JsonResponse({"error": True, "message": f"Invalid value: {e}"}, status=400)
+
+    # 4. Assign and save
+    setattr(collection, field_name, python_value)
+    collection.save(update_fields=[field_name])
+
+    return JsonResponse({
+        "success": True,
+        "message": "Collection updated successfully",
+        "collection": model_to_dict(collection, fields=[field_name])
+    })
+
 
 @csrf_exempt
 def export_collection(request, collection_id):
