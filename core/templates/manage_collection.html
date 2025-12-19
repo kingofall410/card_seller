@@ -28,7 +28,7 @@
 <div id="collection-tree">
   {% for collection in page_obj %}
     <HR>
-    {% include "manage_collection_node.html" with collection=collection settings=settings collections=page_obj.paginator.object_list %}
+    {% include "manage_collection_node.html" with collection=collection settings=settings %}
   {% endfor %}
 </div>
 

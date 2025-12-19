@@ -243,25 +243,10 @@
 
     {% endfor %}
     </div>
-    <button onclick="addCard({{ collection.id }})">➕</button>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/price_collection/{{ collection.id }}/')">💲</button>
-    <button onclick="openForAutomaticInput({{ collection.id }})">📬</button>
-    
-    <div class="dropdown-wrapper">
-      <button onclick="toggleMoveCollectionDropdown({{ collection.id }})" title="Move">📂</button>
-      <div id="move-collection-{{collection.id}}" class="move-dropdown" style="display: none;">
-        <ul>
-            {% for targetCollection in collections %}
-            <li onclick="moveToCollection(null, '{{ collection.id }}', '{{ targetCollection.id }}')">
-                {{targetCollection.id}}. {{targetCollection.name}}
-            </li>
-            {% endfor %}
-        </ul>
-      </div>
-    </div>
     <input type="text"
       name="collection_name_{{ collection.id }}"
       value="{{ collection.name }}"
@@ -270,45 +255,7 @@
       placeholder="Change collection name..."
       onchange="saveCollectionField({{ collection.id }}, 'name', this.value)">
   </div>
-  <div class="card-sort-controls">
-  Sort: 
-    <select onchange="sortCardsInModule(this)">
-      <option value="year">Year</option>
-      <option value="brand">Brand</option>
-      <option value="name">Name</option>
-      <option value="id">Default</option>
-    </select>
-  </div>
-  <div class="card-filter-controls">
-    <form id="view-card-form-{{ collection.id }}" method="POST" style="display: none;">
-    <input type="hidden" name="card_ids" id="visible-cards-{{ collection.id }}">
-  </form>
-
-  Status: 
-    <select onchange="filterCardsInModule(this, {{ collection.id }})">
-      {% get_all_options "status" as options %}
-      {% for option in options %}
-        <option value="status">{{ option }}</option>
-      {% endfor %}
-    
-  Year:
-    <select onchange="filterCardsInModule(this, {{ collection.id }})">
-      {% get_all_options "year" None collection.id as options %}
-      {% for option in options %}
-        <option value="year">{{ option }}</option>
-      {% endfor %}
-    
-  Brand: 
-    <select onchange="filterCardsInModule(this, {{ collection.id }})">
-      {% get_all_options "brands" None collection.id as options %}
-      {% for option in options %}
-        <option value="brand">{{ option }}</option>
-      {% endfor %}
-      
-</select>
-
-  </div>
-
+  
   <div style="text-align: center; margin-top: 20px;">
     <button onclick="toggleAttributePanel()">⚙️ Select Attributes</button>
   </div>
@@ -341,29 +288,12 @@
             <input type="checkbox" onchange="updateSelection({{collection.id}})" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}"><br><br>
         </div>
   
-
-        <div class="card-meta">
-          
-        </div>
-
         <div class="card-meta" data-attr="name">
           {{ display_name }}
         </div>
 
         <div class="card-meta" data-attr="set">
           {{ display_year }} {{ display_brand }} {{ display_subset }}
-        </div>
-
-        <div class="card-meta" data-attr="nr">
-          {{ card.active_search_results.card_number }}
-        </div>
-
-        <div class="card-meta" data-attr="team">
-          {{ display_city }} {{ display_team }}
-        </div>
-
-        <div class="card-meta" data-attr="serial">
-          {{ display_serial }}
         </div>
 
         <div class="card-meta" data-attr="list_price">
@@ -374,29 +304,9 @@
           ${{ card.active_search_results.ebay_msrp|floatformat:2 }}
         </div>
 
-        <div class="card-meta" data-attr="highlow">
-          ${{ card.active_search_results.ebay_low_price|floatformat:2 }} / ${{ card.active_search_results.ebay_high_price|floatformat:2 }}
-        </div>
-
-        <div class="card-meta" data-attr="mmm">
-          ${{ card.active_search_results.ebay_mean_price|floatformat:2 }} / ${{ card.active_search_results.ebay_meadian_price|floatformat:2 }} / ${{ card.active_search_results.ebay_mode_price|floatformat:2 }}
-        </div>
-
-        <div class="card-meta" data-attr="highlowsold">
-          ${{ card.active_search_results.ebay_low_sold_price|floatformat:2 }} /  ${{ card.active_search_results.ebay_high_sold_price|floatformat:2 }}
-        </div>
-
-        <div class="card-meta" data-attr="soldavgs">
-            ${{ card.active_search_results.ebay_last_sold_price|floatformat:2 }} / ${{ card.active_search_results.ebay_last_five_avg_sold_price|floatformat:2 }}
-        </div>
-        <div class="card-meta" data-attr="avgonly">            
-            ${{ card.active_search_results.ebay_avg_sold_price|floatformat:2 }}
-        </div>
-
         <div class="card-meta" data-attr="ids">
           {{ card.id }}:{{ card.active_search_results.id }}
         </div>
-
           
         <div class="image-wrapper" data-attr="thumb">
           <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">

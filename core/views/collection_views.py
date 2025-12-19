@@ -89,14 +89,12 @@ def manage_collection(request):
 def spreadsheet_rows_from_search_result(cards, field_names):
     rows = []
     for card in cards:
+        asr = card.active_search_results()
         row = {}
+
         for field in field_names:
             display_attr = f'display_{field}'
-            asr = card.active_search_results()
-            if asr:
-                value = getattr(card.active_search_results(), display_attr)
-            else:
-                value = None
+            value = getattr(asr, display_attr)
             row[field] = value if value is not None else ''
         row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
         row["card_id"] = card.id
@@ -107,13 +105,13 @@ def spreadsheet_rows_from_search_result(cards, field_names):
 #TODO: should do this based on specific next_collection calls, pagniator is just messy
 #TODO: fuck the paginator for now
 def view_collection(request, collection_id):
-    collections = []#Collection.objects.all().order_by('id')
+    
     collection = Collection.objects.get(id=collection_id)
     settings = Settings.get_default()
 
     columns = CardSearchResult.mini_spreadsheet_fields
     rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
-    return render(request, "collection.html", {"collection":collection, "settings":settings, "collections":collections, "columns":columns, "rows":rows})
+    return render(request, "collection.html", {"collection":collection, "settings":settings, "columns":columns, "rows":rows})
 
 def listing_view(request):
     columns = CardSearchResult.listing_spreadsheet_fields
