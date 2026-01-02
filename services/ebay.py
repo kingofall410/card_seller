@@ -589,11 +589,11 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                 page.goto(url, timeout=25000)
                 #page.screenshot(path="headless_debug.png")
                 try:
-                    page.wait_for_selector("table", timeout=25000)
-                    page.wait_for_timeout(25000)
+                    page.wait_for_selector("table", timeout=35000)
+                    #page.wait_for_timeout(35000)
                 except TimeoutError:
                     #exit after a perfect match between limit and query
-                    print(f"Timeout waiting for table on page {page_num}.")
+                    print(f"Timedout waiting for table on page {page_num}.")
                     break
 
                 rows = page.query_selector_all(".research-table-row")
