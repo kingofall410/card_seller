@@ -559,7 +559,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
 
     with sync_playwright() as p:
         user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path="usr/bin/google-chrome", \
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path="/usr/bin/google-chrome", \
             args=["--use-gl=desktop", "--ignore-gpu-blocklist", "--disable-gpu-sandbox", \
             "--enable-gpu-rasterization", "--enable-zero-copy"])
         page = browser.new_page()
