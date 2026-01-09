@@ -512,15 +512,21 @@ import time
 import random
 
 def launch_and_login():
+    pass
+    '''this all has to be reworked in accordance with the new playwright mechanism in scrape_with_profile
     with sync_playwright() as p:
-        user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)#, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        #user_data_dir = "ebay_profile"
+        #browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)#, args=["--no-sandbox", "--disable-dev-shm-usage"])        
+        user_data_dir = "/home/dcrown/.config/dev-chrome-dir"
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path="/usr/bin/google-chrome", \
+            args=["--use-gl=desktop", "--ignore-gpu-blocklist", "--disable-gpu-sandbox", \
+            "--enable-gpu-rasterization", "--enable-zero-copy", "--use-angle=gl", "--gpu-launcher-wait-time=5000"])
         page = browser.new_page()
         page.goto("https://www.ebay.com/signin")
         #page.screenshot(path="login debug.png")
         print("Log in manually, then close the browser window.")
         page.wait_for_timeout(120000)  # 60 seconds to log in
-        browser.close()
+        browser.close()'''
 
 def get_split_part_text(text, index, split_index):
     try:
@@ -558,9 +564,18 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
     #launch_and_login()
 
     with sync_playwright() as p:
-        user_data_dir = "ebay_profile"
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False)
-        page = browser.new_page()
+        #linux config
+        user_data_dir = "/home/dcrown/.config/chrome-clean-playwright"
+        exe_path = "/usr/bin/google-chrome"
+        args = ["--use-gl=desktop", "--use-angle=gl", "--ignore-gpu-blocklist", "--password-store=basic", "--no-first-run", "--no-default-browser-check",  "--disable-extensions", "--disable-sync", "--disable-default-apps", "--disable-component-update"]
+        
+        #windows config
+        #user_data_dir = "ebay_profile"
+        #exe_path = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        #args = []
+                
+        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path=exe_path, args=args)
+
         start_date, end_date = get_ebay_date_range(days=days)
 
         base_url = "http://www.ebay.com/sh/research"
@@ -586,11 +601,12 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                 query["offset"] = page_num*limit
                 url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
                 print("url", url)
-                page.goto(url, timeout=25000)
+                page = browser.pages[0]
+                page.goto(url, timeout=60000)
                 #page.screenshot(path="headless_debug.png")
                 try:
-                    page.wait_for_selector("table", timeout=35000)
-                    #page.wait_for_timeout(35000)
+                    page.wait_for_selector("table", timeout=60000)
+                    #page.wait_for_timeout(2000)
                 except TimeoutError:
                     #exit after a perfect match between limit and query
                     print(f"Timedout waiting for table on page {page_num}.")
