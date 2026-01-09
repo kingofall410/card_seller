@@ -309,10 +309,10 @@
         </div>
           
         <div class="image-wrapper" data-attr="thumb">
-          <button type="button" onclick='submitCardForm({{ collection.id }}, {{ card.id }}, "/card/{{card.id}}/")' class="image-button">
+          <a href="/card/{{card.id}}/")' class="image-button">
             <img src="{{ card.cropped_image.url }}" loading="lazy" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
             <img src="{{ card.cropped_reverse.url }}" loading="lazy" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
-          </button>
+          </a>
         </div>
 
         <div class="card-actions">

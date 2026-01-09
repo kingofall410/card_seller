@@ -565,14 +565,14 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
 
     with sync_playwright() as p:
         #linux config
-        user_data_dir = "/home/dcrown/.config/chrome-clean-playwright"
-        exe_path = "/usr/bin/google-chrome"
-        args = ["--use-gl=desktop", "--use-angle=gl", "--ignore-gpu-blocklist", "--password-store=basic", "--no-first-run", "--no-default-browser-check",  "--disable-extensions", "--disable-sync", "--disable-default-apps", "--disable-component-update"]
+        #user_data_dir = "/home/dcrown/.config/chrome-clean-playwright"
+        #exe_path = "/usr/bin/google-chrome"
+        #args = ["--use-gl=desktop", "--use-angle=gl", "--ignore-gpu-blocklist", "--password-store=basic", "--no-first-run", "--no-default-browser-check",  "--disable-extensions", "--disable-sync", "--disable-default-apps", "--disable-component-update"]
         
         #windows config
-        #user_data_dir = "ebay_profile"
-        #exe_path = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-        #args = []
+        user_data_dir = "ebay_profile"
+        exe_path = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        args = []
                 
         browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path=exe_path, args=args)
 

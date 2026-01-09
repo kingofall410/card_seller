@@ -11,7 +11,7 @@
       }
     }
 
-    const form = document.getElementById(`view-card-form-${collectionId}`);
+    const form = document.getElementById(`view-card-form-${cardId}`);
     form.action = targetUrl;
     visibleCards.value = JSON.stringify(cardIds);  // ensure value is set
     form.submit();
