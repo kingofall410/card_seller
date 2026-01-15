@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from services import lookup
 from core.models.Card import Card, Collection
 from core.models.CardSearchResult import CardSearchResult
-from services.models import Brand, Subset, KnownName, Team, City, CardAttribute, Condition, Parallel, Settings
+from services.models.models import Brand, Subset, KnownName, Team, City, CardAttribute, Condition, Parallel, Settings
 from django.db.models import F
 
 # Search-related views

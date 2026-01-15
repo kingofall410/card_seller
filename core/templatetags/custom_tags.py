@@ -4,7 +4,7 @@ from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
 from core.models.Card import Collection, CollectionStatus
 from core.models.Status import StatusBase
-from services.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
+from services.models.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from django.db.models import F
 
 register = template.Library()

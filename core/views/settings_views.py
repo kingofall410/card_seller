@@ -2,7 +2,7 @@ import json
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponseRedirect
 from django.conf import settings
-from services.models import Settings
+from services.models.models import Settings
 from services import settings_management as app_settings
 from urllib.parse import unquote
 from django.views.decorators.csrf import csrf_exempt

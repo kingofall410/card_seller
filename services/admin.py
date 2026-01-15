@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
+from .models.models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
+from .models.task import Task
 
 admin.site.register(Brand)
 admin.site.register(Subset)
@@ -16,3 +17,4 @@ admin.site.register(Condition)
 admin.site.register(Parallel)
 admin.site.register(CardName)
 admin.site.register(Season)
+admin.site.register(Task)

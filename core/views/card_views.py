@@ -5,7 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
 from core.models.Status import StatusBase
 from core.models.CardSearchResult import CardSearchResult
-from services.models import Settings
+from services.models.models import Settings
 from django.db import models
 from django.core.paginator import Paginator
 from math import floor

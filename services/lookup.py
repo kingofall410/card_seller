@@ -1,5 +1,5 @@
 from services import ebay, psa
-from services.models import Settings
+from services.models.models import Settings
 from core.models.Card import Card
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase

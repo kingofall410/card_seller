@@ -3,8 +3,9 @@ from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
 from django.http import HttpResponse
 from services import ebay
-from services.models import Settings
+from services.models.models import Settings
 from services.google import GoogleDriveUploader
+from django.shortcuts import get_object_or_404
 import requests
 
 
@@ -120,15 +121,15 @@ def clear_inventory_group(group_key):
     ebay.create_inventory_group(group_key, inventory_group_data, access_token)
 
 #TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csrs, publish=False, group_key=None):
+def export_to_ebay(csr_id, publish=False, group_key=None):
     
-    print("ebay export ", group_key)
+    print("ebay export ", csr_id, publish, group_key)
 
     settings = Settings.get_default()
     #uploader = GoogleDriveUploader()
     if ebay.has_user_consent(settings):
 
-        csr = csrs[0]
+        csr = get_object_or_404(CardSearchResult, id=csr_id)
         #TODO: update these methods to check before creating new?
         csr.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
         csr.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
@@ -197,7 +198,10 @@ def export_to_ebay(csrs, publish=False, group_key=None):
         print("Offer data:", offer_data)
         
         if csr.list_price <= 0:
+            print("Returning due to 0 price")
             return False, None, None#kick out before corrupting the group with a 0 price offer
+        elif not publish:
+            return True, None, None#don't talk to ebay if we're not publishing
         
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #csr.check_category_metadata("261328",access_token)
@@ -210,7 +214,7 @@ def export_to_ebay(csrs, publish=False, group_key=None):
                 #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
                 csr.ebay_offer_id = offer_id
             else:
-                "Error response from ebay"
+                #"Error response from ebay"
                 csr.ebay_listing_id = ""
             
             if group_key:

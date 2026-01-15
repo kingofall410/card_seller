@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from services.models import Settings
+from services.models.models import Settings
 
 from core.models.Card import Collection, CollectionStatus
 # Miscellaneous views

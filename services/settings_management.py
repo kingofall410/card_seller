@@ -1,5 +1,5 @@
 import io, csv
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel, Settings
+from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel, Settings
 from django.shortcuts import render, redirect
     
 def load_settings_file(dj_file, file_type, user_settings=None):

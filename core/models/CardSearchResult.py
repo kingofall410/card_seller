@@ -4,7 +4,7 @@ import re, requests, random
 from core.models.Cropping import CropParams
 from core.models.Status import *
 from core.models.Group import *
-from services.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
+from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 from services import settings_management as app_settings
 from datetime import datetime

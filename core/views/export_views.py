@@ -1,15 +1,16 @@
 # Export-related views
 
-import time
+from datetime import datetime
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from services.models import Settings
+from services.models.models import Settings
 from core.models.CardSearchResult import CardSearchResult
 from services import export as export_handler
 from django.shortcuts import render, redirect, get_object_or_404
 from core.apps import CoreConfig
 from services.queue import Task
 from django.apps import apps
+from django.utils import timezone
 
 @csrf_exempt
 def export_card(request, csr_id):
@@ -28,7 +29,7 @@ def list_card(request, csr_id):
     settings = Settings.get_default()
     publish = request.GET.get('publish', True)
     group_key = request.GET.get('group_key', None)
-    publish_dt = request.GET.get('publish_dt', None)
+    publish_dt = timezone.make_aware(datetime.fromisoformat(request.GET.get('schedule', "")))
     print("pub, group_key", publish, group_key, publish_dt)
     
     if not csr_id or csr_id == 'undefined':
@@ -39,14 +40,12 @@ def list_card(request, csr_id):
 
     #if publish_dt:
     #scheduled for the future
-    task = Task(name="send_email", time=time.time() + 10, callback=print("hello"), params={})
-
     core_config = apps.get_app_config("core")
-    core_config.queue.add(task)
+    core_config.queue.schedule_task(name=f"list csr {csr_id}", when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":False, "group_key":group_key})
 
     success = True
     #else:
-    #    success, _, _ = export_handler.export_to_ebay([csr], publish=publish, group_key=group_key)
+    #    success, _, _ = export_handler.export_to_ebay(csr_id, publish=publish, group_key=group_key)
     if success: 
         return JsonResponse({"success": success}, status=200)
     if not success:

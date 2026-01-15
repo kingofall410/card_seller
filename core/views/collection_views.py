@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.utils.timezone import now
 from services import lookup
-from services.models import Settings
+from services.models.models import Settings
 from core.models.Card import Card, Collection
 from core.models.CardSearchResult import CardSearchResult
 from django.views.decorators.csrf import csrf_exempt
