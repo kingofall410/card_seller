@@ -29,7 +29,8 @@ def list_card(request, csr_id):
     settings = Settings.get_default()
     publish = request.GET.get('publish', True)
     group_key = request.GET.get('group_key', None)
-    publish_dt = timezone.make_aware(datetime.fromisoformat(request.GET.get('schedule', "")))
+    dt_string = request.GET.get('schedule', None)
+    publish_dt = timezone.make_aware(datetime.fromisoformat())
     print("pub, group_key", publish, group_key, publish_dt)
     
     if not csr_id or csr_id == 'undefined':
@@ -41,7 +42,7 @@ def list_card(request, csr_id):
     #if publish_dt:
     #scheduled for the future
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_task(name=f"list csr {csr_id}", when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":False, "group_key":group_key})
+    core_config.queue.schedule_task(name=f"list csr {csr_id}", when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
 
     success = True
     #else:

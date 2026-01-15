@@ -144,8 +144,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
 
         item_data = None
         if group_key:
-            group = ProductGroup.create(group_key, csrs)
-            #print("here")
+            group = ProductGroup.create(group_key, [csr])
             print(csr.variation_title_base)
             print(group.variation_data)
             #print("single row:", group.variation_data[csr.variation_title_base])

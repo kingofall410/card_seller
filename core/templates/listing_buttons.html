@@ -95,13 +95,15 @@ document.addEventListener("DOMContentLoaded", function () {
     </div>
 
     <!-- Schedule time -->
+    {% now "Y-m-d\TH:i" as current_time %}
+
     <div style="display:flex; flex-direction:column;">
       <label for="schedule-{{ card_id }}" style="font-weight:600; margin-bottom:4px;">
         Schedule Time
       </label>
       <input type="datetime-local"
              id="schedule-{{ card_id }}"
-             value="{{ now|date:'Y-m-d\\TH:i' }}"
+             value="{{ current_time }}"
              style="padding: 8px; border-radius: 6px; min-width: 200px;" />
     </div>
 

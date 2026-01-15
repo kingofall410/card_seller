@@ -91,14 +91,14 @@ def spreadsheet_rows_from_search_result(cards, field_names):
     for card in cards:
         asr = card.active_search_results()
         row = {}
-
-        for field in field_names:
-            display_attr = f'display_{field}'
-            value = getattr(asr, display_attr)
-            row[field] = value if value is not None else ''
-        row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
-        row["card_id"] = card.id
-        rows.append(row)
+        if asr:
+            for field in field_names:
+                display_attr = f'display_{field}'
+                value = getattr(asr, display_attr)
+                row[field] = value if value is not None else ''
+            row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
+            row["card_id"] = card.id
+            rows.append(row)
     return rows
 
 #view single collections

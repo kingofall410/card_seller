@@ -299,14 +299,13 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
         search_url = f"{IMG_SEARCH_URL}?{'&'.join(query_params)}"
         print("Search URL:", search_url)
         try:
-            response = requests.post(search_url, headers=headers, json=payload, timeout=10)
+            response = requests.post(search_url, headers=headers, json=payload, timeout=120)
         except Timeout:
             print("❌ Request timed out while contacting eBay image search API.")
             return
         except RequestException as e:
             print(f"❌ Request failed: {e}")
 
-        print("resp: ", response)
         #print("resp: ", response.json())
         if response and response.status_code == 200:
             #print(response.json())
