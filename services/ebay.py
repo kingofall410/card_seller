@@ -93,7 +93,7 @@ singles_excel_fields = {
     "Custom label (SKU)":"",
     "Category ID":"",
     "Category name":"",
-    "Title":"title_to_be",
+    "Title":"display_title_to_be",
     "Relationship":"",
     "Relationship details":"",
     "Schedule Time":"",

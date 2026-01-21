@@ -30,7 +30,7 @@ def list_card(request, csr_id):
     publish = request.GET.get('publish', True)
     group_key = request.GET.get('group_key', None)
     dt_string = request.GET.get('schedule', None)
-    publish_dt = timezone.make_aware(datetime.fromisoformat())
+    publish_dt = timezone.make_aware(datetime.fromisoformat(dt_string))
     print("pub, group_key", publish, group_key, publish_dt)
     
     if not csr_id or csr_id == 'undefined':

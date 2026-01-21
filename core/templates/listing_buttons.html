@@ -74,6 +74,33 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 </script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".group-select").forEach(select => {
+    select.addEventListener("change", function () {
+      if (this.value !== "__new__") return;
+
+      const title = prompt("Enter a name for the new group:");
+      if (!title || title.trim() === "") {
+        this.value = "";
+        return;
+      }
+
+      // group_key = title (exactly as requested)
+      const newOption = document.createElement("option");
+      newOption.value = title;     // <— key = title
+      newOption.textContent = title;
+
+      const newGroupOption = this.querySelector('option[value="__new__"]');
+      this.insertBefore(newOption, newGroupOption);
+
+      this.value = title;
+    });
+  });
+});
+</script>
+
+
 
 
 <div style="margin-top: 20px; margin-bottom: 20px; position: relative;">
@@ -86,13 +113,21 @@ document.addEventListener("DOMContentLoaded", function () {
       <label for="group-select-{{ card_id }}" style="font-weight:600; margin-bottom:4px;">
         Group Name
       </label>
-      <select id="group-select-{{ card_id }}" style="padding: 8px; border-radius: 6px; min-width: 180px;">
+
+      <select id="group-select-{{ card_id }}" class="group-select"
+              data-card-id="{{ card_id }}"
+              style="padding: 8px; border-radius: 6px; min-width: 180px;">
         <option value="">No Group (Single Listing)</option>
+
         {% for g in groups %}
           <option value="{{ g.id }}">{{ g.name }}</option>
         {% endfor %}
+
+        <!-- New group option -->
+        <option value="__new__">➕ New Group…</option>
       </select>
     </div>
+
 
     <!-- Schedule time -->
     {% now "Y-m-d\TH:i" as current_time %}

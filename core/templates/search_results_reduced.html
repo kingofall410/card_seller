@@ -47,7 +47,7 @@
                 id="title_to_be_is_manual-{{ card_counter }}"
                 name="title_to_be_is_manual"
                 {% if search_result|get_attribute:"title_to_be_is_manual" %}checked{% endif %}
-                onchange="handleOverrideToggle('title_to_be', {{ card_counter }})">
+                onchange="handleOverrideToggle('title_to_be', {{ card_counter }}, {{ search_result.id }})">
       
       <input type="text"
                 id="field_title_to_be-{{ card_counter }}"
@@ -56,7 +56,7 @@
                 style="width: 95%; box-sizing: border-box; font-size: 1.25em; padding: 5px; 8px; border: 2px solid #ccc; border-radius: 6px;"
                 data-default="{{ title }}"
                 data-maxlength="80"
-                oninput="rebuildTitle('title_to_be', {{ card_counter }})"
+                onblur="handleEnterPress('title_to_be', {{ card_counter }}, {{ search_result.id }})"
                 {% if not search_result|get_attribute:"title_to_be_is_manual" %}disabled{% endif %}>
       </td>
     </tr>
@@ -72,13 +72,13 @@
                 id="{{ field_name }}_is_manual-{{ card_counter }}"
                 name="{{ field_name }}_is_manual"
                 checked disabled
-                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})">
             {% else %}
             <input type="checkbox"
                 id="{{ field_name }}_is_manual-{{ card_counter }}"
                 name="{{ field_name }}_is_manual"
                 {% if search_result|get_attribute:manual_flag %}checked{% endif %}
-                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }})">
+                onchange="handleOverrideToggle('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})">
             {% endif %}
             <span>{{ search_result|get_field_verbose:field_name }}</span>
           </label>

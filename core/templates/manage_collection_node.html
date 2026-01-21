@@ -246,7 +246,8 @@
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
-    <button onclick="submitCardForm({{ collection.id }}, null, '/price_collection/{{ collection.id }}/')">💲</button>
+    <a href="/price_collection/{{ collection.id }}/" style="display:inline-block; padding:8px 12px; border-radius:6px; background:#eee; cursor:pointer; text-decoration:none;">💲</a>
+
     <input type="text"
       name="collection_name_{{ collection.id }}"
       value="{{ collection.name }}"
