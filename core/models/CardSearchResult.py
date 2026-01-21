@@ -1020,6 +1020,10 @@ class ProductListing(models.Model):
     def display_date(self):
         return self.sold_date.isoformat() if self.sold_date else self.listing_date.isoformat()
 
+    @property
+    def pretty_display_date(self):
+        return self.sold_date if self.sold_date else self.listing_date
+
     @classmethod
     def from_graded_card_record(cls, record, parent_csr, tokenize=True):
         listing = cls(search_result=parent_csr)

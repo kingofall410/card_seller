@@ -1,9 +1,60 @@
 <style>
-.image-grid {
+.listing-group {
+  margin-bottom: 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f9f9f9;
+}
+
+.listing-header {
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.listing-header-label {
+  margin-right: 8px;
+}
+
+.listing-toggle {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.search-string {
+  font-size: 1rem;
+  color: #060505ff;
+  margin: 4px 0 12px 0;
+}
+
+/* Collapsed: one row */
+.listing-group.collapsed .image-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 12px;
+
+  height: 120px;
+  max-height: 120px;
+  overflow: hidden;
+  transition: height 0.25s ease;
+}
+
+/* Expanded: full height */
+.listing-group.expanded .image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .listing {
@@ -28,90 +79,142 @@
   text-align: center;
 }
 
-details.listing-group {
-  margin-bottom: 16px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 8px;
-  background: #f9f9f9;
+.sort-controls {
+  margin: 4px 0 12px 0;
+  font-size: 0.9rem;
 }
 
-summary.listing-summary {
-  font-weight: bold;
-  font-size: 1rem;
+.sort-title {
+  margin-right: 8px;
+  color: #333;
+  font-weight: 500;
+}
+
+.sort-link {
   cursor: pointer;
-  list-style: revert; /* restores triangle */
-  display: list-item; /* ensures native marker appears */
+  color: #0074d9;
+  margin-right: 12px;
 }
 
-.search-string {
-  font-size: 1rem;
-  color: #060505ff;
-  margin: 4px 0 12px 22px; /* indent to align with summary arrow */
+.sort-link:hover {
+  text-decoration: underline;
 }
 </style>
-<details class="listing-group">
-  <summary class="listing-summary">
-    {{ listing_group.label }} ({{ listing_group.listings.count }})
-  </summary>
-  <div class="search-string">{{ listing_group.id_string }} {{ listing_group.filter_terms }}</div>
+
+
+<div class="listing-group collapsed" data-listing-group>
+  <div class="listing-header" data-toggle>
+    <span class="listing-header-label">
+      {{ listing_group.label }} ({{ listing_group.listings.count }})
+    </span>
+    <span class="listing-toggle" data-toggle-label>Show more</span>
+  </div>
+
+  <div class="search-string">
+    {{ listing_group.id_string }} {{ listing_group.filter_terms }}
+  </div>
+
+  <div class="sort-controls">
+    <span class="sort-title">Sort:</span>
+    <span class="sort-link" data-sort="price" data-dir="desc">Price ↓</span>
+    <span class="sort-link" data-sort="date" data-dir="desc">Date ↓</span>
+    <span class="sort-link" data-sort="title" data-dir="asc">Title ↑</span>
+  </div>
 
   <div class="image-grid">
+
     {% for listing in listing_group.listings.all %}
-      <div class="listing">
+      <div class="listing"
+           data-price="{{ listing.ebay_price }}"
+           data-date="{{ listing.pretty_display_date|date:'c' }}"
+           data-title="{{ listing.title }}"
+           data-format="{{ listing.format }}"
+           data-qty="{{ listing.qty }}">
+
         <a href="{{ listing.img_url }}" target="_blank" rel="noopener noreferrer">
-          <img src="{{ listing.thumb_url }}" alt="Listing Image" class="listing-thumb" title="{{ listing.title|default:'Listing' }}" />
+          <img src="{{ listing.thumb_url }}"
+               alt="Listing Image"
+               class="listing-thumb"
+               title="{{ listing.title }}
+{{ listing.pretty_display_date|date:'m/d/Y' }}
+{{ listing.ebay_price }}
+Format: {{ listing.format }}
+Qty: {{ listing.qty }}
+{{ listing.item_id }}">
         </a>
-        <div class="listing-caption">
-          {{ listing.ebay_price }}
-        </div>
+
+        <div class="listing-caption">{{ listing.ebay_price }}</div>
       </div>
     {% empty %}
       <p>No listings found.</p>
     {% endfor %}
   </div>
-</details>
+</div>
+
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  const listingGroups = document.querySelectorAll(".listing-group");
+  const groups = document.querySelectorAll("[data-listing-group]");
 
-  listingGroups.forEach(group => {
+  groups.forEach(group => {
     const grid = group.querySelector(".image-grid");
     const listings = Array.from(grid.querySelectorAll(".listing"));
+    const toggle = group.querySelector("[data-toggle]");
+    const toggleLabel = group.querySelector("[data-toggle-label]");
+    const sortLinks = group.querySelectorAll(".sort-link");
 
-    listings.sort((a, b) => {
-      const priceA = parseFloat(a.querySelector(".listing-caption").textContent) || 0;
-      const priceB = parseFloat(b.querySelector(".listing-caption").textContent) || 0;
-      return priceB - priceA;
+    // Extract values once
+    listings.forEach(listing => {
+      listing.dataset.price = parseFloat(listing.dataset.price) || 0;
+      listing._sortDate = new Date(listing.dataset.date).getTime() || 0;
+      listing._sortTitle = listing.dataset.title.toLowerCase();
     });
 
-    listings.forEach(listing => {
-      grid.appendChild(listing);
+    function applySort(mode, dir) {
+      listings.sort((a, b) => {
+        let result = 0;
 
-      const img = listing.querySelector("img");
-      const listingId = listing.dataset.listingId;
+        if (mode === "price") {
+          result = a.dataset.price - b.dataset.price;
+        } else if (mode === "date") {
+          result = a._sortDate - b._sortDate;
+        } else if (mode === "title") {
+          result = a._sortTitle.localeCompare(b._sortTitle);
+        }
 
-      img.addEventListener("click", function (event) {
-        event.preventDefault();
-
-        listing.classList.add("excluded");
-        listing.dataset.excluded = "true";
-
-        fetch("/exclude-listing/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            listing_id: listingId,
-            excluded: true
-          })
-        }).then(response => {
-          if (!response.ok) {
-            console.error("Failed to update exclusion");
-          }
-        });
+        return dir === "asc" ? result : -result;
       });
+
+      listings.forEach(l => grid.appendChild(l));
+    }
+
+    // Default sort
+    applySort("price", "desc");
+
+    // Link click handlers
+    sortLinks.forEach(link => {
+      link.addEventListener("click", () => {
+        const mode = link.dataset.sort;
+        const currentDir = link.dataset.dir;
+        const newDir = currentDir === "desc" ? "asc" : "desc";
+
+        // Update direction
+        link.dataset.dir = newDir;
+
+        // Update label arrow
+        const arrow = newDir === "desc" ? "↓" : "↑";
+        link.textContent = `${link.dataset.sort.charAt(0).toUpperCase() + link.dataset.sort.slice(1)} ${arrow}`;
+
+        applySort(mode, newDir);
+      });
+    });
+
+    // Expand/collapse
+    toggle.addEventListener("click", () => {
+      const isCollapsed = group.classList.contains("collapsed");
+      group.classList.toggle("collapsed", !isCollapsed);
+      group.classList.toggle("expanded", isCollapsed);
+      toggleLabel.textContent = isCollapsed ? "Show less" : "Show more";
     });
   });
 });

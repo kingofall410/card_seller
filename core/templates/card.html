@@ -109,27 +109,6 @@
     }
   </style>
 </head>
-{% comment %}
-<script>
-    window.submitCardForm = function(collectionId, cardId, targetUrl) {
-    console.log("submit to", targetUrl, cardId, collectionId);
-    const visibleCards = document.getElementById(`visible-cards`);
-    console.log(visibleCards.value);
-    
-    let cardIds = [];  // Declare outside the block
-    if (visibleCards.value) {
-      cardIds = JSON.parse(visibleCards.value).map(Number);
-    } else {
-      cardsIds = [];
-    }
-    
-    // Optionally attach cardIds to the form as a hidden input
-    const form = document.getElementById(`view-card-form`);
-    form.action = targetUrl || (cardId ? `/card/${cardId}/` : `/card/`);
-    form.submit();
-  }
-</script>
-{% endcomment %}
 <body>
   {% include "header.html" %}
   {% include "nav_buttons.html" with url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
