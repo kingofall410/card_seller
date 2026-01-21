@@ -307,9 +307,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return self.front_crop_params
         
     def save(self, *args, **kwargs):
-        print("saving csr", self.id, self.card_name, self.card_name_m, self.card_name_is_manual)
+        print("saving csr", self.id, self.title_to_be, self.title_to_be_m, self.title_to_be_is_manual)
         if not self.title_to_be_is_manual:
-            self.title_to_be = self.build_title()
+            self.title_to_be = self.build_title(condition_sensitive=True)
 
         self.variation_title_base = self.build_title(variation_title=True, condition_sensitive=True)
 
@@ -515,7 +515,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 self.set_ovr_attribute(field_name, final_value, False)
 
         
-        self.set_ovr_attribute("title_to_be", self.build_title(), False)
+        self.set_ovr_attribute("title_to_be", self.build_title(condition_sensitive=True), False)
         self.save()
         #print("Final collapsed tokens:", self.collapsed_tokens)
         return summary

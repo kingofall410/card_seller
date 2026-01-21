@@ -176,7 +176,7 @@ function handleSelect(selector, event, ui) {
 
 
 // Enable/disable field on checkbox toggle
-function handleOverrideToggle(fieldName, cardId) {
+function handleOverrideToggle(fieldName, cardId, csrId) {
   const checkbox = document.getElementById(`${fieldName}_is_manual-${cardId}`);
   const input = document.getElementById(`field_${fieldName}-${cardId}`);
 
@@ -186,6 +186,7 @@ function handleOverrideToggle(fieldName, cardId) {
     input.setAttribute("disabled", "disabled");
     const defaultValue = input.getAttribute("data-default");
   }
+  handleEnterPress(fieldName, cardId, csrId)
 }
 
 function rebuildTitle(fieldName, cardId) {
@@ -302,17 +303,13 @@ function handleEnterPress(fieldName, cardId, csrId) {
 
         Object.entries(updatedFields).forEach(([key, val]) => {
           const fieldInput = document.getElementById(`field_${key}-${cardId}`);
-          if (fieldInput) {
-            if (fieldInput.tagName === "TEXTAREA" || fieldInput.type === "text") {
-              fieldInput.value = val;
-            } else if (fieldInput.type === "checkbox") {
-              fieldInput.checked = !!val;
-            }
-          }
-
           const manualCheckbox = document.getElementById(`${key}_is_manual-${cardId}`);
-          if (manualCheckbox && typeof updatedFields[`${key}_is_manual`] !== "undefined") {
-            manualCheckbox.checked = !!updatedFields[`${key}_is_manual`];
+
+          if (fieldInput && manualCheckbox) {
+            if ((fieldInput.tagName === "TEXTAREA" || fieldInput.type === "text")
+                && (!manualCheckbox.checked)) {
+              fieldInput.value = val;
+            } 
           }
         });
       },
