@@ -14,7 +14,7 @@ def get_dynamic_options(request):
     pass
 
 @csrf_exempt
-def image_search(request, card_id, create_new_csr=False):
+def image_search(request, card_id, create_new_csr=True):
     print("image_searchy", request.body)
     if not card_id:
         return JsonResponse({'error': 'Card ID is required'}, status=400)

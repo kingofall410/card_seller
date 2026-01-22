@@ -77,8 +77,8 @@ def text_refinement(csr, keyword_string = "", all_fields = {}, settings=None, si
     backup_ss = wide_id_string + " " + filter_terms
 
     #TODO: Update these to operate on the grouop itself
-    text_group = csr.create_listing_group(label="text", filter_terms=filter_terms, id_string=id_string)
-    text_wide_group = csr.create_listing_group(label="text wide", is_wide=True, filter_terms=filter_terms, id_string=wide_id_string)
+    text_group = csr.create_listing_group(label="Active Listings", filter_terms=filter_terms, id_string=id_string)
+    text_wide_group = csr.create_listing_group(label="Active Listings (wide)", is_wide=True, filter_terms=filter_terms, id_string=wide_id_string)
     keyword_strings = [(search_string, text_group), (backup_ss, text_wide_group)]
 
     if csr.condition and csr.condition != " ":
@@ -87,8 +87,8 @@ def text_refinement(csr, keyword_string = "", all_fields = {}, settings=None, si
         condition_ss = condition_id + " " + filter_terms
         backup_condition_ss = backup_condition_id + " " + filter_terms
 
-        condition_group = csr.create_listing_group(label="text refined", is_refined=True, filter_terms=filter_terms, id_string=condition_id)
-        condition_wide_group = csr.create_listing_group(label="text wide refined", is_wide=True, is_refined=True, filter_terms=filter_terms, id_string=backup_condition_id)
+        condition_group = csr.create_listing_group(label="Refined Active Listings", is_refined=True, filter_terms=filter_terms, id_string=condition_id)
+        condition_wide_group = csr.create_listing_group(label="Refined Active Listings (wide)", is_wide=True, is_refined=True, filter_terms=filter_terms, id_string=backup_condition_id)
 
         keyword_strings.append((condition_ss, condition_group))
         keyword_strings.append((backup_condition_ss, condition_wide_group))
@@ -117,8 +117,8 @@ def price_only(csr, settings, ss=None):
     backup_ss = wide_id_string + " " + filter_terms
 
     #TODO: Update these to operate on the grouop itself
-    sold_group = csr.create_listing_group(label="sold", is_sold=True, filter_terms=filter_terms, id_string=id_string)
-    sold_wide_group = csr.create_listing_group(label="sold wide", is_sold=True, is_wide=True, filter_terms=filter_terms, id_string=wide_id_string)
+    sold_group = csr.create_listing_group(label="Sold Listings", is_sold=True, filter_terms=filter_terms, id_string=id_string)
+    sold_wide_group = csr.create_listing_group(label="Sold Listings (wide)", is_sold=True, is_wide=True, filter_terms=filter_terms, id_string=wide_id_string)
     
     keyword_strings = [(search_string, sold_group), (backup_ss, sold_wide_group)]
 
@@ -128,8 +128,8 @@ def price_only(csr, settings, ss=None):
         condition_ss = condition_id + " " + filter_terms
         backup_condition_ss = backup_condition_id + " " + filter_terms
 
-        condition_group = csr.create_listing_group(label="sold refined", is_sold=True, is_refined=True, filter_terms=filter_terms, id_string=condition_id)
-        condition_wide_group = csr.create_listing_group(label="sold wide refined", is_sold=True, is_wide=True, is_refined=True, filter_terms=filter_terms, id_string=backup_condition_id)
+        condition_group = csr.create_listing_group(label="Refined Sold Listings", is_sold=True, is_refined=True, filter_terms=filter_terms, id_string=condition_id)
+        condition_wide_group = csr.create_listing_group(label="Refined Sold Listings (wide)2", is_sold=True, is_wide=True, is_refined=True, filter_terms=filter_terms, id_string=backup_condition_id)
 
         keyword_strings.append((condition_ss, condition_group))
         keyword_strings.append((backup_condition_ss, condition_wide_group))

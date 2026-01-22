@@ -99,6 +99,11 @@
 .sort-link:hover {
   text-decoration: underline;
 }
+
+.sort-link.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
 </style>
 
 
@@ -189,7 +194,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Default sort
-    applySort("price", "desc");
+    applySort("date", "desc");
+
+    // Mark Date as the default active sort
+    sortLinks.forEach(l => l.classList.remove("active"));
+    const defaultLink = group.querySelector('[data-sort="date"]');
+    defaultLink.classList.add("active");
 
     // Link click handlers
     sortLinks.forEach(link => {
@@ -205,9 +215,16 @@ document.addEventListener("DOMContentLoaded", function () {
         const arrow = newDir === "desc" ? "↓" : "↑";
         link.textContent = `${link.dataset.sort.charAt(0).toUpperCase() + link.dataset.sort.slice(1)} ${arrow}`;
 
+        // Clear active class from all links
+        sortLinks.forEach(l => l.classList.remove("active"));
+
+        // Set active class on this link
+        link.classList.add("active");
+
         applySort(mode, newDir);
       });
     });
+
 
     // Expand/collapse
     toggle.addEventListener("click", () => {

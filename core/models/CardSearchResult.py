@@ -299,6 +299,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         except ListingGroup.DoesNotExist:
             return None
 
+
+    def get_listing_group(self, is_sold=False, is_wide=False, is_refined=False, is_img=False):
+        try:
+            return self.listing_groups.get(is_sold=is_sold, is_wide=is_wide, is_refined=is_refined, is_img=is_img)
+        except ListingGroup.DoesNotExist:
+            return None
+
     
     def get_crop_params(self, card_id=None):
         if card_id == self.parent_card.reverse_id:
@@ -400,8 +407,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     def aggregate_pricing_data(self):
         
-        sold_refined_group = self.get_listing_group("sold refined")
-        sold_group = self.get_listing_group("sold")
+        sold_refined_group = self.get_listing_group(is_sold=True, is_refined=True)
+        sold_group = self.get_listing_group(is_sold=True)
         #print("lg:", sold_refined_group, sold_group)
         listing_group = sold_refined_group or sold_group
         #print("final:", listing_group, listing_group.max_price)
@@ -588,7 +595,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
         csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
         csr.ebay_msrp = 0.0
-        csr.create_listing_group("id", is_img=True)
+        csr.create_listing_group("ID Listings", is_img=True)
         csr.create_listing_group("graded")
 
         #csr.response_count = 0
@@ -634,8 +641,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not csr:
             csr = cls.create_empty(pcard)
         elif id_listings:      
-            csr.create_listing_group("id", "", "", is_img=True)#in case we have a legacy CSR
-            csr.get_listing_group("id").listings.all().delete()
+            csr.create_listing_group("ID Listings", "", "", is_img=True)#in case we have a legacy CSR
+            csr.get_listing_group(is_img=True).listings.all().delete()
 
         listing_set = []
         #print("locked words: ", all_fields)
@@ -646,7 +653,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     listing_set.append(listing)
 
                 if id_listings:
-                    listing.listing_group = csr.get_listing_group("id")
+                    listing.listing_group = csr.get_listing_group(is_img=True)
                     listing.save()
 
                         
