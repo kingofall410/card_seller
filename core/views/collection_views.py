@@ -76,7 +76,9 @@ def render_collection_list(request, collections, per_page, collection_id=None):
         page_number = request.GET.get('page')
 
     page_obj = paginator.get_page(page_number)
-    return render(request, "manage_collection.html", {"page_obj": page_obj, "settings": settings})
+    columns = CardSearchResult.mini_spreadsheet_fields
+    #rows = (spreadsheet_rows_from_search_result(collection.cards.all(), columns) for collection in collections)
+    return render(request, "manage_collection.html", {"page_obj": page_obj, "settings": settings, "columns":columns, "rows":rows})
 
 #view specific manage-collections
 def manage_collection(request):
@@ -97,6 +99,7 @@ def spreadsheet_rows_from_search_result(cards, field_names):
                 value = getattr(asr, display_attr)
                 row[field] = value if value is not None else ''
             row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
+            row["reverse_thumb_url"] = card.cropped_reverse.url() if card.cropped_reverse else ""
             row["card_id"] = card.id
             rows.append(row)
     return rows

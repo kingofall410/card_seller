@@ -28,7 +28,7 @@
 <div id="collection-tree">
   {% for collection in page_obj %}
     <HR>
-    {% include "manage_collection_node.html" with collection=collection settings=settings %}
+    {% include "spreadsheet.html" with columns=columns rows=rows %}
   {% endfor %}
 </div>
 
