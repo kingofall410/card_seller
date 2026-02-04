@@ -42,7 +42,7 @@ def list_card(request, csr_id):
     #if publish_dt:
     #scheduled for the future
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_task(name=f"list csr {csr_id}", when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
+    core_config.queue.schedule_listing_task(name=f"list csr {csr_id}", card=csr.parent_card, csr=csr, when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
 
     success = True
     #else:

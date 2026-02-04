@@ -1,0 +1,51 @@
+<a href="/card/{{ task.listingtask.card.id }}/" style="text-decoration:none; color:inherit;">
+<div class="task-item status-{{ task.status|slugify }}">
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            <td colspan=3>
+                
+            </td>
+
+        </tr>
+        <tr>
+            <!-- LEFT: Image -->
+            <td style="width:40px; vertical-align:top; padding-right:8px;">
+                {% if task.listingtask.card.cropped_image %}
+                    <img src="{{ task.listingtask.card.cropped_image.url }}"
+                        style="height:50px; width:auto;">
+                {% else  %}
+                    <img src="{{ task.img }}" style="height:50px; width:auto;">
+                {% endif %}
+            </td>
+
+            <!-- CENTER: Info rows -->
+            <td style="vertical-align:top;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    
+                    <div class="csr-title">
+                        {% if task.listingtask.group_key %}
+                            <b>{{ task.listingtask.csr.display_full_name }}</b>
+                        {% else %}
+                            <b>{{ task.listingtask.csr.display_full_name }}</b>
+                        {% endif %}
+                    </div>
+
+                    <div class="csr-price">
+                        ${{ task.listingtask.csr.list_price }}
+                    </div>
+                </div>
+            </td>
+            
+            <!-- RIGHT: Icons rows -->
+            <td style="vertical-align:top;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div class="status">
+                        {{ task.status_icon }}
+                    </div> 
+
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+</a>

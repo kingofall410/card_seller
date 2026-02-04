@@ -18,22 +18,8 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
         
         if "psa" in sites:
             #TODO: ultimately this is backwards, my lookup modules need to be unifying to Card, not vice versa
-            psa_record = {
-                "cert_number": "88547026",
-                "grade": "GEM MT 10",
-                "full_name": "CJ STROUD",
-                "set_name": "PANINI DONRUSS",
-                "year": "2023",
-                "card_number": "339",
-                "category": "FOOTBALL CARDS",
-                "population_higher": "0",
-                "total_population": "7786",
-                "spec_id": "10066981",
-                "spec_number": "EMS8006103",
-                "shareable_front_link": "https://d1htnxwo4o0jhw.cloudfront.net/cert/155477432/ILJ4jCk2LEytteWa6a461A.jpg",
-                "shareable_reverse_link": "https://d1htnxwo4o0jhw.cloudfront.net/cert/155477432/znww58_DqEmprmPIy7ck_g.jpg",
-            }
-
+            psa_record = psa.scan_and_lookup(card.get_lookup_image().path)
+            print("jim", psa_record)
             csr = card.parse_psa_record(psa_record)
         elif "ebay" in sites:
             listing_matches = ebay.image_search(card.get_lookup_image(), limit=result_count_max, page=page, settings=settings)
@@ -55,7 +41,7 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
             csr.refinement_status = StatusBase.UNEXECUTED
 
         if scrape_sold_data:
-            price_only(csr, settings)
+            price_only(csr.id, settings.id)
             csr.pricing_status = StatusBase.AUTO
         else:
             csr.pricing_status = StatusBase.UNEXECUTED
@@ -107,8 +93,9 @@ def text_refinement(csr, keyword_string = "", all_fields = {}, settings=None, si
 def retokenize(card):
     card.retokenize()
 
-def price_only(csr, settings, ss=None):
-    
+def price_only(csr_id, settings_id, ss=None):
+    csr = CardSearchResult.objects.get(id=csr_id)
+    settings = Settings.objects.get(id=settings_id)
     filter_terms = csr.display_value("filter_terms") or ""
     filter_terms = "" if filter_terms == "-" else filter_terms
     id_string = csr.build_title(shorter=True)

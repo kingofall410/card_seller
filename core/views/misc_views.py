@@ -1,17 +1,34 @@
 from django.shortcuts import render
 from django.http import JsonResponse
 from services.models.models import Settings
+from services.models.task import Task, ListingTask
+from core.models.Status import StatusBase
 
+from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Collection, CollectionStatus
+from core.models.CardSearchResult import CardSearchResult
 # Miscellaneous views
-
+from django.apps import apps
+from django.shortcuts import get_object_or_404, redirect
+from django.views.decorators.http import require_POST
+import re
 
 def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
-    Collection.objects.update(status=CollectionStatus.IMPORTED)
 
+    #core_config = apps.get_app_config("core")
+    #core_config.queue.reset()
+    '''lasks = Task.objects.filter(status=StatusBase.PENDING)
+    for lt in lasks:
+        csr = lt.listingtask.csr
+        csr.overall_status = StatusBase.PENDING
+        csr.save()'''
+    
+    
+    
+    
     '''settings = Settings.get_default()
     collection = Collection.objects.get(id=97).cards.all()
     csrs = [card.active_search_results() for card in collection]

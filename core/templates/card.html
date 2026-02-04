@@ -149,7 +149,7 @@
 
     <!-- Product Listings -->
     <div class="uicard listing-block">
-    {% for listing_group in card_tuple.2.listing_groups.all %}
+    {% for listing_group in card_tuple.2.reverse_listing_groups %}
       {% include "product_listings.html" with listing_group=listing_group %}
     {% endfor %}
     </div>

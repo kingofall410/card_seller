@@ -25,14 +25,15 @@
   text-decoration: underline;
 }
 
-</style>
-<style>
-/* Existing styles… */
+/* Status colors */
 .status-imported      { background-color: #ffffff; }
-.status-listed    { background-color: #e0f7ff; }
-.status-ready-to-price { background-color: #fff4cc; }
-.status-ready-to-list  { background-color: #e8ffe8; }
-.status-identified        { background-color: #ffe6e6; }
+.status-listed        { background-color: #e0f7ff; }
+.status-ready-to-price{ background-color: #fff4cc; }
+.status-ready-to-list { background-color: #e8ffe8; }
+.status-identified    { background-color: #ffe6e6; }
+.status-pending       { background-color: #fff4cc; }
+.status-failed        { background-color: #ffe6e6; }
+.status-closed        { background-color: #383838ff; }
 
 .nav-link.status-imported:hover,
 .nav-link.status-identified:hover,
@@ -43,52 +44,127 @@
 }
 </style>
 
-
-
-
 <nav style="background-color: #333; padding: 16px 24px; display: flex; align-items: center; position: relative;">
-  
-  <div class="collection-dropdown" style="position: relative;">
-    <button style="color: white; background: none; border: none; cursor: pointer;
-      font-weight: bold;
-      margin-right: 24px; ">
+
+  <!-- COLLECTION DROPDOWN -->
+  <div class="dropdown collection-dropdown" style="position: relative; margin-right: 24px;">
+    <button class="dropdown-toggle"
+            style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
       🗂️ COLLECTION ▾
     </button>
-    <div class="dropdown-menu" style="
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      background-color: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      border-radius: 6px;
-      overflow: hidden;
-      min-width: 420px;
-      z-index: 1000;
-    ">
+
+    <div class="dropdown-menu"
+         style="
+           display: none;
+           position: absolute;
+           top: 100%;
+           left: 0;
+           background-color: white;
+           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+           border-radius: 6px;
+           overflow: hidden;
+           min-width: 420px;
+           z-index: 1000;
+         ">
       <a href="{% url 'manage_collection' %}" class="nav-link">
-        ➕ See All...
+        ➕ See All Collections...
       </a>
+
       {% get_collections as collections %}
       {% for collection in collections %}
         <a href="{% url 'collection' collection.id %}"
-          class="nav-link status-{{ collection.status|slugify }}">
+           class="nav-link status-{{ collection.status|slugify }}">
           {{ collection.id }}. {{ collection.name }} ({{ collection.get_size }})
         </a>
       {% endfor %}
-
-
-
     </div>
   </div>
 
-  <a href="{% url 'upload_image' %}" class="navbar-link">
-     📤 UPLOAD
-  </a>
+  <!-- TASK QUEUE DROPDOWN -->
+  <div class="dropdown task-dropdown" style="position: relative; margin-right: 24px;">
+    <button class="dropdown-toggle"
+            style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
+      📤 TASK QUEUE ▾
+    </button>
 
+    <div class="dropdown-menu"
+         style="
+           display: none;
+           position: absolute;
+           top: 100%;
+           left: 0;
+           background-color: white;
+           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+           border-radius: 6px;
+           overflow: hidden;
+           min-width: 520px;
+           z-index: 1000;
+         ">
+      <a href="{% url 'tasks_list' %}" class="nav-link">
+        Task List...
+      </a>
+      <a href="{% url 'calendar' %}" class="nav-link">
+        Task Calendar...
+      </a>
+      {% get_tasks as tasks %}    
+      {% for task in tasks %}
+        <span
+           class="nav-link status-{{ task.status|slugify }}"
+           style="display: flex; align-items: center; gap: 10px; padding: 8px;">
+
+          {% if task.img %}
+            <img src="{{ task.img }}" class="thumb"
+                 style="height: 40px; width: 40px; object-fit: contain;">
+          {% else %}
+            <div style="height: 40px; width: 40px; display:flex; align-items:center; justify-content:center; color:#aaa;">
+              —
+            </div>
+          {% endif %}
+
+          <div style="display: flex; flex-direction: column;">
+
+            {% if task.card %}
+              <span style="font-size: 0.85rem; color: #333;">
+                <b>{{ task.card.listing_title }}</b> — ${{ task.card.listing_price }}
+              </span>
+            {% endif %}
+
+            <span style="font-size: 0.85rem; color: #666;">
+              {{ task.scheduled_for }}
+            </span>
+
+            <span style="font-size: 0.85rem;">
+              {{ task.status_icon }}
+            </span>
+          </div>
+            <!-- DELETE BUTTON -->
+              <form method="POST"
+                    action="{% url 'delete_task' task.id %}"
+                    style="margin-left:auto; padding-left:10px;">
+                <button type="submit"
+                        style="background:none; border:none; color:#b00; font-weight:bold; cursor:pointer;">
+                  ✖
+                </button>
+              </form>
+
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- OTHER NAV LINKS -->
   <a href="{% url 'listing_view' %}" class="navbar-link">
      💲 LISTINGS
   </a>
+
+  <a href="{% url 'admin:index' %}" class="navbar-link">
+     🛠️ ADMIN
+  </a>
+
+  <a href="{% url 'test_view' %}" class="navbar-link">
+     🧪 TEST
+  </a>
+
 
   <a href="{% url 'settings' %}" class="navbar-link" style="margin-left: auto;">
      ⚙️ SETTINGS
@@ -97,20 +173,29 @@
 </nav>
 
 <script>
-  // Toggle dropdown on click
-  document.addEventListener("DOMContentLoaded", function() {
-    const dropdown = document.querySelector(".collection-dropdown");
-    const button = dropdown.querySelector("button");
+document.addEventListener("DOMContentLoaded", function() {
+  const dropdowns = document.querySelectorAll(".dropdown");
+
+  dropdowns.forEach(dropdown => {
+    const button = dropdown.querySelector(".dropdown-toggle");
     const menu = dropdown.querySelector(".dropdown-menu");
 
     button.addEventListener("click", function(e) {
       e.stopPropagation();
+
+      // Close other dropdowns
+      document.querySelectorAll(".dropdown-menu").forEach(m => {
+        if (m !== menu) m.style.display = "none";
+      });
+
       menu.style.display = (menu.style.display === "block") ? "none" : "block";
     });
+  });
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", function() {
+  document.addEventListener("click", function() {
+    document.querySelectorAll(".dropdown-menu").forEach(menu => {
       menu.style.display = "none";
     });
   });
+});
 </script>

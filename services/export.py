@@ -197,8 +197,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         print("Offer data:", offer_data)
         
         if csr.list_price <= 0:
-            print("Returning due to 0 price")
-            return False, None, None#kick out before corrupting the group with a 0 price offer
+            raise Exception("List price not valid")
         elif not publish:
             return True, None, None#don't talk to ebay if we're not publishing
         
@@ -233,7 +232,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         #ebay.publish_offer("66119568011", access_token)
 
     else:
-        return False, None, None
+        raise Exception("Missing user consent")
 
 
 ''''

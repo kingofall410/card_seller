@@ -31,15 +31,16 @@ def perform_upload(uploaded_files, collection=None, is_slab=False):
         # 🔍 Phase 2: Process files after all uploads complete
         skip_next = False
         settings = Settings.get_default()
-        lookup_sites = ["ebay","psa"] if is_slab else ["ebay"]
-        for absolute_path in uploaded_file_paths:
+        lookup_sites = ["psa"] if is_slab else ["ebay"]
+        for i, absolute_path in enumerate(uploaded_file_paths):
             #print("FP", uploaded_file_paths)
             if skip_next:
                 skip_next = not skip_next
                 print("Skipping")
             else:
                 print("not skipping")
-                source_card, skip_next = Card.from_filename(collection, absolute_path, crop=True, match_back=True, is_slab=is_slab)
+                skip_next = (absolute_path == uploaded_file_paths[-1])
+                source_card, skip_next = Card.from_filename(collection, absolute_path, crop=True, match_back=not skip_next, is_slab=is_slab)
                 lookup.single_image_lookup(source_card, {}, settings, sites=lookup_sites, scrape_sold_data=False, result_count_max=settings.id_listings)
 
 @csrf_exempt
@@ -54,7 +55,7 @@ def upload_image(request, collection_id=None):
     if request.method == 'POST':
         uploaded_files = sorted(    request.FILES.getlist('images'), key=lambda r: r.name)
         collection_id = request.POST.get('collection_id')
-        is_slab = request.POST.get('slab') == 'true'
+        is_slab = (request.POST.get('slab') == 'true') or (request.POST.get('slab') == 'True')
         
         if collection_id == "__Add__":
             collection = Collection.objects.create()
@@ -63,7 +64,7 @@ def upload_image(request, collection_id=None):
             collection = Collection.objects.get(id=collection_id)           
     
         perform_upload(uploaded_files, collection, is_slab=is_slab)                   
-        return redirect('manage_collection')
+        return redirect('collection', collection_id)
 
 @csrf_exempt
 def upload_crop(request):

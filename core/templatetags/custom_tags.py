@@ -5,6 +5,7 @@ from core.models.Group import ProductGroup
 from core.models.Card import Collection, CollectionStatus
 from core.models.Status import StatusBase
 from services.models.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
+from services.models.task import Task
 from django.db.models import F
 
 register = template.Library()
@@ -73,6 +74,16 @@ def get_cropped(card, id):
 def get_collections():
     return Collection.objects.order_by('-id')
 
+#combine the two below
+@register.simple_tag
+def get_tasks():
+    return Task.objects.filter(status__in=[StatusBase.PENDING, StatusBase.FAILED]).order_by('scheduled_for')
+
+@register.simple_tag
+def get_all_tasks():
+    return Task.objects.filter().order_by('scheduled_for')
+
+
 @register.simple_tag
 def get_calculated():
     return CardSearchResult.calculated_fields
@@ -104,7 +115,7 @@ def get_textonly():
 
 @register.simple_tag
 def get_product_groups():
-    return [{"id": pg.group_key, "name": pg.group_title or pg.group_key} for pg in ProductGroup.objects.all().order_by('-id')]
+    return [{"key": pg.group_key, "name": pg.group_title or pg.group_key} for pg in ProductGroup.objects.all().order_by('-id')]
 
 @register.simple_tag
 def get_all_options(field_key, csrId=None, collection_id=None):

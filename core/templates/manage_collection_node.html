@@ -30,13 +30,6 @@
   z-index: 10;
   margin-bottom: 4px;
 }
-
-.status-icon {
-  position: absolute;
-  bottom: 2px;
-  left: 2px;
-  font-size: 0.85em;
-}
 .image-wrapper {
   position: relative;
   width: 150px;
@@ -186,19 +179,21 @@
   border-color: #ffa39e
 }
 
-.card-item.status-manual {
+.card-item.status-failed {
+  background-color: #fff1f0; /* soft red */
+  border-color: #ffa39e
+}
+
+.card-item.status-pending {
   background-color: #fffbe6; /* soft yellow */
   border-color: #ffe58f;
 }
 
-.card-item.status-auto {
-  background-color: #f6ffed; /* soft green */
-  border-color: #b7eb8f;
-}
 .card-item.status-listed {
   background-color: #e6f7ff; /* soft blue */
   border-color: #91d5ff;
 }
+
 .image-button {
   background: none;
   border: none;
@@ -277,11 +272,12 @@
       <label><input type="checkbox" class="attr-toggle" value="avgonly">Avg Sale</label>
       <label><input type="checkbox" class="attr-toggle" value="msrp" checked>MSRP</label>
     </div>
+    {% include "components/drop_zone.html" with collection_id=collection.id %}
     <div class="card-list">
     {% for card in collection.cards.all %}
       {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" display_team=card.active_search_results|get_attribute:"display_team" display_city=card.active_search_results|get_attribute:"display_city" display_serial=card.active_search_results|get_attribute:"display_serial" %}
       {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
-      {% with refinement_status=card.active_search_results.refinement_status|status_icon_meta pricing_status=card.active_search_results.pricing_status|status_icon_meta id_status=card.active_search_results.id_status|status_icon_meta%}
+      {% comment %} {% with refinement_status=card.active_search_results.refinement_status|status_icon_meta pricing_status=card.active_search_results.pricing_status|status_icon_meta id_status=card.active_search_results.id_status|status_icon_meta%} {% endcomment %}
       
       <div id="card-{{ card.id }}" class="card">    
       <div class="card-item status-{{ card.active_search_results.overall_status|lower }}">
@@ -298,11 +294,11 @@
         </div>
 
         <div class="card-meta" data-attr="list_price">
-          ${{ card.active_search_results.list_price|floatformat:2 }}
+          List: ${{ card.active_search_results.list_price|floatformat:2 }}
         </div>
 
-        <div class="card-meta" data-attr="msrp">
-          ${{ card.active_search_results.ebay_msrp|floatformat:2 }}
+        <div class="card-meta" data-attr="ebay-msrp">
+          MSRP: ${{ card.active_search_results.ebay_msrp|floatformat:2 }}
         </div>
 
         <div class="card-meta" data-attr="ids">
@@ -343,7 +339,7 @@
 
         {% endwith %}
         {% endwith %}
-        {% endwith %}
+        {% comment %} {% endwith %}{% endcomment %}
         
     </div>
     </div>

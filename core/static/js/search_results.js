@@ -8,6 +8,29 @@ $(document).ready(function () {
       rebuildTitle(input); // Run once on init
   });
   
+    $(document).on("click", ".clearGroupBtn", function () {
+      console.log("Clear group clicked!");
+      const cardId = this.dataset.cardId;
+      const csrId = this.dataset.csrId;
+
+      console.log("cid", cardId);
+
+      const allFields = collectAllFields(cardId);
+      allFields.group_key = "";
+
+      $.ajax({
+      url: "/update_csr_fields/",
+      method: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({
+          csrId: csrId,
+          allFields: allFields,
+      }),
+      headers: { "X-CSRFToken": "{{ csrf_token }}" }
+  });
+});
+
+  
   // 🧩 Allow HTML in autocomplete labels
   $.ui.autocomplete.prototype._renderItem = function (ul, item) {
     if (item.isDivider) {
@@ -320,3 +343,8 @@ function handleEnterPress(fieldName, cardId, csrId) {
     });
   }, 300); // debounce delay in ms
 }
+
+// ❌ Clear Group handler
+$(".clearGroupBtn").on("click", function () {
+    
+});

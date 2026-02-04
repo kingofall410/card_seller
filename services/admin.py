@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models.models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
-from .models.task import Task
+from .models.task import Task, ListingTask
 
 admin.site.register(Brand)
 admin.site.register(Subset)
@@ -17,4 +17,21 @@ admin.site.register(Condition)
 admin.site.register(Parallel)
 admin.site.register(CardName)
 admin.site.register(Season)
-admin.site.register(Task)
+
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'status', 'actual_type']
+    def actual_type(self, obj):
+        for subclass in Task.__subclasses__():
+            try:
+                getattr(obj, subclass.__name__.lower())
+                return subclass.__name__
+            except subclass.DoesNotExist:
+                pass
+        return "Task"
+
+class ListingTaskAdmin(admin.ModelAdmin):
+    list_display = ['id']
+
+admin.site.register(Task, TaskAdmin)
+
+admin.site.register(ListingTask, ListingTaskAdmin)

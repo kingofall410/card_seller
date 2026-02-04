@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 from math import floor
 from services import lookup
 from django.forms.models import model_to_dict
-
+from django.apps import apps
 
 # Card-related views
 @csrf_exempt
@@ -182,8 +182,14 @@ def update_csr_fields(request):
         csr = CardSearchResult.objects.get(id=int(csr_id))
     except CardSearchResult.DoesNotExist:
         return JsonResponse({"error": True, "message": f"CardSearchResult with id {csr_id} not found"}, status=404)
+    
     # Convert POST data to dict and sanitize
     field_data = convert_and_sanitize(all_fields, csr)    
+    
+    #overwrite the product group info to clear a broken group
+    #right now this is only used by Clear group.  It will have to be improved to handle other use cases
+    if "group_key" in field_data:
+        csr.ebay_product_group = None
     try:
         csr.update_fields(field_data)
     except Exception as e:
@@ -210,7 +216,10 @@ def price_only(request, csr_id):
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
     csr = CardSearchResult.objects.get(id=csr_id)
-    lookup.price_only(csr, Settings.get_default())
+
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_pricing_task(name=f"list csr {csr_id}", card=csr.parent_card,
+        csr=csr, callback=lookup.price_only, params={"csr_id": csr_id, "settings_id":2})
 
     return JsonResponse({"success": True, "error": ""})
 
@@ -235,9 +244,7 @@ def price_collection(request, collection_id):
     for card in card_list:
         cc_asr = card.active_search_results()
         lookup.text_refinement(cc_asr)
-        lookup.price_only(cc_asr, Settings.get_default())
-        cc_asr.pricing_status = StatusBase.AUTO
-        cc_asr.save()
+        lookup.price_only(cc_asr.id, Settings.get_default().id)
 
     return JsonResponse({"success": True, "error": ""})
 

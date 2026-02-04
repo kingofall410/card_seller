@@ -1,0 +1,141 @@
+{% load static %}
+{% load custom_tags %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tasks</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        pre {
+            background: #f7f7f7;
+            padding: 6px;
+            border-radius: 4px;
+            max-width: 500px;
+            overflow-x: auto;
+        }
+        img.thumb {
+            max-height: 80px;
+            max-width: 80px;
+            object-fit: contain;
+        }
+
+        .bulk-actions {
+            margin: 20px 0;
+            display: flex;
+            gap: 12px;
+        }
+        .bulk-actions form button {
+            padding: 8px 14px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            background: #444;
+            color: white;
+        }
+        .bulk-actions form button:hover {
+            background: #222;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #b00;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .delete-btn:hover {
+            color: #800;
+        }
+    </style>
+</head>
+<body>
+
+  {% include "header.html" %}
+
+<h1>Task List</h1>
+
+<!-- BULK ACTION BUTTONS -->
+<div class="bulk-actions">
+
+    <form method="POST" action="{% url 'clear_tasks' 'failed' %}">
+        {% csrf_token %}
+        <button type="submit">Clear failed tasks</button>
+    </form>
+
+    <form method="POST" action="{% url 'clear_tasks' 'closed' %}">
+        {% csrf_token %}
+        <button type="submit">Clear completed tasks</button>
+    </form>
+
+    <form method="POST" action="{% url 'clear_tasks' 'pending' %}">
+        {% csrf_token %}
+        <button type="submit">Clear pending tasks</button>
+    </form>
+
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Scheduled For</th>
+            <th colspan=2>Status</th>
+            <th>Image</th>
+            <th>Listing Title</th>
+            <th>Listing Price</th>
+            <th>Delete</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% get_all_tasks as tasks %}   
+        {% for task in tasks %}
+        <tr style="background-color: {{ task.status_color }};">
+            <td>{{ task.id }}</td>
+            <td>{{ task.name }}</td>
+            <td>{{ task.scheduled_for }}</td>
+            <td>{{ task.status_icon }}</td>
+            <td>{{ task.error_str }}</td>
+
+            <td>
+                {% if task.img %}
+                    <img class="thumb" src="{{ task.img }}" alt="Task Image">
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+
+            <td><b>{{ task.card.listing_title }}</b></td>
+            <td><b>{{ task.card.listing_price }}</b></td>
+
+            <!-- DELETE BUTTON -->
+            <td>
+                <form method="POST" action="{% url 'delete_task' task.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="delete-btn">✖</button>
+                </form>
+            </td>
+
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="8">No tasks found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>

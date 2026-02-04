@@ -15,6 +15,7 @@ class CollectionStatus(models.TextChoices):
     RTP = "ready to price", "Ready to price"
     RTL = "ready to list", "Ready to list"
     LISTED = "listed", "Listed"
+    CLOSED = "closed", "Closed"
 
 class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
@@ -98,6 +99,18 @@ class Card(models.Model):
         return csr
 
     @property
+    def listing_title(self):
+        return self.active_search_results().display_title_to_be
+        
+    @property
+    def listing_group(self):
+        return self.active_search_results().ebay_product_group.name
+
+    @property
+    def listing_price(self):
+        return self.active_search_results().list_price
+
+    @property
     def search_count(self):
         return len(self.search_results.all())
     
@@ -160,15 +173,20 @@ class Card(models.Model):
         card.uploaded_image = CroppedImage.create(save_to_filepath=filepath)
         #print("5")
         back_filepath = None
+
+        #hacking this for now since code depends on front and back, just read the front in again
         if match_back:
             back_filepath = card.find_back_by_alpha(filepath)
-            if back_filepath:
+        else:
+            back_filepath = filepath
+        if back_filepath:
                 
-                # Save cropped image and path
-                base, _ = os.path.splitext(os.path.basename(filepath))
-                card.reverse_image = CroppedImage.create(save_to_filepath=os.path.join("cropped_cards/", back_filepath))
-                match_back_success = True
-                card.reverse_id = str(card.id)+"R"
+            # Save cropped image and path
+            base, _ = os.path.splitext(os.path.basename(filepath))
+            card.reverse_image = CroppedImage.create(save_to_filepath=os.path.join("cropped_cards/", back_filepath))
+            match_back_success = True
+            card.reverse_id = str(card.id)+"R"
+            
         #print("6")        
         # Handle cropping if requested
         if crop:

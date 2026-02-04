@@ -120,7 +120,11 @@ document.addEventListener("DOMContentLoaded", function () {
         <option value="">No Group (Single Listing)</option>
 
         {% for g in groups %}
-          <option value="{{ g.id }}">{{ g.name }}</option>
+          <option value="{{ g.key }}" 
+            {% if g.key == search_result.ebay_product_group.group_key %}
+              selected
+            {% endif %}>
+          {{ g.name }}</option>
         {% endfor %}
 
         <!-- New group option -->
@@ -168,6 +172,14 @@ document.addEventListener("DOMContentLoaded", function () {
                    border: none; border-radius: 6px; cursor: pointer;">
       🚀 Export
     </button>
+
+    <button class="clearGroupBtn" id="clearGroupBtn-{{ card_id }}"
+      data-card-id="{{ card_id }}" data-csr-id="{{ search_result.id }}"
+      style="padding: 8px 16px; background-color: #e74c3cff; color: white;
+              border: none; border-radius: 6px; cursor: pointer;">
+    ❌ Clear Group
+    </button>
+
   </div>
 
 </div>

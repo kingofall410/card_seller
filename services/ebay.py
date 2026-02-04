@@ -201,8 +201,7 @@ def get_access_token(settings, user_auth_code=None):
         print(f"✅ Access token received successfully.") 
 
     else:
-        print(f"❌ Token request failed with status code {response.status_code}.")
-        print(response.text)
+        raise Exception(f"❌ Token request failed with status code {response.status_code}.")
     
     return settings.ebay_access_token
 
@@ -259,7 +258,7 @@ def text_search(keyword_strings, settings, limit=50, page=1):
                 print(f"✅ Found {len(items)} matches for the input string.")
                 result_data[keywords[0]][1].extend(items)
         else:
-            print(response.json())
+            raise Exception(response.json()["errors"][0]["message"])
         
     return result_data
 
@@ -317,7 +316,7 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
                 print(f"✅ Found {len(items)} matches for the input image.")
                 return items
         else:
-            print(response.json())
+            raise Exception(response.json()["errors"][0]["message"])
 
 def update_inventory_item_qty(update_data, access_token):
     headers = {
@@ -333,7 +332,10 @@ def update_inventory_item_qty(update_data, access_token):
     print("update_data:", update_data)
     response = requests.post(url, headers=headers, json=update_data)
     print("Update Qty response: ", response, response.text)
-    return response.status_code == 200 or response.status_code == 204
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 #https://auth.ebay.com/oauth2/authorize?client_id=DanielCr-LatestSa-PRD-8a6d6e5b0-96ce1b10&redirect_uri=Daniel_Crown-DanielCr-Latest-reqvvsrz&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory
 def create_inventory_item(sku, item_data, access_token, patch=False):
@@ -356,7 +358,10 @@ def create_inventory_item(sku, item_data, access_token, patch=False):
         response = requests.put(url, headers=headers, json=item_data)
     #print("Inventory request: ", response.request.text)
     print("Inventory response: ", response, response.text)
-    return response.status_code == 200 or response.status_code == 204
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 def create_inventory_group(group_id, group_data, access_token):
     #get_user_auth()
@@ -373,7 +378,10 @@ def create_inventory_group(group_id, group_data, access_token):
     print("Inventory Group request data:", group_data)
     response = requests.put(url, headers=headers, json=group_data)
     print("Inventory Group response: ", response, response.text)
-    return response.status_code == 200 or response.status_code == 204
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 def delete_inventory_group(group_id, settings, access_token=None):
     #get_user_auth()
@@ -388,7 +396,10 @@ def delete_inventory_group(group_id, settings, access_token=None):
     url = f"https://api.ebay.com/sell/inventory/v1/inventory_item_group/{group_id}"
     response = requests.delete(url, headers=headers)
     print("Inventory Delete response: ", response, response.text)
-    return response.status_code == 200 or response.status_code == 204
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 
 def get_inventory_group(group_id, settings, access_token=None):
@@ -405,8 +416,10 @@ def get_inventory_group(group_id, settings, access_token=None):
     response = requests.get(url, headers=headers)
     print("inventory get request:", group_id)
     print("Inventory Get response: ", response, response.text)
-    return
-    return response.status_code == 200 or response.status_code == 204
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 
 def get_or_create_offer(offer_data, access_token, sku=None):
@@ -438,6 +451,8 @@ def get_or_create_offer(offer_data, access_token, sku=None):
         
         if response.status_code == 201:
             offer_id = response.json().get('offerId', None)
+        else:
+            raise Exception(response.json()["errors"][0]["message"])
 
     return offer_id, response.status_code
 
@@ -473,6 +488,7 @@ def publish_inventory_group(group_name, access_token):
         "marketplaceId": "EBAY_US"
     }
     response = requests.post(url, json=inventory_group_listing_data, headers=headers)
+    print ("group name", group_name)
     print ("PIG response", response.text)
     return response.json()["listingId"]
 

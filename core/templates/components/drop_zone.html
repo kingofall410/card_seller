@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Images</title>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 40px;
+        }
+
+        #dropzone {
+            width: 350px;
+            height: 200px;
+            border: 3px dashed #888;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #dropzone.dragover {
+            border-color: #007bff;
+            color: #007bff;
+            background: #eef6ff;
+        }
+
+        #loading {
+            margin-top: 20px;
+            display: none;
+        }
+
+        #results {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Upload Images</h2>
+
+<div id="dropzone">
+    Drop, click, or paste an image
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+<input type="hidden" id="collectionId" value="{{ collection_id }}">
+
+<div id="loading">Uploading…</div>
+<div id="results"></div>
+
+<script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const loading = document.getElementById("loading");
+    const results = document.getElementById("results");
+    const collectionId = document.getElementById("collectionId").value;
+
+    // Click → open file picker
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    // Drag events
+    dropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+    });
+
+    dropzone.addEventListener("dragleave", () => {
+        dropzone.classList.remove("dragover");
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+        if (e.dataTransfer.files.length > 0) {
+            uploadImages(e.dataTransfer.files);
+        }
+    });
+
+    // File picker
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+            uploadImages(fileInput.files);
+        }
+    });
+
+    // ⭐ Paste support — convert clipboard image → File → upload
+    document.addEventListener("paste", (e) => {
+        const items = e.clipboardData.items;
+
+        for (let item of items) {
+            if (item.type.startsWith("image/")) {
+                const blob = item.getAsFile();
+
+                // Create a temporary filename
+                const filename = `pasted_${Date.now()}.png`;
+
+                // Wrap blob in a File object
+                const file = new File([blob], filename, { type: blob.type });
+
+                uploadImages([file]);
+            }
+        }
+    });
+
+    // ⭐ Upload to Django synchronously
+    function uploadImages(files) {
+        const form = new FormData();
+        form.append("collection_id", collectionId);
+        form.append("slab", "true");   // <-- THIS is what Django reads
+
+        for (let f of files) {
+            form.append("images", f);
+        }
+
+        fetch(`/upload_image/${collectionId || ""}`, {
+            method: "POST",
+            body: form
+        })
+
+        .then(res => res.text())
+        .then(html => {
+            loading.style.display = "none";
+            results.style.display = "block";
+            results.innerHTML = html;
+        })
+        .catch(err => {
+            loading.style.display = "none";
+            results.style.display = "block";
+            results.innerHTML = `<p>Error: ${err}</p>`;
+        });
+    }
+</script>
+
+</body>
+</html>

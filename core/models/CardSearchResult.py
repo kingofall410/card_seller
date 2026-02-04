@@ -290,10 +290,15 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
+    @property
+    def reverse_listing_groups(self):
+        return self.listing_groups.all().order_by('-id')
+
+
     def create_listing_group(self, label, filter_terms="", id_string="", is_img=False, is_refined=False, is_wide=False, is_sold=False):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
-    def get_listing_group(self, label):
+    def get_listing_group_labeled(self, label):
         try:
             return self.listing_groups.get(label=label)
         except ListingGroup.DoesNotExist:
@@ -327,8 +332,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not self.text_search_string_is_manual:
             self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms
 
-        self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
-        if self.ebay_listing_id != "" or self.ebay_listed_under_sku:
+        #self.overall_status = min([self.refinement_status, self.pricing_status, self.id_status], key=lambda s: StatusBase.get_id(s))
+        if not self.overall_status == StatusBase.FAILED and (self.ebay_listing_id != "" or self.ebay_listed_under_sku):
             self.overall_status = StatusBase.LISTED
         #super.ugly
         super().save(*args, **kwargs)
@@ -593,7 +598,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         print(f"Create new CSR for card {pcard.id}")
         csr = CardSearchResult(parent_card = pcard)
         csr.front_crop_params = CropParams.clone(pcard.cropped_image.crop_params.last())
-        csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
+        if pcard.cropped_reverse:        
+            csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
         csr.ebay_msrp = 0.0
         csr.create_listing_group("ID Listings", is_img=True)
         csr.create_listing_group("graded")
@@ -625,7 +631,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if not csr:
             csr = cls.create_empty(pcard)
         print(csr)
-        gg = csr.get_listing_group("graded")
+        gg = csr.get_listing_group_labeled("graded")
         gg.listings.all().delete()
 
         listing = ProductListing.from_graded_card_record(record, csr, tokenize)
@@ -1037,9 +1043,9 @@ class ProductListing(models.Model):
         listing.item_id = record.get("cert_number", "N/A")
         
         #a lot of this actually happens on the csr itself since we have hard data
-        parent_csr.derive_grade_condition(record.get("grade", None))
-        parent_csr.derive_brand_subset(record.get("set_name", None))
-        parent_csr.update_fields(record)
+        #parent_csr.derive_grade_condition(record.get("grade", None))
+        #parent_csr.derive_brand_subset(record.get("set_name", None))
+        #parent_csr.update_fields(record)
         
         return listing
 

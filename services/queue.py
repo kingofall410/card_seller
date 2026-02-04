@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Any, Dict
 from django.utils import timezone
-from services.models.task import Task
+from services.models.task import Task, ListingTask, PricingTask
+from core.models.Status import StatusBase
 from importlib import import_module
 import json
 
@@ -25,6 +26,7 @@ class Queue:
         self.tasks = []
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._load_pending_tasks()
 
     def start(self):
         self._thread.start()
@@ -37,9 +39,14 @@ class Queue:
         self.tasks.append(task)
         self.tasks.sort()  # earliest datetime first
 
+    def reset(self):
+        self.tasks = []
+        self._load_pending_tasks()
+
     def _load_pending_tasks(self):
-        pending = Task.objects.filter(status="pending")
+        pending = Task.objects.filter(status=StatusBase.PENDING)
         for t in pending:
+            print(t.id)
             callback = self._import_callback(t.callback_path)
             mem_task = MemoryTask(
                 scheduled_for=t.scheduled_for,
@@ -48,6 +55,7 @@ class Queue:
                 params=t.params(),
                 db_id=t.id
             )
+            print("---", mem_task.name)
             self.tasks.append(mem_task)
         self.tasks.sort()
 
@@ -62,23 +70,59 @@ class Queue:
 
             ready = [t for t in self.tasks if t.scheduled_for <= now]
             self.tasks = [t for t in self.tasks if t.scheduled_for > now]
-
+            #print("loop:", ready)
+            csr = None
             for task in ready:
+                
                 db_task = Task.objects.get(id=task.db_id)
-                db_task.status = "running"
-                db_task.save(update_fields=["status"])
-
+                
                 try:
-                    task.run()
-                    db_task.status = "done"
-                except Exception:
-                    db_task.status = "failed"
-                db_task.save(update_fields=["status"])
+                    if hasattr(db_task, "listingtask"):
+                        on_success = StatusBase.LISTED
+                        csr = db_task.listingtask.csr
+                        print(f"Running Listing Task {csr}")
+                    elif hasattr(db_task, "pricingtask"):
+                        csr = db_task.pricingtask.csr
+                        on_success = csr.overall_status
+                        print(f"Running Pricing Task {csr}")
+                    else:
+                        csr = None                    
+                        print(db_task)
 
+                    db_task.status = "running"
+                    db_task.save(update_fields=["status"])
+                    task.run()
+                    print("success")
+                    csr.overall_status = on_success
+                    db_task.status = StatusBase.SUCCESS
+                    
+                except Exception as e:
+                    print("fail")
+                    db_task.status = StatusBase.FAILED
+                    db_task.error_str = str(e)
+                    if csr:
+                        csr.overall_status = StatusBase.FAILED
+                finally:
+                    db_task.save(update_fields=["status", "error_str"])
+                    if csr:
+                        csr.save(update_fields=["overall_status"])
+            
             time.sleep(self.interval)
 
-    def schedule_task(self, name, when, callback, params):
-        t = Task.objects.create(name=name, scheduled_for=when, callback_path=f"{callback.__module__}.{callback.__name__}", \
-                                params_json=json.dumps(params), status="pending")
-
+    #move these into the task object
+    def schedule_listing_task(self, name, card, csr, when, callback, params):
+        t = ListingTask.objects.create(name=name, scheduled_for=when, card=card, csr=csr, callback_path=f"{callback.__module__}.{callback.__name__}", \
+                                params_json=json.dumps(params), status=StatusBase.PENDING)
+        
         self.add(MemoryTask(scheduled_for=when, name=name, callback=callback, params=params, db_id=t.id))
+        csr.overall_status = StatusBase.PENDING
+        csr.save()
+
+    def schedule_pricing_task(self, name, card, csr, callback, params):
+        now = timezone.now()
+        t = PricingTask.objects.create(name=name, scheduled_for=now, card=card, csr=csr, callback_path=f"{callback.__module__}.{callback.__name__}", \
+                                params_json=json.dumps(params), status=StatusBase.PENDING)
+        
+        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))
+        csr.overall_status = StatusBase.PENDING
+        csr.save()
