@@ -547,18 +547,18 @@ class Card(models.Model):
 
         if fixed_crop_params:
             print("📐 Using fixed crop coordinates.")
-            bb_x1 = int(fixed_crop_params[0]*w)
-            bb_y1 = int(fixed_crop_params[1]*h)
-            bb_x2 = int(fixed_crop_params[2]*w)
-            bb_y2 = int(fixed_crop_params[3]*h)
+            bb_x1 = int(fixed_crop_params[0]*original_w)
+            bb_y1 = int(fixed_crop_params[1]*original_h)
+            bb_x2 = int(fixed_crop_params[2]*original_w)
+            bb_y2 = int(fixed_crop_params[3]*original_h)
             skew_angle = rotate
-            print(bb_x1, bb_y1, bb_x2, bb_y2)
-            if abs(skew_angle) > 0.01:
-                skew_matrix = cv2.getRotationMatrix2D((w // 2, h // 2), skew_angle, 1.0)
-                img = cv2.warpAffine(img, skew_matrix, (w, h))
-                portrait_img = img.copy()
+            print("bb:", bb_x1, bb_y1, bb_x2, bb_y2)
+            '''if abs(skew_angle) > 0.01:
+                skew_matrix = cv2.getRotationMatrix2D((original_w // 2, original_h // 2), skew_angle, 1.0)
+                img = cv2.warpAffine(original_img, skew_matrix, (original_w, original_h))
+                portrait_img = img.copy()'''
 
-            final_crop = img[bb_y1:bb_y2, bb_x1:bb_x2]
+            final_crop = original_img[bb_y1:bb_y2, bb_x1:bb_x2]
             
         else:   
             center = (w // 2, h // 2)   

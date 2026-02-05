@@ -23,6 +23,108 @@ AUTH_HEADERS = {
     "Accept": "application/json",
     "Authorization": f"Bearer {ACCESS_TOKEN}"
 }
+def extract_psa_label_cert_ocr_debug(image_path, region=None, angle=0, debug_dir="debug_ocr"):
+    """
+    Step-by-step OCR for PSA label with debug output AND saved images.
+    """
+
+    # Create debug directory
+    os.makedirs(debug_dir, exist_ok=True)
+
+    print(f"[1] Loading image: {image_path}")
+    img = cv2.imread(image_path)
+    if img is None:
+        print("[1] ERROR: Could not load image.")
+        return None
+    print(f"[1] Image shape: {img.shape}")
+
+    # Optional rotation
+    if angle:
+        print(f"[2] Rotating image by {angle} degrees")
+        pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        pil_img = pil_img.rotate(angle, expand=True)
+        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    else:
+        print("[2] No rotation applied")
+
+    cv2.imwrite(f"{debug_dir}/step2_rotated.png", img)
+
+    # Optional region crop
+    '''if region:
+        x1, y1, x2, y2 = region
+        print(f"[3] Cropping region: ({x1}, {y1}) -> ({x2}, {y2})")
+        img = img[y1:y2, x1:x2]
+    else:
+        print("[3] No region crop applied")
+    
+    cv2.imwrite(f"{debug_dir}/step3_cropped.png", img)'''
+
+    # 4. Grayscale
+    print("[4] Converting to grayscale")
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    cv2.imwrite(f"{debug_dir}/step4_gray.png", gray)
+
+    # 5. Contrast boost
+    print("[5] Boosting contrast (alpha=2.0)")
+    gray_contrast = cv2.convertScaleAbs(gray, alpha=2.0, beta=0)
+    cv2.imwrite(f"{debug_dir}/step5_contrast.png", gray_contrast)
+
+    # 6. Adaptive threshold
+    print("[6] Applying adaptive threshold")
+    thresh = cv2.adaptiveThreshold(
+        gray_contrast, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31, 10
+    )
+    cv2.imwrite(f"{debug_dir}/step6_thresh.png", thresh)
+
+    # 7. Denoise
+    print("[7] Applying median blur (ksize=3)")
+    denoised = cv2.medianBlur(thresh, 3)
+    cv2.imwrite(f"{debug_dir}/step7_denoised.png", denoised)
+
+    # 8. Deskew
+    print("[8] Deskewing based on text pixels")
+    coords = np.column_stack(np.where(denoised > 0))
+    if coords.size == 0:
+        print("[8] No non-zero pixels found; skipping deskew")
+        deskewed = denoised
+    else:
+        rect = cv2.minAreaRect(coords)
+        angle_found = rect[-1]
+        print(f"[8] Raw angle from minAreaRect: {angle_found}")
+
+        if angle_found < -45:
+            angle_corrected = -(90 + angle_found)
+        else:
+            angle_corrected = -angle_found
+
+        print(f"[8] Corrected deskew angle: {angle_corrected}")
+
+        (h, w) = denoised.shape[:2]
+        M = cv2.getRotationMatrix2D((w // 2, h // 2), angle_corrected, 1.0)
+        deskewed = cv2.warpAffine(denoised, M, (w, h), flags=cv2.INTER_CUBIC)
+
+    cv2.imwrite(f"{debug_dir}/step8_deskewed.png", deskewed)
+
+    # 9. OCR
+    print("[9] Running Tesseract OCR (digits only)")
+    config = "--psm 6 -c tessedit_char_whitelist=0123456789"
+    text = pytesseract.image_to_string(img, config=config)
+    print(f"[9] Raw OCR text:\n{text!r}")
+
+    # 10. Extract numeric cert
+    print("[10] Parsing OCR output for numeric cert")
+    for token in text.split():
+        cleaned = "".join(c for c in token if c.isdigit())
+        print(f"[10] Token: {token!r}, cleaned: {cleaned!r}")
+        if cleaned.isdigit() and 6 <= len(cleaned) <= 10:
+            print(f"[10] Found cert candidate: {cleaned}")
+            return cleaned
+
+    print("[10] No valid cert number found")
+    return None
 
 def extract_psa_label_cert(image_path, angle=0):
     """
@@ -85,6 +187,117 @@ def extract_psa_label_cert(image_path, angle=0):
             return cleaned
 
     return None
+
+def extract_psa_label_cert_multi(image_path, top_n=30, debug_dir="debug_candidates2"):
+    """
+    Detect red-bordered white rectangles that match PSA label geometry.
+    """
+
+    os.makedirs(debug_dir, exist_ok=True)
+
+    img = cv2.imread(image_path)
+    if img is None:
+        print("ERROR: Could not load image")
+        return None
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    # Red mask
+    lower_red1 = np.array([0, 80, 80])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 80, 80])
+    upper_red2 = np.array([180, 255, 255])
+
+    red_mask = cv2.inRange(hsv, lower_red1, upper_red1) | cv2.inRange(hsv, lower_red2, upper_red2)
+
+    # Clean mask
+    # --- Merge red border fragments into one contour ---
+    kernel_big = np.ones((15, 15), np.uint8)
+
+    # Dilate first to connect broken red edges
+    red_mask = cv2.dilate(red_mask, kernel_big, iterations=2)
+
+    # Then close to fill small gaps
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel_big)
+
+    # Optional: slight erosion to restore border thickness
+    red_mask = cv2.erode(red_mask, np.ones((5, 5), np.uint8), iterations=1)
+
+
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        print("No red contours found")
+        return None
+
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    candidates = contours[:top_n]
+
+    print(f"Found {len(contours)} red regions, processing top {len(candidates)}")
+
+    certs = []
+
+    for idx, cnt in enumerate(candidates):
+        x, y, w, h = cv2.boundingRect(cnt)
+        area = w * h
+
+        print(f"[Candidate {idx+1}] box=({x},{y},{w},{h}) area={area}")
+
+        # --- 1. Reject tiny regions ---
+        if w < 80 or h < 20:
+            print(f"[Candidate {idx+1}] Too small, skipping")
+            continue
+
+        # --- 2. Aspect ratio check (PSA labels are wide) ---
+        aspect = w / float(h)
+        print(f"[Candidate {idx+1}] aspect ratio={aspect:.2f}")
+
+        if aspect < 2.5 or aspect > 6.0:
+            print(f"[Candidate {idx+1}] Aspect ratio not PSA-like, skipping")
+            continue
+
+        # Extract region
+        region = img[y:y+h, x:x+w]
+
+        # --- 3. White interior check ---
+        inset = max(4, int(min(w, h) * 0.08))
+        inner = region[inset:h-inset, inset:w-inset]
+
+        if inner.size == 0:
+            print(f"[Candidate {idx+1}] Inner region empty, skipping")
+            continue
+
+        inner_hsv = cv2.cvtColor(inner, cv2.COLOR_BGR2HSV)
+        h_vals, s_vals, v_vals = cv2.split(inner_hsv)
+
+        white_pixels = np.sum((s_vals < 60) & (v_vals > 150))
+        total_pixels = inner.shape[0] * inner.shape[1]
+        white_ratio = white_pixels / total_pixels
+
+        print(f"[Candidate {idx+1}] white_ratio={white_ratio:.2f}")
+
+        if white_ratio < 0.40:
+            print(f"[Candidate {idx+1}] Not enough white interior, skipping")
+            continue
+
+        # --- 4. Save debug image ---
+        debug_path = os.path.join(debug_dir, f"candidate_{idx+1}.png")
+        cv2.imwrite(debug_path, region)
+        print(f"[Candidate {idx+1}] Saved debug image → {debug_path}")
+
+        # --- 5. OCR ---
+        pil_region = Image.fromarray(cv2.cvtColor(region, cv2.COLOR_BGR2RGB))
+        text = pytesseract.image_to_string(pil_region)
+        print(f"[Candidate {idx+1}] OCR text: {text!r}")
+
+        # Extract cert numbers
+        for token in text.split():
+            cleaned = "".join(c for c in token if c.isdigit())
+            if cleaned.isdigit() and 6 <= len(cleaned) <= 10:
+                print(f"[Candidate {idx+1}] Found cert: {cleaned}")
+                certs.append(cleaned)
+
+    return certs
+
 
 
 def extract_psa_cert(image_path, region=None, angle=0):
@@ -260,12 +473,16 @@ def fetch_psa_images_playwright(cert_number, context):
         page.close()
 
 
-def scan_and_lookup(image_path, region=None, angle=0):
+def scan_and_lookup(image_path, region=(0,0,480, 100), angle=0):
+    region=(0,0,480, 100)
+    angle=0
     """Full pipeline: scan image, extract cert, lookup card info + images."""
     print("icup", image_path)
     #cert = extract_psa_cert(image_path, region, angle)
     #cert = extract_psa_label_cert(image_path, angle)
-    cert = extract_psa_label_cert_ocr(image_path, angle)
+    cert = extract_psa_label_cert_multi(image_path)     
+    #cert = extract_psa_label_cert_ocr(image_path, region, angle)
+    #cert = extract_psa_label_cert_ocr_debug(image_path, region, angle)
     print(cert)
     if not cert:
         return {"error": "No valid barcode found."}
