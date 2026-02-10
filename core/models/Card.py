@@ -101,6 +101,14 @@ class Card(models.Model):
     @property
     def listing_title(self):
         return self.active_search_results().display_title_to_be
+
+        
+    @property
+    def latest_listing_task(self):
+        wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
+        print("wtf", wtf.id)
+        return wtf
+        
         
     @property
     def listing_group(self):

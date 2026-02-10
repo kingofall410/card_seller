@@ -97,9 +97,8 @@
   width: 144px;
   height: 274px;
   padding: 8px;
-  border: 2px dashed #aaa;
+  border: 3px dashed #aaa;
   border-radius: 6px;
-  background-color: #f0f0f0;
 }
 
 .card-sort-controls {
@@ -211,6 +210,23 @@
     align-items: center;
     gap: 0.25rem;
 }
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* Map to your existing status colors */
+
+.status-listed          { background: #00aaff; color: #000;}
+.status-identified      { background: #ff6666; }
+.status-pending         { background: #ffcc0020; color: #000; }
+.status-failed          { background: #ff333320; }
+.status-success         { background: #33cc3320; color: #000;}
+.status-none            { background: #aaa; }
 
 </style>
 <div id="collection-{{ collection.id }}" class="collection">
@@ -272,8 +288,10 @@
       <label><input type="checkbox" class="attr-toggle" value="avgonly">Avg Sale</label>
       <label><input type="checkbox" class="attr-toggle" value="msrp" checked>MSRP</label>
     </div>
-    {% include "components/drop_zone.html" with collection_id=collection.id %}
+    
     <div class="card-list">
+      {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
+
     {% for card in collection.cards.all %}
       {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" display_team=card.active_search_results|get_attribute:"display_team" display_city=card.active_search_results|get_attribute:"display_city" display_serial=card.active_search_results|get_attribute:"display_serial" %}
       {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
@@ -313,24 +331,19 @@
         </div>
 
         <div class="card-actions">
-                
-          <div class="tooltip-wrapper" data-tooltip="{{ tooltip_string }}">
-              <button onclick="cropCard({{ collection.id }}, {{ card.id }})">✂</button>
-          </div>
-          
-          <button onclick="toggleMoveDropdown({{card.id}})" title="Move">📂</button>
-          <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
 
-          <div id="move-card-{{card.id}}" class="move-dropdown" style="display: none;">
-              <ul>
-                  {% for targetCollection in collections %}
-                  <li onclick="moveToCollection({{ card.id }}, '{{ collection.id }}', {{ targetCollection.id }})">
-                      {{targetCollection.id}}. {{targetCollection.name}}
-                  </li>
-                  {% endfor %}
-              </ul>
-          </div>
+          {% with listing_task=card.latest_listing_task %}
+              {% if listing_task %}
+                  <span class="status-badge status-{{ listing_task.status|slugify }}">
+                      {{ listing_task.get_status_display }}
+                  </span>
+              {% else %}
+                  <span class="status-badge status-none">No Status</span>
+              {% endif %}
+          {% endwith %}
+
         </div>
+
         <div>  
           <span title="ID Status: {{ card.active_search_results.id_status.title }}">{{ id_status.icon }}</span>
           <span title="Refinement Status: {{ card.active_search_results.refinement_status.title }}">{{ refinement_status.icon }}</span>
@@ -363,24 +376,25 @@
             <img src="/static/images/missing_collection_reverse.png" alt="{{ subcollection.id }} hover" class="thumbnail hover">
         </div>
         <div class="card-actions">
-            <div class="tooltip-wrapper" data-tooltip="{{ subcollection.id }}">
-                <button onclick="editCard({{ subcollection.id }})">✏️</button>
-            </div>
-            <button onclick="toggleMoveDropdown(this)" title="Move">📂</button>
-            <button onclick="removeCard({{ subcollection.id }})" title="Delete">🗑️</button>
+
+            {% with asr=card.active_search_results %}
+                {% if asr and asr.task and asr.task.listing_task %}
+                    {% with lt=asr.task.listing_task %}
+                        <span class="status-badge status-{{ lt.status|slugify }}">
+                            {{ lt.get_status_display }}
+                        </span>
+                    {% endwith %}
+                {% else %}
+                    <span class="status-badge status-none">No Status</span>
+                {% endif %}
+            {% endwith %}
+
         </div>
         
     </div>
     {% endfor %}
     
-    <div class="card-item add-controls">
-        <button name="card" class="add-button" onclick='triggerFileUpload("cardFileInput_{{ collection.id }}")' title="Add Card">➕ Card</button>
-        <button name="slab" class="add-button" onclick='triggerFileUpload("slabFileInput_{{ collection.id }}")' title="Add Slab">➕ Slab</button>
-        <button class="add-button" onclick="addSubcollection({{ collection.id }})" title="Add Subcollection">📁 Subcollection</button>
-        <input type="file" id="cardFileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadImage({{ collection.id }}, this.files)" multiple>
-        <input type="file" id="slabFileInput_{{ collection.id }}" style="display: none;" accept="image/*" onchange="uploadSlab({{ collection.id }}, this.files)" multiple>
-
-    </div>
+    
 
     </div>
 </div>

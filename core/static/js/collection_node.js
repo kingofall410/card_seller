@@ -18,6 +18,26 @@
   };
 
 
+function handleDrop(event, collectionId) {
+    event.preventDefault();
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        uploadImage(collectionId, files);
+    }
+}
+
+function handlePaste(event, collectionId) {
+    const items = event.clipboardData.items;
+    const files = [];
+    for (const item of items) {
+        if (item.kind === "file") {
+            files.push(item.getAsFile());
+        }
+    }
+    if (files.length > 0) {
+        uploadImage(collectionId, files);
+    }
+}
 
   
 function priceCollection(collectionId) {

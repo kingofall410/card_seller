@@ -1,0 +1,54 @@
+<style>
+.add-controls {
+    position: relative; /* anchor for absolute children */
+}
+
+.dz-message {
+    position: absolute;
+    bottom: 8px;              /* pinned to bottom */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;       /* smaller text */
+    opacity: 0.6;             /* subtle */
+    pointer-events: none;     /* doesn't block clicks */
+    text-align: center;
+    line-height: 1.2;
+}
+</style>
+<div class="card-item add-controls"
+     id="dropzone-{{ collection_id }}"
+     ondrop="handleDrop(event, {{ collection_id }})"
+     ondragover="event.preventDefault()"
+     onpaste="handlePaste(event, {{ collection_id }})">
+
+    <div class="dz-message">
+        Drag / Drop
+    </div>
+
+    <button name="card" class="add-button"
+            onclick='triggerFileUpload("cardFileInput_{{ collection_id }}")'
+            title="Add Card">➕ Card</button>
+
+    <button name="slab" class="add-button"
+            onclick='triggerFileUpload("slabFileInput_{{ collection_id }}")'
+            title="Add Slab">➕ Slab</button>
+
+    <button class="add-button"
+            onclick="addSubcollection({{ collection_id }})"
+            title="Add Subcollection">📁 Subcollection</button>
+
+    <!-- Hidden inputs for click uploads -->
+    <input type="file"
+           id="cardFileInput_{{ collection_id }}"
+           style="display:none;"
+           accept="image/*"
+           onchange="uploadImage({{ collection_id }}, this.files)"
+           multiple>
+
+    <input type="file"
+           id="slabFileInput_{{ collection_id }}"
+           style="display:none;"
+           accept="image/*"
+           onchange="uploadSlab({{ collection_id }}, this.files)"
+           multiple>
+</div>

@@ -8,6 +8,7 @@
 
         </tr>
         <tr>
+            {% if show_images %}
             <!-- LEFT: Image -->
             <td style="width:40px; vertical-align:top; padding-right:8px;">
                 {% if task.listingtask.card.cropped_image %}
@@ -17,7 +18,7 @@
                     <img src="{{ task.img }}" style="height:50px; width:auto;">
                 {% endif %}
             </td>
-
+            {% endif %}
             <!-- CENTER: Info rows -->
             <td style="vertical-align:top;">
                 <div style="display:flex; flex-direction:column; gap:2px;">
@@ -30,9 +31,11 @@
                         {% endif %}
                     </div>
 
+                    {% if show_price %}
                     <div class="csr-price">
                         ${{ task.listingtask.csr.list_price }}
                     </div>
+                    {% endif %}
                 </div>
             </td>
             

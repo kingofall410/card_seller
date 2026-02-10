@@ -107,6 +107,12 @@ def spreadsheet_rows_from_search_result(cards, field_names):
 #view single collections
 #TODO: should do this based on specific next_collection calls, pagniator is just messy
 #TODO: fuck the paginator for now
+
+
+def new_collection(request):
+    collection = Collection.objects.create()
+    return view_collection(request, collection.id)
+
 def view_collection(request, collection_id):
     
     collection = Collection.objects.get(id=collection_id)

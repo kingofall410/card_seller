@@ -31,9 +31,7 @@
 .status-ready-to-price{ background-color: #fff4cc; }
 .status-ready-to-list { background-color: #e8ffe8; }
 .status-identified    { background-color: #ffe6e6; }
-.status-pending       { background-color: #fff4cc; }
-.status-failed        { background-color: #ffe6e6; }
-.status-closed        { background-color: #383838ff; }
+.status-closed        { background-color: #383838; }
 
 .nav-link.status-imported:hover,
 .nav-link.status-identified:hover,
@@ -67,8 +65,12 @@
            z-index: 1000;
          ">
       <a href="{% url 'manage_collection' %}" class="nav-link">
-        ➕ See All Collections...
+        All Collections...
       </a>
+      <a href="{% url 'new_collection' %}" class="nav-link">
+        ✨ New Collection
+      </a>
+
 
       {% get_collections as collections %}
       {% for collection in collections %}

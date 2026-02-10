@@ -8,15 +8,15 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from types import SimpleNamespace
 
-
 def task_calendar(request):
     # Determine month
     month_param = request.GET.get("month")
+    today = date.today()  # <-- ensure today always exists
+
     if month_param:
         year, month = map(int, month_param.split("-"))
         current = date(year, month, 1)
     else:
-        today = date.today()
         current = date(today.year, today.month, 1)
 
     # Calendar helpers
@@ -29,23 +29,31 @@ def task_calendar(request):
 
     days = [d for d in month_days if d.month == current.month]
 
-    day_map = {}
-
     for task in tasks:
         day = task.scheduled_for.date()
         day_map.setdefault(day, []).append(task)
 
-    # 2. Now build day_objects using the populated map
+    # Build day_objects
     day_objects = [
         SimpleNamespace(date=d, tasks=day_map.get(d, []))
         for d in days
     ]
 
+    # First day index for blanks
     first_day_index = (current.weekday() + 1) % 7
 
+    # WEEK VIEW: compute week containing today
+    week_start = today - timedelta(days=today.weekday())  # Monday start
+    week_end = week_start + timedelta(days=6)
+
+    week_objects = [
+        day for day in day_objects
+        if week_start <= day.date <= week_end
+    ]
 
     context = {
         "day_objects": day_objects,
+        "week_objects": week_objects,   # <-- ADDED
         "current_month": current,
         "days": [d for d in month_days if d.month == current.month],
         "weekday_headers": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
@@ -57,10 +65,12 @@ def task_calendar(request):
         # Navigation
         "prev_month": (current.replace(day=1) - timedelta(days=1)).replace(day=1),
         "next_month": (current.replace(day=28) + timedelta(days=4)).replace(day=1),
-        "today": date.today()
+
+        "today": today,
     }
 
     return render(request, "services/task_calendar.html", context)
+
 
 def tasks_list(request):
 

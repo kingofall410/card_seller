@@ -7,7 +7,7 @@
     <span class="nav-button disabled">← Previous</span>
   {% endif %}
 
-  <button id="prev" class="nav-button up" data-url="{% url up_url up %}">Up</button>
+  <button id="up" class="nav-button up" data-url="{% url up_url up %}" onclick="handleUp()">Up ↑</button>
 
   {% if next %}
     <button id="next" class="nav-button next" data-url="{% url url_name next %}" onclick="handleNext()">Next →</button>
@@ -67,7 +67,11 @@ function handlePrev() {
 }
 
 function handleUp() {
+
+  el = document.getElementById("up")
+  url = el.dataset.url;
+
   console.log("here");
-  window.location.href = "/manage";
+  window.location.href = url;
 }
 </script>

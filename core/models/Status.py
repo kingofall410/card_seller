@@ -24,9 +24,9 @@ class StatusBase(models.TextChoices):
             cls.MANUAL: {"icon": "✋", "color": "#fffbe6"},
             cls.AUTO: {"icon": "🤖", "color": "#fff1f0"},
             cls.LOCKED: {"icon": "", "color": "#f6ffed"},
-            cls.LISTED: {"icon": "✔️", "color": "#e0f7ff"},
+            cls.LISTED: {"icon": "✔️", "color": "#ff0000"},
             cls.PENDING: {"icon": "⏳", "color": "#fff4cc"},
-            cls.FAILED: {"icon": "❌", "color": "#e6f7ff"},
+            cls.FAILED: {"icon": "❌", "color": "#ff0000"},
             cls.CLOSED: {"icon": "🔒", "color": "#e6f7ff"},
-            cls.SUCCESS: {"icon": "✔️", "color": "#e6f7ff"},
+            cls.SUCCESS: {"icon": "✔️", "color": "#fff1f0"},
         }.get(value, {"icon": "❓", "color": "#ffe6e6"})
