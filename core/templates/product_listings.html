@@ -1,113 +1,6 @@
-<style>
-.listing-group {
-  margin-bottom: 16px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 8px;
-  background: #f9f9f9;
-}
-
-.listing-header {
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.listing-header-label {
-  margin-right: 8px;
-}
-
-.listing-toggle {
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.search-string {
-  font-size: 1rem;
-  color: #060505ff;
-  margin: 4px 0 12px 0;
-}
-
-/* Collapsed: one row */
-.listing-group.collapsed .image-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-
-  height: 120px;
-  max-height: 120px;
-  overflow: hidden;
-  transition: height 0.25s ease;
-}
-
-/* Expanded: full height */
-.listing-group.expanded .image-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-
-  height: auto;
-  max-height: none;
-  overflow: visible;
-}
-
-.listing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 100px;
-}
-
-.listing-thumb {
-  max-width: 100px;
-  max-height: 100px;
-  object-fit: contain;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-
-.listing-caption {
-  margin-top: 0px;
-  font-size: 0.85rem;
-  color: #333;
-  text-align: center;
-}
-
-.sort-controls {
-  margin: 4px 0 12px 0;
-  font-size: 0.9rem;
-}
-
-.sort-title {
-  margin-right: 8px;
-  color: #333;
-  font-weight: 500;
-}
-
-.sort-link {
-  cursor: pointer;
-  color: #0074d9;
-  margin-right: 12px;
-}
-
-.sort-link:hover {
-  text-decoration: underline;
-}
-
-.sort-link.active {
-  font-weight: bold;
-  text-decoration: underline;
-}
-</style>
-
-
-<div class="listing-group collapsed" data-listing-group>
+{% load custom_tags %}
+<div class="listing-group {{ listing_group.display_state }}" data-listing-group data-group-id="{{ listing_group.id }}"
+>
   <div class="listing-header" data-toggle>
     <span class="listing-header-label">
       {{ listing_group.label }} ({{ listing_group.listings.count }})
@@ -130,6 +23,7 @@
 
     {% for listing in listing_group.listings.all %}
       <div class="listing"
+           data-id="{{ listing.id }}"
            data-price="{{ listing.ebay_price }}"
            data-date="{{ listing.pretty_display_date|date:'c' }}"
            data-title="{{ listing.title }}"
@@ -155,8 +49,6 @@ Qty: {{ listing.qty }}
     {% endfor %}
   </div>
 </div>
-
-
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const groups = document.querySelectorAll("[data-listing-group]");
@@ -167,14 +59,41 @@ document.addEventListener("DOMContentLoaded", function () {
     const toggle = group.querySelector("[data-toggle]");
     const toggleLabel = group.querySelector("[data-toggle-label]");
     const sortLinks = group.querySelectorAll(".sort-link");
+    const groupId = group.dataset.groupId;
 
-    // Extract values once
     listings.forEach(listing => {
-      listing.dataset.price = parseFloat(listing.dataset.price) || 0;
-      listing._sortDate = new Date(listing.dataset.date).getTime() || 0;
-      listing._sortTitle = listing.dataset.title.toLowerCase();
+      const listingId = listing.dataset.id;
+
+      listing.addEventListener("mouseenter", () => {
+        window.dispatchEvent(new CustomEvent("highlightListing", {
+          detail: {
+            group_id: groupId,
+            listing_id: listingId
+          }
+        }));
+      });      
+
+      listing.addEventListener("mouseleave", () => {
+        window.dispatchEvent(new CustomEvent("unhighlightListing", {
+          detail: {
+            group_id: groupId,
+            listing_id: listingId
+          }
+        }));
+      });
+
+      listing.addEventListener("click", () => {
+        window.dispatchEvent(new CustomEvent("clickListing", {
+          detail: {
+            group_id: groupId,
+            listing_id: listingId
+          }
+        }));
+      });
     });
 
+
+    // Sorting logic
     function applySort(mode, dir) {
       listings.sort((a, b) => {
         let result = 0;
@@ -195,36 +114,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Default sort
     applySort("date", "desc");
-
-    // Mark Date as the default active sort
     sortLinks.forEach(l => l.classList.remove("active"));
-    const defaultLink = group.querySelector('[data-sort="date"]');
-    defaultLink.classList.add("active");
+    group.querySelector('[data-sort="date"]').classList.add("active");
 
-    // Link click handlers
+    // Sort link click handlers
     sortLinks.forEach(link => {
       link.addEventListener("click", () => {
         const mode = link.dataset.sort;
         const currentDir = link.dataset.dir;
         const newDir = currentDir === "desc" ? "asc" : "desc";
 
-        // Update direction
         link.dataset.dir = newDir;
-
-        // Update label arrow
         const arrow = newDir === "desc" ? "↓" : "↑";
-        link.textContent = `${link.dataset.sort.charAt(0).toUpperCase() + link.dataset.sort.slice(1)} ${arrow}`;
+        link.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ${arrow}`;
 
-        // Clear active class from all links
         sortLinks.forEach(l => l.classList.remove("active"));
-
-        // Set active class on this link
         link.classList.add("active");
 
         applySort(mode, newDir);
       });
     });
-
 
     // Expand/collapse
     toggle.addEventListener("click", () => {
@@ -233,6 +142,8 @@ document.addEventListener("DOMContentLoaded", function () {
       group.classList.toggle("expanded", isCollapsed);
       toggleLabel.textContent = isCollapsed ? "Show less" : "Show more";
     });
-  });
-});
+
+  }); // groups.forEach
+}); // DOMContentLoaded
 </script>
+

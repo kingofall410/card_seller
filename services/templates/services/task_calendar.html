@@ -205,6 +205,32 @@
     </div>
 
 </div>
+<!-- DATETIME RESET MODAL -->
+<div id="resetModal" 
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.45); backdrop-filter:blur(2px);
+            align-items:center; justify-content:center;">
+
+    <div style="background:white; padding:20px; border-radius:8px; width:300px;
+                box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+
+        <h3 style="margin-top:0;">Reset Task</h3>
+
+        <label>New datetime:</label>
+        <input id="resetDatetime" type="datetime-local" 
+               style="width:100%; margin-top:6px; margin-bottom:12px;">
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button onclick="closeResetModal()"
+                    style="padding:6px 10px;">Cancel</button>
+
+            <button id="resetConfirmBtn"
+                    style="padding:6px 10px; background:#0078d4; color:white; border:none;">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -268,6 +294,104 @@ document.addEventListener('DOMContentLoaded', function () {
     // Default to Month view + auto-scroll
     show('month');
 });
+
+function resetTask(taskId) {
+    const newDatetime = prompt("Enter new datetime (YYYY-MM-DD HH:MM):");
+
+    if (!newDatetime) {
+        return; // user cancelled
+    }
+
+    fetch(`/task_reset/${taskId}/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ new_datetime: newDatetime })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Server error");
+        }
+        return response.json();
+    })
+    .then(data => {
+        alert("Task reset successfully");
+        location.reload();
+    })
+    .catch(err => {
+        alert("Failed to reset task");
+        console.error(err);
+    });
+}
+let currentTaskId = null;
+
+function openResetModal(taskId, event) {
+    // Prevent the click from triggering the parent <a> link
+    event.stopPropagation();
+    event.preventDefault();
+    currentTaskId = taskId;
+
+    // Generate current datetime in local timezone, formatted for datetime-local input
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16); // "YYYY-MM-DDTHH:MM"
+
+    document.getElementById("resetDatetime").value = local;
+    document.getElementById("resetModal").style.display = "flex";
+}
+
+function closeResetModal() {
+    document.getElementById("resetModal").style.display = "none";
+}
+
+document.getElementById("resetConfirmBtn").onclick = function () {
+    const newDatetime = document.getElementById("resetDatetime").value;
+
+    if (!newDatetime) {
+        alert("Please select a datetime");
+        return;
+    }
+
+    fetch(`/services/task_reset/${currentTaskId}/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ new_datetime: newDatetime })
+    })
+    .then(r => {
+        if (!r.ok) throw new Error("Server error");
+        return r.json();
+    })
+    .then(() => {
+        closeResetModal();
+        location.reload();
+    })
+    .catch(err => {
+        alert("Failed to reset task");
+        console.error(err);
+    });
+};
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.startsWith(name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 
 </script>
 

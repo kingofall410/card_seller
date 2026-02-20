@@ -10,6 +10,7 @@
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 
+
   <style>
     body {
       font-family: 'Segoe UI', Roboto, sans-serif;
@@ -35,29 +36,21 @@
       width: 100%;
       box-sizing: border-box;
     }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
 
-    .info-flex-row {
+    .uicard-listing-groups {
       display: flex;
-      gap: 32px;
       flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 16px;
+      gap: 20px;
+      width: 100%; /* important */
     }
 
-    .info-button-row {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-      padding-top: 12px;
-      border-top: 1px solid #eee;
-      width: 100%;
-    }
 
-    .notes-wrapper,
-    .buttons-wrapper {
-      width: 100%;
-    }
-
+    /* IMAGE */
     .portrait-image {
       display: flex;
       flex-direction: column;
@@ -99,61 +92,285 @@
       opacity: 0;
     }
 
-    .csr-fields {
-      flex: 1 1 600px;
-      max-width: 600px;
-      padding: 16px;
+    /* TABS */
+    .csr-tabs {
+      padding: 8px;
       background-color: #fafafa;
       border-radius: 8px;
       box-shadow: inset 0 0 0 1px #eee;
     }
-  </style>
+
+    .csr-tab-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .csr-tab-btn {
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      background: #eee;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .csr-tab-btn.active {
+      background: #fafafa;
+      border-bottom: 1px solid #fafafa; /* same as panel background */
+      position: relative;
+      top: 1px; /* pulls it down to overlap the panel border */
+      z-index: 2;
+
+    }
+
+    .csr-tab-content {
+      display: none;
+    }
+
+    .csr-tab-content.active {
+      display: block;
+    }
+
+    .csr-tab-content-wrapper {
+      position: relative;
+      overflow: hidden;
+      transition: height 0.25s ease;
+    }
+
+    /* GRID LAYOUT */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      grid-template-rows: auto auto auto;
+      align-items: start;
+      column-gap: 20px;
+      row-gap: 0;
+    }
+
+    .info-tabs {
+      grid-column: 1 / span 2;
+      grid-row: 1;
+    }
+
+    .info-left-top {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .info-left-bottom {
+      grid-column: 1;
+      grid-row: 3;
+    }
+
+    .info-right {
+      grid-column: 2;
+      grid-row: 2 / span 2;
+    }
+
+    .info-left-bottom {
+      min-width: 0;
+    }
+
+    .notes-container {
+      min-width: 0;
+    }
+
+.listing-groups-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.listing-group {
+  flex: 1 1 19%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.listing-header {
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.listing-header-label {
+  margin-right: 8px;
+}
+
+.listing-toggle {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.search-string {
+  font-size: 1rem;
+  color: #060505ff;
+  margin: 4px 0 12px 0;
+}
+
+/* Collapsed: one row */
+.listing-group.collapsed .image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  
+  height: 120px;
+  max-height: 120px;
+  overflow: hidden;
+  transition: height 0.25s ease;
+}
+
+/* Expanded: full height */
+.listing-group.expanded .image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.listing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100px;
+}
+
+.listing-thumb {
+  max-width: 100px;
+  max-height: 100px;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.listing-caption {
+  margin-top: 0px;
+  font-size: 0.85rem;
+  color: #333;
+  text-align: center;
+}
+
+.sort-controls {
+  margin: 4px 0 12px 0;
+  font-size: 0.9rem;
+}
+
+.sort-title {
+  margin-right: 8px;
+  color: #333;
+  font-weight: 500;
+}
+
+.sort-link {
+  cursor: pointer;
+  color: #0074d9;
+  margin-right: 12px;
+}
+
+.sort-link:hover {
+  text-decoration: underline;
+}
+
+.sort-link.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* Default collapsed width */
+.listing-group {
+  flex: 1 1 19%;
+  transition: flex-basis 0.25s ease;
+}
+
+/* Expanded width — grows sideways */
+.listing-group.expanded {
+  flex: 1 1 100%;   /* or 60%, or 80%, depending on your preference */
+}
+
+</style>
 </head>
 <body>
+
+
   {% include "header.html" %}
   {% include "nav_buttons.html" with url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
+
   <div class="overview-wrapper">
 
-    <!-- Info Block: Search Results + Portrait + Buttons -->
-    <div class="uicard info-block">
-      <div class="info-flex-row">
-        <div class="csr-fields">
-          {% include "search_results_reduced.html" with card_id=card_tuple.0.id search_result=card_tuple.2 %}
-        </div>
-        <div class="portrait-image">
-          <div class="image-wrapper">
-            <img src="{{ card_tuple.0.cropped_image.url }}" alt="{{ card_tuple.1 }}" onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';" class="thumbnail default">
-            <img src="{{ card_tuple.0.cropped_reverse.url }}" alt="{{ card_tuple.1 }} hover" onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';" class="thumbnail hover">
-          </div>
-        </div>
-      </div>
-
-      <div class="info-button-row">
-        <div class="notes-wrapper">
-          {% include "notes_panel.html" with card=card_tuple.0 %}
-        </div>
-        <div class="buttons-wrapper">
-          {% include "re_search_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2 collection_id=card_tuple.0.collection.id %}
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Price Chart + Listing Details -->
+    <!-- LISTING BUTTONS -->
     <div class="uicard price-block">
-      {% include "listing_buttons.html" with card_id=card_tuple.1 search_result=card_tuple.2  %}
-      {% include "ebay_listing_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 %}
-      {% include "price_over_time2.html" with datasetConfigs=card_tuple.11 %}
-      {% comment %} include "histogram.html" with all_listings=card_tuple.3 filtered_listings=card_tuple.4 settings=settings title="Listed" sold_listings=card_tuple.5 %}  {% endcomment %}
+      {% include "listing_buttons.html" with card=card_tuple.0 card_id=card_tuple.1 search_result=card_tuple.2 %}
     </div>
 
-    <!-- Product Listings -->
-    <div class="uicard listing-block">
-    {% for listing_group in card_tuple.2.reverse_listing_groups %}
-      {% include "product_listings.html" with listing_group=listing_group %}
-    {% endfor %}
+    <div class="uicard price-block">
+    <!-- MAIN GRID BLOCK (tabs + description + image) -->
+      {% include "re_search_buttons.html" with card=card_tuple.0 card_id=card_tuple.1 search_result=card_tuple.2 %}
+      {% include "card_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 datasetConfigs=card_tuple.11%}
     </div>
 
-  </div>
+<!-- Product Listings -->
+    <div class="listing-groups-wrapper">
+      
+      {% for listing_group in card_tuple.2.listing_groups.all %}
+        {% include "product_listings.html" with listing_group=listing_group %}
+      {% endfor %}
+    </div>
+  
 </body>
 </html>
+
+<script>
+function resizeTabWrapper() {
+    const wrapper = document.getElementById("csr-tab-wrapper");
+    const tabs = wrapper.querySelectorAll(".csr-tab-content");
+
+    let maxHeight = 0;
+    tabs.forEach(tab => {
+        tab.style.display = "block";
+        const h = tab.offsetHeight;
+        if (h > maxHeight) maxHeight = h;
+        if (!tab.classList.contains("active")) {
+            tab.style.display = "none";
+        }
+    });
+
+    wrapper.style.height = maxHeight + "px";
+}
+
+resizeTabWrapper();
+
+document.addEventListener("click", (e) => {
+    if (!e.target.classList.contains("csr-tab-btn")) return;
+
+    const tabName = e.target.dataset.tab;
+
+    document.querySelectorAll(".csr-tab-btn").forEach(btn =>
+        btn.classList.remove("active")
+    );
+    e.target.classList.add("active");
+
+    document.querySelectorAll(".csr-tab-content").forEach(div =>
+        div.classList.remove("active")
+    );
+    document.getElementById(tabName).classList.add("active");
+
+    resizeTabWrapper();
+});
+</script>

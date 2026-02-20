@@ -1,0 +1,149 @@
+<table style="font-size: 14px; border-collapse: collapse; width: 100%; 
+               border: 1px solid #ccc; margin-top: 12px; background-color: #4c96d7;">
+
+  <!-- CARD -->
+  {% if listed_info.card.id != card.id %}
+    <tr style="border-bottom: 3px solid #eee;">
+      <td  style="padding: 6px;">
+        <label style="font-weight: bold;">Lead Card</label>
+      </td>
+      <td  style="padding: 6px;">
+        <input type="text"
+              value="{{ listed_info.card }}"
+              style="width: 100%; box-sizing: border-box;">
+      </td>
+    </tr>
+  {% else %}
+    <!-- SUB CARDS -->
+    <tr style="border-bottom: 3px solid #eee;">
+      <td  style="padding: 6px;">
+        <label style="font-weight: bold;">Sub Cards</label>
+      </td>
+      <td  style="padding: 6px;">
+        <input type="text"
+              value="{% for c in listed_info.sub_cards.all %}{{ c }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+              style="width: 100%; box-sizing: border-box;">
+      </td>
+    </tr>
+  {% endif %}
+
+  <!-- PRODUCT GROUP -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Product Group</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.product_group.group_title|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- LISTING DATETIME -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Listing Datetime</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.listing_datetime|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- PRICE -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">List Price</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="${{ listed_info.list_price|floatformat:2 }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- QTY -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Quantity</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.list_qty }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- LISTING ID -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Listing ID</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.listing_id|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- SKU -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">SKU</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.sku|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- OFFER ID -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Offer ID</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.offer_id|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <!-- MSRP -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">MSRP</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{% if listed_info.msrp %}${{ listed_info.msrp|floatformat:2 }}{% else %}—{% endif %}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+  
+  <!-- SHAREABLE LINKS -->
+  <tr style="border-bottom: 3px solid #eee;">
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Shareable Link (Front)</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.shareable_link_front|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+  <tr>
+    <td  style="padding: 6px;">
+      <label style="font-weight: bold;">Shareable Link (Reverse)</label>
+    </td>
+    <td  style="padding: 6px;">
+      <input type="text"
+             value="{{ listed_info.shareable_link_reverse|default:'—' }}"
+             style="width: 100%; box-sizing: border-box;">
+    </td>
+  </tr>
+
+</table>

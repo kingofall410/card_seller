@@ -25,11 +25,16 @@
   text-decoration: underline;
 }
 
-/* Status colors */
+/* card status colors */
+.nav-link .status-pending { color: #fff4cc; background-color: #fff4cc20;}
+.nav-link .status-failed  { color: #af1e1e; background-color: #af1e1e20;}
+.nav-link .status-other   { color: #383838; background-color: #383838;}
+.nav-link .status-listed  { color: #4ca4c2; background-color: #4ca4c220;}
+
+/* collection status colors */
 .status-imported      { background-color: #ffffff; }
-.status-listed        { background-color: #e0f7ff; }
-.status-ready-to-price{ background-color: #fff4cc; }
-.status-ready-to-list { background-color: #e8ffe8; }
+.status-ready-to-price{ background-color: #ffcc0020; }
+.status-ready-to-list { background-color: #33cc3320; }
 .status-identified    { background-color: #ffe6e6; }
 .status-closed        { background-color: #383838; }
 
@@ -65,20 +70,31 @@
            z-index: 1000;
          ">
       <a href="{% url 'manage_collection' %}" class="nav-link">
-        All Collections...
+        🗃️ All Collections...
       </a>
       <a href="{% url 'new_collection' %}" class="nav-link">
-        ✨ New Collection
+        ✨ New Collection...
       </a>
 
 
       {% get_collections as collections %}
-      {% for collection in collections %}
-        <a href="{% url 'collection' collection.id %}"
-           class="nav-link status-{{ collection.status|slugify }}">
-          {{ collection.id }}. {{ collection.name }} ({{ collection.get_size }})
+        {% for collection in collections %}
+        <a href="{% url 'collection' collection.id %}" class="nav-link">
+            {{ collection.id }}. {{ collection.name }}
         </a>
-      {% endfor %}
+        {% comment %}{% with status_counts=collection.status_counts %}
+          <a href="{% url 'collection' collection.id %}" class="nav-link status-{{ collection.status|slugify }}">
+            {{ collection.id }}. {{ collection.name }}
+            {% comment %}
+            (
+              <span class="status-listed" style="background-color: #ffffff00">{{ status_counts.listed_and_pending }}</span> /
+              <span class="status-failed" style="background-color: #ffffff00">{{ status_counts.failed }}</span> /
+              <span class="status-other" style="background-color: #ffffff00">{{ status_counts.other }}</span>
+            )
+            {% endcomment %}
+    
+        {% endfor %}
+
     </div>
   </div>
 

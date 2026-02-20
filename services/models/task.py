@@ -22,6 +22,11 @@ class Task(models.Model):
     error_str = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def reset(self, new_datetime):
+        self.scheduled_for = new_datetime
+        self.status = StatusBase.PENDING
+        self.save()
+
     @property
     def img(self):
         return None
@@ -42,7 +47,7 @@ class Task(models.Model):
         return self.status_meta["color"]
 
     def __str__(self):
-        return f"{self.name} @ {self.scheduled_for}, {self.img}"
+        return f"{self.name} @ {self.scheduled_for}"
 
 
 class ListingTask(Task):

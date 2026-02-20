@@ -3,10 +3,13 @@ from django.http import JsonResponse
 from services.models.models import Settings
 from services.models.task import Task, ListingTask
 from core.models.Status import StatusBase
+from core.models.ListedInfo import ListedInfo
+from core.models.Group import ProductGroup
 
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Collection, CollectionStatus
 from core.models.CardSearchResult import CardSearchResult
+from core.models.Card import Card
 # Miscellaneous views
 from django.apps import apps
 from django.shortcuts import get_object_or_404, redirect
@@ -17,6 +20,31 @@ def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
+    
+    groups = ProductGroup.objects.all()
+    for group in groups:
+        for csr in group.products.all():
+            if csr.overall_status == StatusBase.FAILED:
+                
+                csr.ebay_product_group = None
+                csr.save()
+    '''ListedInfo.objects.all().delete()
+
+    collections = Collection.objects.filter(id__in=[132,133])
+    for collection in collections:
+        for card in collection.cards.all():
+            csr = card.active_search_results()
+            if csr:
+                lci = ListedInfo.create_from_csr(csr)
+            else:
+                lci = ListedInfo.create_from_card(card)  
+
+    collections = Collection.objects.all() 
+    for collection in collections:
+        for card in collection.cards.all():
+            csr = card.active_search_results()
+            if csr and csr.overall_status == StatusBase.LISTED:
+                listed_card_info = ListedInfo.create(csr)'''
 
     #core_config = apps.get_app_config("core")
     #core_config.queue.reset()

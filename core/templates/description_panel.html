@@ -1,7 +1,7 @@
 <style>
 .notes-container {
   display: flex;
-  gap: 20px;
+  gap: 5px;
   position: relative;
   max-width: 100%;        /* Prevent overflow */
   flex-wrap: wrap;        /* Allow wrapping on smaller screens */
@@ -35,19 +35,24 @@
   gap: 5px;
 }
 </style>
-
 <div class="notes-container">
+
   <div class="notes-panel">
     <div class="notes-header">
-      📝 <span>Listing Details</span>
+      📝 <span>Listing Description</span>
     </div>
-    <textarea id="listing-details" class="notes-content" placeholder="Enter listing details...">{{ card.listing_details | safe }}</textarea>
+    <textarea id="listing-details" class="notes-content">
+      {{ card.listed_card_info.listing_detail_text | safe }}
+    </textarea>
   </div>
 
   <div class="notes-panel">
     <div class="notes-header">
       📦 <span>Notes</span>
     </div>
-    <textarea id="notes" class="notes-content" placeholder="Write your notes here...">{{ card.notes | safe }}</textarea>
+    <textarea id="notes" class="notes-content">
+      {{ card.listed_card_info.listing_notes | safe }}
+    </textarea>
   </div>
+
 </div>

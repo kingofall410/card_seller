@@ -7,6 +7,7 @@ from core.models.Status import StatusBase
 from services.models.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from services.models.task import Task
 from django.db.models import F
+from django.core.serializers.json import DjangoJSONEncoder
 
 register = template.Library()
 
@@ -77,7 +78,7 @@ def get_collections():
 #combine the two below
 @register.simple_tag
 def get_tasks():
-    return Task.objects.filter(status__in=[StatusBase.PENDING, StatusBase.FAILED]).order_by('scheduled_for')
+    return []#Task.objects.filter(status__in=[StatusBase.PENDING, StatusBase.FAILED]).order_by('scheduled_for')
 
 @register.simple_tag
 def get_all_tasks():

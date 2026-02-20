@@ -45,6 +45,7 @@ urlpatterns = [
     #path('export/<int:csr_id>/', export_views.export, name='export'),
     path('hold_card/<int:csr_id>/', card_views.hold_card, name='hold_card'),
     path('list_card/<int:csr_id>/', export_views.list_card, name='list_card'),
+    path('clear_listed_info/<int:card_id>/', card_views.clear_listed_info, name="clear_listed_info"),
     path('export_collection/<int:collection_id>/', collection_views.export_collection, name='export_collection'),
     path('set_default_collection/<int:collection_id>/', collection_views.set_default_collection, name='set_default_collection'),
     path('manage/', collection_views.manage_collection, name='manage_collection'),

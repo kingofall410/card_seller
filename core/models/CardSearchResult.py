@@ -247,11 +247,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ]
 
     display_fields = [
-        "text_search_string", "sold_search_string", "filter_terms", "year", "brand", "subset", "parallel", "full_name", 
-        "card_number", "card_name", "city", "team", "serial_number", "condition", "number_grade", "attributes"
+       "year", "brand", "subset", "parallel", "full_name", "card_number", "card_name", "city", "team", "attributes" 
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
-        # "unknown_words", 
+        # "unknown_words",  "text_search_string", "sold_search_string", "filter_terms", #"serial_number", "condition", "number_grade"
     ]
 
     spreadsheet_fields = [
@@ -293,7 +292,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     @property
     def reverse_listing_groups(self):
         return self.listing_groups.all().order_by('-id')
-
 
     def create_listing_group(self, label, filter_terms="", id_string="", is_img=False, is_refined=False, is_wide=False, is_sold=False):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
@@ -959,6 +957,10 @@ class ListingGroup(models.Model):
     class Meta:
         unique_together = ("search_result", "is_sold", "is_refined", "is_wide", "is_img")
 
+    @property
+    def display_state(self):
+        return "expanded" if self.label.find("ID") >= 0 else "collapsed" 
+
     @classmethod
     def create(cls, search_result, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
         search_result.save()
@@ -1002,7 +1004,8 @@ class ListingGroup(models.Model):
                 listing.ebay_price,
                 listing.title.title if listing.title else "",
                 listing.thumb_url,
-                listing.display_date
+                listing.display_date,
+                listing.id
             ]
             for listing in self.listings.filter(
                 ebay_price__isnull=False

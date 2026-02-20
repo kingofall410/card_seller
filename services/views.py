@@ -2,11 +2,12 @@ from django.shortcuts import render
 from services.models.task import Task, ListingTask
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
-import calendar
+import calendar, json
 from datetime import date, datetime, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from types import SimpleNamespace
+from django.http import JsonResponse
 
 def task_calendar(request):
     # Determine month
@@ -94,3 +95,15 @@ def clear_tasks(request, status_value):
 
     Task.objects.filter(status=status).delete()
     return redirect('tasks_list')
+
+@csrf_exempt
+def task_reset(request, task_id):
+    data = json.loads(request.body)
+    new_dt = data.get("new_datetime")
+    print(new_dt)
+
+    # delete + recreate logic here
+    task = Task.objects.get(id=task_id)
+    task.reset(new_dt)
+
+    return JsonResponse({"status": "ok"})

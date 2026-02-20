@@ -1,179 +1,241 @@
-<div style="margin-top: 20px; display: flex; gap: 10px;">
-    <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🖼️ Clear+ID
-    </button>
-    <button id="text-filter-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔤 Refine
-    </button>
-    <button id="export-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        👇 Download
-    </button>
-    <button id="retokenize-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        🔍 Retokenize
-    </button>
-    <button id="price-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        💲 Price Only
-    </button>
-    <button id="crop-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        ✂ Crop
-    </button>
-    <button id="save-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        💾 Save
-    </button>
-    <button id="save-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-        💾→ Save & Next
-    </button>
-</div>
+{% load custom_tags %}
+{% get_product_groups as groups %}
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const imageSearchBtn = document.getElementById("image-search-btn-{{ card_id }}");
-        const retokenizeBtn = document.getElementById("retokenize-btn-{{ card_id }}");
-        const priceBtn = document.getElementById("price-btn-{{ card_id }}");
-        const textFilterBtn = document.getElementById("text-filter-btn-{{ card_id }}");
-        const exportBtn = document.getElementById("export-btn-{{ card_id }}");
-        const cropBtn = document.getElementById("crop-btn-{{ card_id }}");
-        const saveBtn = document.getElementById("save-btn-{{ card_id }}");
-        const saveNextBtn = document.getElementById("save-next-btn-{{ card_id }}");
-        const searchResultId = "{{ search_result.id }}"
-        const cardId = "{{ card_id }}";
-        const collectionId = "{{ collection_id }}";
+function showSpinnerOnButton(button) {
+    button.originalText = button.textContent;
+    button.disabled = true;
 
-        imageSearchBtn.addEventListener('click', () => {
-            console.log(`🖼️ Image Search triggered for ${imageSearchBtn.id}`);
-            fetch(`/image_search/${cardId}/`, { 
-                method: 'POST',                      
-                body: JSON.stringify({
-                    required_words: collectAllFields(cardId)
-                })
-            }).then(response => {
-                console.log("Successfully");
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-            });
-        });
-        retokenizeBtn.addEventListener('click', () => {
-            fetch(`/retokenize/${searchResultId}/`, { 
-                method: 'POST',
-            }).then(response => {
-                console.log("Successfully");
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-            });
-        });
-        priceBtn.addEventListener('click', () => {
-            showSpinnerOnButton(priceBtn);
-            fetch(`/price_only/${searchResultId}/`, { 
-                method: 'GET',
-            }).then(response => {
-                console.log("Successfully");
-                restoreButton(priceBtn);
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-            });
-        });
-        exportBtn.addEventListener('click', () => {
-            //TODO:reimplement this when needed as download csv
-            console.log(` Export triggered for ${exportBtn.id}`);
-            console.log(searchResultId);
-            //fetch(`/export/${searchResultId}/`)
-              //  .then(res => res.json())
-                
-        });
-        saveBtn.addEventListener('click', () => {
-            
-            console.log(` Save triggered for ${saveBtn.id}`);
-            console.log(searchResultId);
-            allFields = collectAllFields(cardId);
-            //TODO:fix this hack maybe
-            allFields["notes"] = document.getElementById("notes").value
-            console.log("Fields:", allFields);
+    const spinner = document.createElement('span');
+    spinner.style.display = 'inline-block';
+    spinner.style.width = '16px';
+    spinner.style.height = '16px';
+    spinner.style.border = '2px solid #ccc';
+    spinner.style.borderTop = '2px solid #333';
+    spinner.style.borderRadius = '50%';
+    spinner.style.animation = 'spin 0.6s linear infinite';
+    spinner.style.marginLeft = '8px';
 
-            $.ajax({
-                url: "/update_csr_fields/",
-                method: "POST",
-                    data: JSON.stringify({
-                    csrId: searchResultId,
-                    allFields: allFields
-                }),
-                success: response => {
-                    console.log("Saved:", response);
-                    alert("Changes saved successfully.");
-                },
-                error: xhr => {
-                    console.error("Save error:", xhr.responseText);
-                    alert("Error saving changes.");
-                }
-            });       
-        });
-        saveNextBtn.addEventListener('click', () => {
-            
-            console.log(` Save triggered for ${saveBtn.id}`);
-            console.log(searchResultId);
-            allFields = collectAllFields(cardId);
-            //TODO:fix this hack maybe
-            allFields["notes"] = document.getElementById("notes").value
-            console.log("Fields:", allFields);
+    button.textContent = '';
+    button.appendChild(spinner);
+}
 
-            $.ajax({
-                url: "/update_csr_fields/",
-                method: "POST",
-                data: {
-                    csrId: searchResultId,
-                    ...allFields,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
-                success: response => {
-                    {% if page_obj.has_next %}
-                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}");
-                    {% else %}
-                        submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1");
-                    {% endif %}
-                },
-                error: xhr => {
-                    console.error("Save error:", xhr.responseText);
-                    alert("Error saving changes.");
-                }
-            });       
-        });
-        cropBtn.addEventListener('click', () => {
-            console.log(cardId)
-            fetch(`/crop_review/${collectionId}/`, { 
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },             
-                body: JSON.stringify({
-                    card_ids: [cardId]
-                })
-            }).then(response => {
-                console.log("Successfully");
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-            });
-        });
-        
-        textFilterBtn.addEventListener('click', () => {
-            let allFields = {}
-            allFields = collectAllFields(cardId);
-            console.log(`Text filter triggered`, allFields)
-            fetch(`/text_filter/`, { 
-                method: 'POST',                            
-                body: JSON.stringify({
-                    required_words: allFields,
-                    csr_ids: [searchResultId],
-                    new_search: true
-                })
-            }).then(response => {
-                console.log("Successfully");
-                location.reload()
-            }).catch(error => {
-                console.error("Save error", error);
-            });
+function restoreButton(button) {
+    button.textContent = button.originalText || 'List';
+    button.disabled = false;
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const cardId = "{{ card_id }}";
+    const searchResultId = "{{ search_result.id }}";
+    const collectionId = "{{ collection_id }}";
+
+    /* ---------------------------
+       TOP BUTTONS
+    ----------------------------*/
+    const imageSearchBtn = document.getElementById(`image-search-btn-${cardId}`);
+    const textFilterBtn = document.getElementById(`text-filter-btn-${cardId}`);
+    const priceBtn = document.getElementById(`price-btn-${cardId}`);
+    const saveBtn = document.getElementById(`save-btn-${cardId}`);
+    const saveNextBtn = document.getElementById(`save-next-btn-${cardId}`);
+
+    imageSearchBtn.addEventListener('click', () => {
+        fetch(`/image_search/${cardId}/`, {
+            method: 'POST',
+            body: JSON.stringify({ required_words: collectAllFields(cardId) })
+        }).then(() => location.reload());
+    });
+
+    textFilterBtn.addEventListener('click', () => {
+        let allFields = collectAllFields(cardId);
+        fetch(`/text_filter/`, {
+            method: 'POST',
+            body: JSON.stringify({
+                required_words: allFields,
+                csr_ids: [searchResultId],
+                new_search: true
+            })
+        }).then(() => location.reload());
+    });
+
+    priceBtn.addEventListener('click', () => {
+        showSpinnerOnButton(priceBtn);
+        fetch(`/price_only/${searchResultId}/`, { method: 'GET' })
+            .then(() => location.reload())
+            .finally(() => restoreButton(priceBtn));
+    });
+
+    saveBtn.addEventListener('click', () => {
+        let allFields = collectAllFields(cardId);
+        allFields["notes"] = document.getElementById("notes").value;
+
+        $.ajax({
+            url: "/update_csr_fields/",
+            method: "POST",
+            data: JSON.stringify({ csrId: searchResultId, allFields }),
+            success: () => alert("Changes saved successfully."),
+            error: xhr => alert("Error saving changes.")
         });
     });
+
+    saveNextBtn.addEventListener('click', () => {
+        let allFields = collectAllFields(cardId);
+        allFields["notes"] = document.getElementById("notes").value;
+
+        $.ajax({
+            url: "/update_csr_fields/",
+            method: "POST",
+            data: {
+                csrId: searchResultId,
+                ...allFields,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            success: () => {
+                {% if page_obj.has_next %}
+                    submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}");
+                {% else %}
+                    submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1");
+                {% endif %}
+            }
+        });
+    });
+
+    /* ---------------------------
+       LISTING BUTTONS
+    ----------------------------*/
+    const listBtn = document.getElementById(`list-btn-${cardId}`);
+    const listNextBtn = document.getElementById(`list-next-btn-${cardId}`);
+    const listUpBtn = document.getElementById(`list-up-btn-${cardId}`);
+    const clearListedInfoBtn = document.getElementById(`clear-listed-info-btn-${cardId}`);
+
+    const groupSelect = document.getElementById(`group-select-${cardId}`);
+    const scheduleInput = document.getElementById(`schedule-${cardId}`);
+    const publishInput = document.getElementById(`publish-${cardId}`);
+
+    listBtn.addEventListener("click", () => {
+        performListAction(listBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => location.reload());
+    });
+
+    listNextBtn.addEventListener("click", () => {
+        performListAction(listNextBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => handleNext());
+    });
+
+    listUpBtn.addEventListener("click", () => {
+        performListAction(listUpBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => handleUp());
+    });
+
+    clearListedInfoBtn.addEventListener("click", () => {
+        clearListedInfo(clearListedInfoBtn, cardId)
+    });
+
+    function performListAction(button, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
+        const groupKey = groupSelect.value || "";
+        const publishValue = publishInput.checked ? "True" : "False";
+        const scheduleTime = scheduleInput.value;
+
+        showSpinnerOnButton(button);
+
+        const url = `/list_card/${searchResultId}?publish=${publishValue}`
+                  + `&group_key=${encodeURIComponent(groupKey)}`
+                  + `&schedule=${encodeURIComponent(scheduleTime)}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => onSuccess && onSuccess(data))
+            .finally(() => restoreButton(button));
+    }
+
+    function clearListedInfo(button, cardId) {
+        
+        showSpinnerOnButton(button);
+
+        const url = `/clear_listed_info/${cardId}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => onSuccess && onSuccess(data))
+            .finally(() => restoreButton(button));
+    }
+
+    /* ---------------------------
+       GROUP SELECT (NEW GROUP)
+    ----------------------------*/
+    document.querySelectorAll(".group-select").forEach(select => {
+        select.addEventListener("change", function () {
+            if (this.value !== "__new__") return;
+
+            const title = prompt("Enter a name for the new group:");
+            if (!title || title.trim() === "") {
+                this.value = "";
+                return;
+            }
+
+            const newOption = document.createElement("option");
+            newOption.value = title;
+            newOption.textContent = title;
+
+            const newGroupOption = this.querySelector('option[value="__new__"]');
+            this.insertBefore(newOption, newGroupOption);
+
+            this.value = title;
+        });
+    });
+});
 </script>
+
+<!-- ============================
+     FULL MERGED UI
+============================= -->
+<div style="margin-top: 20px; margin-bottom: 20px; position: relative;">
+
+  <!-- EVERYTHING ON ONE ROW -->
+  <div style="
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+  ">
+
+    <!-- TOP BUTTONS -->
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          🖼️ Clear+ID
+      </button>
+
+      <button id="text-filter-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          🔤 Text Search
+      </button>
+
+      <button id="price-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💲 Sold Search
+      </button>
+
+      <button id="save-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💾 Save
+      </button>
+
+      <button id="save-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💾→ Save & Next
+      </button>
+    
+      <button id="list-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🧾 List
+      </button>
+
+      <button id="list-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🧾→ List/Next
+      </button>
+
+      <button id="list-up-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🧾↑ List/Up
+      </button>
+
+      <button id="clear-listed-info-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #cc3e2eff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        🧾 Clear
+      </button>
+    </div>
+
+  </div>
+</div>

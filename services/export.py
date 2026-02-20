@@ -148,7 +148,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             print(csr.variation_title_base)
             print(group.variation_data)
             #print("single row:", group.variation_data[csr.variation_title_base])
-            if csr.variation_title_base in group.variation_data:
+            if False:#csr.variation_title_base in group.variation_data:
                 #This is a full dup of something already listed under a diff sku in this group, add 1 to that item instead of creating a new item
                 group.variation_data[csr.variation_title_base][1] += 1
                 group.save()
@@ -164,7 +164,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
                     #item was updated successfully
                     return True, csr_for_sku.ebay_offer_id, csr_for_sku.ebay_listing_id
             
-        print("not grouping")
+        print("new item")
         #if we didn't fill item data above, this needs a new inv item and offer    
         item_data = csr.export_to_template(csr.sku, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
         print("Item data:", item_data)
@@ -173,7 +173,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             "sku": csr.sku,
             "marketplaceId": "EBAY_US",
             "format": "FIXED_PRICE",
-            "listingDescription": csr.parent_card.listing_details,
+            "listingDescription": csr.parent_card.listed_card_info.listing_detail_text,
             "availableQuantity": 1,
             "pricingSummary": {
                 "price": {

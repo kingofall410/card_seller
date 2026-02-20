@@ -1,0 +1,59 @@
+{% load static %}
+{% load custom_tags %}
+
+<div class="info-grid">
+    
+    <!-- LHEADER: TABBED PANEL tabs -->
+    <div class="info-tabs">
+        <div class="csr-tab-buttons">
+            <button class="csr-tab-btn active" data-tab="csr-search">Card Info</button>
+            <button class="csr-tab-btn" data-tab="csr-listing">Listing Details</button>
+            <button class="csr-tab-btn" data-tab="csr-charts">Charts</button>
+        </div>
+        <span style="text-align:center">Card: <b>{{ search_result.parent_card.id }}</b> CSR: <b>{{ search_result.id }}</b> ListedInfo: <b>{{search_result.parent_card.listed_card_info.id}}</b></span>
+    </div>
+    
+    
+        <!-- LEFT COLUMN — ROW 1: TABBED PANEL -->
+        <div class="info-left-top">    
+            <div class="csr-tab-content-wrapper" id="csr-tab-wrapper">
+                <div class="csr-tab-content active" id="csr-search">
+                {% include "search_results.html" with card_id=card_id search_result=search_result %}
+                {% include "description_panel.html" with card=search_result.parent_card %}
+                </div>
+
+                <div class="csr-tab-content" id="csr-listing">
+                    {% include "listed_card_info.html" with listed_info=search_result.parent_card.listed_card_info card=search_result.parent_card %}
+                </div>
+
+                <div class="csr-tab-content" id="csr-charts">
+                    {% include "price_over_time2.html" with datasetConfigs=datasetConfigs %}
+                    {% comment %} include "histogram.html" with all_listings=card_tuple.3 filtered_listings=card_tuple.4 settings=settings title="Listed" sold_listings=card_tuple.5 %}  {% endcomment %}
+                </div>
+            </div>
+        </div>
+
+        <!-- LEFT COLUMN — ROW 2: DESCRIPTION PANEL -->
+        <div class="info-left-bottom">
+            placeholder
+        </div>
+
+        <!-- RIGHT COLUMN — IMAGE SPANNING BOTH ROWS -->
+        <div class="info-right">
+            <div class="portrait-image">
+                <div class="image-wrapper">
+                    <img src="{{ search_result.parent_card.cropped_image.url }}"
+                        alt="{{ card_id }}"
+                        onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';"
+                        class="thumbnail default">
+
+                    <img src="{{ search_result.parent_card.cropped_reverse.url }}"
+                        alt="{{ card_id }} hover"
+                        onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
+                        class="thumbnail hover">
+                </div>
+            </div>
+        </div>
+
+
+</div>

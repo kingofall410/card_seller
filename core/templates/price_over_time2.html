@@ -11,8 +11,8 @@
 
   <style>
     .chart-container {
-      width: 1200px;
-      height: 400px;
+      width: 100%;
+      min-height: 400px;
       margin: 40px auto;
     }
     .title-header {
@@ -28,6 +28,36 @@
     .controls label {
       margin-right: 12px;
     }
+    canvas {
+      width: 100% !important;
+      height: 400px !important;
+      }
+  #chartjs-custom-tooltip {
+  position: fixed;        /* instead of absolute */
+  z-index: 999999;        /* higher than anything else */
+  pointer-events: none;
+  background: rgba(0,0,0,0.85);
+  color: white;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: opacity 0.1s ease;
+  opacity: 0;
+  width: auto;
+  height: auto;
+  display: inline-block;
+}
+
+
+  #chartjs-custom-tooltip img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    display: block;
+    margin-top: 6px;
+    border-radius: 4px;
+  }
+
   </style>
 </head>
 <body>
@@ -46,173 +76,369 @@
   <div class="chart-container">
     <canvas id="priceTimeChart-{{ title }}"></canvas>
   </div>
-
 <script>
-  (function() {
-      const datasetConfigs = JSON.parse(`{{ datasetConfigs|escapejs }}`);
+(function() {
+  const datasetConfigs = JSON.parse(`{{ datasetConfigs|escapejs }}`);
 
-      const ctxTime = document.getElementById(`priceTimeChart-{{ title }}`).getContext('2d');
-      let timeChart;
-     
+  const ctxTime = document.getElementById(`priceTimeChart-{{ title }}`).getContext('2d');
+  let timeChart;
+  let swapOnLeave;
+  let persistentMatches = []
 
-      window.updateChartWrapper = function() {
-        updateChart();
-      };
+  // -----------------------------------------------------
+  // CLICK LISTING
+  // -----------------------------------------------------
+  window.addEventListener("clickListing", (e) => {
+    if (!timeChart) return;
 
-      datasetConfigs.forEach(({ key, label, display_default }) => {
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.id = `toggle-${key}`;
-        checkbox.checked = display_default;
-        checkbox.onchange = updateChartWrapper;
+    const listingId = String(e.detail.listing_id);
 
-        const labelEl = document.createElement("label");
-        labelEl.appendChild(checkbox);
-        labelEl.appendChild(document.createTextNode(` ${label}`));
-        labelEl.style.marginRight = "12px";
+    const matches = [];
 
-        document.getElementById("toggle-container").appendChild(labelEl);
+    timeChart.data.datasets.forEach((dataset, datasetIndex) => {
+      dataset.data.forEach((point, index) => {
+        if (point.ids && point.ids.includes(listingId)) {
+          matches.push({ datasetIndex, index });
+        }
       });
+    });
 
-      function filterByPrice(data, maxPrice) {
-        return data.filter(([price]) => price <= maxPrice);
+    matches.forEach(match => {
+      const exists = persistentMatches.find(
+        m => m.datasetIndex === match.datasetIndex && m.index === match.index
+      );
+
+      if (exists) {
+        persistentMatches = persistentMatches.filter(
+          m => !(m.datasetIndex === match.datasetIndex && m.index === match.index)
+        );
+      } else {
+        persistentMatches.push(match);
       }
+    });
 
-      function buildSeries(rawData, windowSize = 1) {
-        const groupedByDay = {};
-        rawData.forEach(([price, title, thumb, date]) => {
-          const day = new Date(date).toISOString().split('T')[0];
-          if (!groupedByDay[day]) groupedByDay[day] = [];
-          groupedByDay[day].push({ price, title, thumb, date });
-        });
+    // Reapply persistent highlights
+    timeChart.setActiveElements(persistentMatches);
+    timeChart.tooltip.setActiveElements(persistentMatches);
+    timeChart.update();
+  });
 
-        const dailyHighs = Object.entries(groupedByDay).map(([day, entries]) => {
-          const highest = entries.reduce((max, entry) => entry.price > max.price ? entry : max, entries[0]);
-          return {
-            x: new Date(day).toISOString(),
-            y: highest.price,
-            title: highest.title,
-            thumb: highest.thumb
-          };
-        });
 
-        const sorted = dailyHighs.sort((a, b) => new Date(a.x) - new Date(b.x));
 
-        if (windowSize > 1) {
-          return sorted.map((point, i, arr) => {
-            const start = Math.max(0, i - Math.floor(windowSize / 2));
-            const end = Math.min(arr.length, i + Math.ceil(windowSize / 2));
-            const window = arr.slice(start, end);
-            const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
-            return { ...point, y: avg };
-          });
+  window.addEventListener("resize", () => {
+    if (timeChart) timeChart.resize();
+  });
+
+  // -----------------------------------------------------
+  // HIGHLIGHT LISTING
+  // -----------------------------------------------------
+  window.addEventListener("highlightListing", (e) => {
+    const listingId = String(e.detail.listing_id);
+    const groupId = String(e.detail.group_id);
+
+    if (!timeChart) return;
+
+    const toggle = document.getElementById(`toggle-group-${groupId}`);
+
+    if (toggle && !toggle.checked) {
+      toggle.checked = true;
+      swapOnLeave = true;
+      updateChart();
+    }
+
+    // ❗ Start with a *fresh* array
+    const hoverMatches = [];
+
+    // Find hover matches
+    timeChart.data.datasets.forEach((dataset, datasetIndex) => {
+      dataset.data.forEach((point, index) => {
+        if (point.ids && point.ids.includes(listingId)) {
+          hoverMatches.push({ datasetIndex, index });
         }
+      });
+    });
 
-        return sorted;
+    // Combine hover + persistent (but do NOT mutate persistent)
+    const combinedMatches = [
+      ...persistentMatches,
+      ...hoverMatches
+    ];
+
+    if (combinedMatches.length === 0) {
+      timeChart.setActiveElements([]);
+      timeChart.update();
+      return;
+    }
+
+    // Emphasize selected group
+    timeChart.data.datasets.forEach((ds, i) => {
+      if (hoverMatches.some(m => m.datasetIndex === i)) {
+        ds.borderWidth = 4;
+      } else {
+        ds.borderWidth = 1;
       }
+    });
 
-      function getToggleState(key) {
-        const el = document.getElementById(`toggle-${key}`);
-        return el ? el.checked : false;
-      }
-
-      window.updateChart = function() {
-        const maxPrice = parseFloat(document.getElementById("maxPrice-time").value);
-        const windowSize = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
-        const datasets = [];
-
-        let latestDate = null;
-
-        datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
-          if (!getToggleState(key)) return;
-
-          const filtered = filterByPrice(data, maxPrice);
-          const series = buildSeries(filtered, windowSize);
-
-          // Track latest date across all datasets
-          if (series.length) {
-            const lastPointDate = new Date(series[series.length - 1].x);
-            if (!latestDate || lastPointDate > latestDate) {
-              latestDate = lastPointDate;
-            }
-          }
-
-          datasets.push({
-            label,
-            data: series,
-            fill: false,
-            backgroundColor: color.replace("0.8", "0.2"),
-            borderColor: color,
-            tension: 0.6,
-            borderWidth,
-            pointRadius: 0,
-            borderDash: lineStyle === "dotted" ? [6, 4] : []
-          });
-        });
-
-        datasetConfigs.forEach(({ key, max_date }) => {
-          if (!getToggleState(key)) return;
-
-          const date = new Date(max_date);
-          if (!latestDate || date > latestDate) {
-            latestDate = date;
-          }
-        });
-
-        let minDate = undefined;
-        if (latestDate) {
-          minDate = new Date(latestDate);
-          minDate.setMonth(minDate.getMonth() - 6);
-        }
+    timeChart.setActiveElements(combinedMatches);
+    timeChart.tooltip.setActiveElements(combinedMatches);
+    timeChart.update();
+  });
 
 
-        if (timeChart) {
-          timeChart.clear();
-          timeChart.destroy();
-          timeChart = null;
-        }
+  // -----------------------------------------------------
+  // UNHIGHLIGHT LISTING
+  // -----------------------------------------------------
+  window.addEventListener("unhighlightListing", (e) => {
+    const groupId = String(e.detail.group_id);
 
-        timeChart = new Chart(ctxTime, {
-          type: 'line',
-          data: { datasets },
-          options: {
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                type: 'time',
-                time: { unit: 'month', tooltipFormat: 'MMM dd, yyyy' },
-                title: { display: true, text: 'Date' },
-                min: minDate
-              },
-              y: {
-                title: { display: true, text: 'Price ($)' },
-                beginAtZero: true
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    const point = context.raw;
-                    return [`Price: $${point.y.toFixed(2)}`, `Item: ${point.title}`];
-                  }
-                }
-              },
-              zoom: {
-                pan: { enabled: true, mode: 'x' },
-                zoom: {
-                  wheel: { enabled: true },
-                  pinch: { enabled: true },
-                  mode: 'x'
-                }
-              }
-            }
-          }
-        });
+    if (!timeChart) return;
+
+    const toggle = document.getElementById(`toggle-group-${groupId}`);
+
+    if (toggle && swapOnLeave) {
+      toggle.checked = false;
+      swapOnLeave = false;
+      updateChart();
+    }
+
+    // Restore line emphasis (but NOT point radius)
+    timeChart.data.datasets.forEach(ds => {
+      ds.borderWidth = 1;
+    });
+
+    // Clear ONLY hover highlight
+    timeChart.setActiveElements([]);
+
+    // Reapply persistent highlights
+    if (persistentMatches.length > 0) {
+      timeChart.setActiveElements(persistentMatches);
+      timeChart.tooltip.setActiveElements(persistentMatches);
+    } else {
+      timeChart.tooltip.setActiveElements([]);
+    }
+
+    timeChart.update();
+  });
+
+
+  // -----------------------------------------------------
+  // EXTERNAL TOOLTIP HANDLER
+  // -----------------------------------------------------
+  function externalTooltipHandler(context) {
+    const { chart, tooltip } = context;
+
+    const container = chart.canvas.parentNode;
+
+    let tooltipEl = container.querySelector('#chartjs-custom-tooltip');
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.id = 'chartjs-custom-tooltip';
+      container.appendChild(tooltipEl);
+    }
+
+    if (tooltip.opacity === 0) {
+      tooltipEl.style.opacity = 0;
+      return;
+    }
+
+    const point = tooltip.dataPoints[0].raw;
+
+    tooltipEl.innerHTML = `
+      <div>Price: $${point.y.toFixed(2)}</div>
+      <img src="${point.thumb}" />
+    `;
+
+    const rect = chart.canvas.getBoundingClientRect();
+    const xScale = rect.width / chart.canvas.width;
+    const yScale = rect.height / chart.canvas.height;
+
+    // Correct tooltip positioning
+    tooltipEl.style.left = (tooltip.caretX * xScale + 10) + "px";
+    tooltipEl.style.top  = (tooltip.caretY * yScale + 10) + "px";
+    tooltipEl.style.opacity = 1;
+  }
+
+  // -----------------------------------------------------
+  // UPDATE CHART WRAPPER
+  // -----------------------------------------------------
+  window.updateChartWrapper = function() {
+    updateChart();
+  };
+
+  // -----------------------------------------------------
+  // TOGGLES
+  // -----------------------------------------------------
+  datasetConfigs.forEach(({ key, label, display_default }) => {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = `toggle-${key}`;
+    checkbox.checked = display_default;
+    checkbox.onchange = updateChartWrapper;
+
+    const labelEl = document.createElement("label");
+    labelEl.appendChild(checkbox);
+    labelEl.appendChild(document.createTextNode(` ${label}`));
+    labelEl.style.marginRight = "12px";
+
+    document.getElementById("toggle-container").appendChild(labelEl);
+  });
+
+  // -----------------------------------------------------
+  // DATA PROCESSING
+  // -----------------------------------------------------
+  function filterByPrice(data, maxPrice) {
+    return data.filter(([price]) => price <= maxPrice);
+  }
+
+  function buildSeries(rawData, windowSize = 1) {
+    const groupedByDay = {};
+
+    rawData.forEach(([price, title, thumb, date, id]) => {
+      const day = new Date(date).toISOString().split('T')[0];
+      if (!groupedByDay[day]) groupedByDay[day] = [];
+      groupedByDay[day].push({ price, title, thumb, date, id });
+    });
+
+    const dailyHighs = Object.entries(groupedByDay).map(([day, entries]) => {
+      const highest = entries.reduce((max, entry) =>
+        entry.price > max.price ? entry : max,
+        entries[0]
+      );
+
+      return {
+        x: new Date(day).toISOString(),
+        y: highest.price,
+        title: highest.title,
+        thumb: highest.thumb,
+        ids: entries.map(e => String(e.id))
       };
+    });
 
-      updateChartWrapper(); // Initial render
-    })();
-  </script>
+    const sorted = dailyHighs.sort((a, b) => new Date(a.x) - new Date(b.x));
+
+    if (windowSize > 1) {
+      return sorted.map((point, i, arr) => {
+        const start = Math.max(0, i - Math.floor(windowSize / 2));
+        const end = Math.min(arr.length, i + Math.ceil(windowSize / 2));
+        const window = arr.slice(start, end);
+        const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
+
+        return {
+          ...point,
+          y: avg,
+          ids: [...new Set(window.flatMap(p => p.ids))]
+        };
+      });
+    }
+
+    return sorted;
+  }
+
+  function getToggleState(key) {
+    const el = document.getElementById(`toggle-${key}`);
+    return el ? el.checked : false;
+  }
+
+  // -----------------------------------------------------
+  // UPDATE CHART
+  // -----------------------------------------------------
+  window.updateChart = function() {
+    const maxPrice = parseFloat(document.getElementById("maxPrice-time").value);
+    const windowSize = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
+    const datasets = [];
+
+    let latestDate = null;
+
+    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
+      if (!getToggleState(key)) return;
+
+      const filtered = filterByPrice(data, maxPrice);
+      const series = buildSeries(filtered, windowSize);
+
+      if (series.length) {
+        const lastPointDate = new Date(series[series.length - 1].x);
+        if (!latestDate || lastPointDate > latestDate) {
+          latestDate = lastPointDate;
+        }
+      }
+
+      datasets.push({
+        label,
+        data: series,
+        fill: false,
+        backgroundColor: color.replace("0.8", "0.2"),
+        borderColor: color,
+        tension: 0.6,
+        borderWidth,
+        pointRadius: 0,
+        pointHoverRadius: 8,
+        pointHoverBorderWidth: 3,
+        pointHoverBackgroundColor: color.replace("0.8", "0.2"),
+        pointHoverBorderColor: color,
+        borderDash: lineStyle === "dotted" ? [6, 4] : []
+      });
+    });
+
+    datasetConfigs.forEach(({ key, max_date }) => {
+      if (!getToggleState(key)) return;
+
+      const date = new Date(max_date);
+      if (!latestDate || date > latestDate) {
+        latestDate = date;
+      }
+    });
+
+    let minDate = undefined;
+    if (latestDate) {
+      minDate = new Date(latestDate);
+      minDate.setMonth(minDate.getMonth() - 6);
+    }
+
+    if (timeChart) {
+      timeChart.clear();
+      timeChart.destroy();
+      timeChart = null;
+    }
+
+    timeChart = new Chart(ctxTime, {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'month', tooltipFormat: 'MMM dd, yyyy' },
+            title: { display: true, text: 'Date' },
+            min: minDate
+          },
+          y: {
+            title: { display: true, text: 'Price ($)' },
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          // tooltip: {
+          //   enabled: false,
+          //   external: externalTooltipHandler
+          // },
+          zoom: {
+            pan: { enabled: true, mode: 'x' },
+            zoom: {
+              wheel: { enabled: true },
+              pinch: { enabled: true },
+              mode: 'x'
+            }
+          }
+        }
+      }
+    });
+  };
+
+  updateChartWrapper();
+})();
+</script>
+
 </body>
 </html>

@@ -34,6 +34,56 @@ class Collection(models.Model):
         return (card.active_search_results() for card in self.cards.all())
     
     @property
+    def status_counts(self):
+        status_counts = {}
+        cards = self.cards.all()
+        for card in cards:
+            status = card.active_search_results().overall_status
+            if status in status_counts:
+                status_counts[status] += 1
+            else:
+                status_counts[status] = 1
+            
+        return status_counts
+
+    #replace this once active_search_results is a relation
+    @property
+    def status_counts(self):
+        if hasattr(self, "_status_counts"):
+            return self._status_counts
+
+        listed = pending = failed = other = 0
+
+        for card in self.cards.all():
+            csr = card.active_search_results()
+            if not csr:
+                continue
+
+            status = csr.overall_status
+            if status == StatusBase.LISTED:
+                listed += 1
+            elif status == StatusBase.PENDING:
+                pending += 1
+            elif status == StatusBase.FAILED:
+                failed += 1
+            else:
+                other += 1
+
+        self._status_counts = {
+            "listed": listed,
+            "pending": pending,
+            "listed_and_pending": listed+pending,
+            "failed": failed,
+            "other": other,
+            "total": len(self.cards.all())
+        }
+        return self._status_counts
+        
+    @property
+    def list_value(self):
+        return sum(card.active_search_results().list_price for card in self.cards.all())
+
+    @property
     def get_size(self):
         return len(self.cards.all())
     
@@ -59,7 +109,6 @@ class Card(models.Model):
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
     notes = models.TextField(blank=True)
-    listing_details = models.TextField(blank=True)
         
     @property
     def next(self):
@@ -68,6 +117,10 @@ class Card(models.Model):
     @property
     def previous(self):
         return self.collection.previous(self.id)
+
+    @property
+    def listed_card_info(self):
+        return self.listed_card
 
     def get_lookup_image(self):
         if self.cropped_image:
@@ -154,6 +207,19 @@ class Card(models.Model):
             return self.cropped_reverse
         return self.reverse_image
 
+        
+    def clear_listed_info(self):
+        self.listed_card_info.clear()
+        csr = self.active_search_results()
+        csr.ebay_product_group = None
+        csr.save()
+        self.save()
+        
+    @classmethod
+    def create(cls, collection):
+        card = Card.objects.create(collection=collection)
+        card.listed_card_info = ListedInfo.create_from_card(card)
+
     @classmethod
     def from_filename(cls, collection, filepath, crop=True, match_back=True, is_slab=False):
         print("from filename")
@@ -166,14 +232,10 @@ class Card(models.Model):
         
         #clean all this up, throw out the paths and just keep files
         #create card object and save front/back images
-        card = cls()
-        #print("1")
-        card.collection = collection
-        #print("2")
-
+        card = Card.create(collection)
         #TODO: careful taking this out now seems to
         #rotated = card.force_rotate(filepath)
-        card.save()
+        #card.save()
         #print("3")
         #success, rotated = cv2.imencode('.jpg', rotated)
         #print("4")
@@ -1096,6 +1158,7 @@ class Card(models.Model):
 
     def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None, id_listings=False):
         csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr, id_listings=id_listings)
+        self.listed_card_info.update(csr)
 
         return csr
 
@@ -1172,9 +1235,3 @@ class Card(models.Model):
 
         self.save()  # Save the updated crop parameters to the database
         return target_image.img.url
-
-    def save(self, *args, **kwargs):
-        
-        self.listing_details = self.active_search_results().title_to_be if self.active_search_results() else ""
-        super().save(*args, **kwargs)
-

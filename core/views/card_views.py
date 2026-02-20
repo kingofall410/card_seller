@@ -270,3 +270,12 @@ def text_filter(request):
         csr.save()
     
     return JsonResponse({"success": True, "error": ""})
+
+    
+@csrf_exempt
+def clear_listed_info(request, card_id):
+    
+    card = Card.objects.get(id=card_id)
+    card.clear_listed_info()
+    
+    return JsonResponse({"success": True, "error": ""})
