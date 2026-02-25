@@ -84,7 +84,7 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
     #find or create django group object
     group = ProductGroup.create(group_key, csrs)
     
-    inventory_group_data = group.export_to_ebay_variation_group()
+    inventory_group_data = group.export_to_ebay_variation_group(csrs=csrs)
     
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
@@ -130,17 +130,23 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
     if ebay.has_user_consent(settings):
 
         csr = get_object_or_404(CardSearchResult, id=csr_id)
+        listed_info = csr.parent_card.listed_card_info
         #TODO: update these methods to check before creating new?
-        csr.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
-        csr.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
-        #print("am i here", csr.sku)
-        csr.sku = csr.build_sku()
-        #print("am i here", csr.sku)
-        print("SKU:", csr.sku)
-        print("🔗 Public link:", csr.shareable_link_front)
-        print("🔗 Public link:", csr.shareable_link_reverse)
+        listed_info.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
+        listed_info.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
 
-        print(csr.list_price)
+        #also upload to google drive
+        #uploader = GoogleDriveUploader()
+        #uploader.upload_and_share(csr.get_latest_front(), csr.display_full_name)
+        #uploader.upload_and_share(csr.get_latest_reverse(), csr.display_full_name)
+        #print("am i here", csr.sku)
+        listed_info.sku = csr.build_sku()
+        #print("am i here", csr.sku)
+        print("SKU:", listed_info.sku)
+        print("🔗 Public link:", listed_info.shareable_link_front)
+        print("🔗 Public link:", listed_info.shareable_link_reverse)
+
+        print(listed_info.list_price)
 
         item_data = None
         if group_key:
@@ -166,18 +172,18 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             
         print("new item")
         #if we didn't fill item data above, this needs a new inv item and offer    
-        item_data = csr.export_to_template(csr.sku, ebay.ebay_item_data_template, [csr.shareable_link_front, csr.shareable_link_reverse])
+        item_data = csr.export_to_template(listed_info.sku, ebay.ebay_item_data_template, [listed_info.shareable_link_front, listed_info.shareable_link_reverse])
         print("Item data:", item_data)
 
         offer_data = {
-            "sku": csr.sku,
+            "sku": listed_info.sku,
             "marketplaceId": "EBAY_US",
             "format": "FIXED_PRICE",
-            "listingDescription": csr.parent_card.listed_card_info.listing_detail_text,
-            "availableQuantity": 1,
+            "listingDescription": listed_info.listing_detail_text,
+            "availableQuantity": listed_info.list_qty,
             "pricingSummary": {
                 "price": {
-                "value": csr.list_price,
+                "value": listed_info.list_price,
                 "currency": "USD"
                 }
             },
@@ -185,8 +191,11 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             "categoryId": ebay.CATEGORY_ID,
             #"conditionId":4000,
             #"storeCategoryId": "",
-            "listingPolicies": {
-                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if csr.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND,
+            "listingPolicies": {    
+                "bestOfferTerms": {
+                    "bestOfferEnabled": "true"
+                },
+                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if listed_info.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND,
                 "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
                 "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
             },
@@ -196,35 +205,36 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         #print(csr.list_price)
         print("Offer data:", offer_data)
         
-        if csr.list_price <= 0:
+        if listed_info.list_price <= 0:
             raise Exception("List price not valid")
         elif not publish:
             return True, None, None#don't talk to ebay if we're not publishing
         
         access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
         #csr.check_category_metadata("261328",access_token)
-        if ebay.create_inventory_item(csr.sku, item_data, access_token):
+        if ebay.create_inventory_item(listed_info.sku, item_data, access_token):
             #item was created successfully
             #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
-            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, csr.sku)
+            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, listed_info.sku)
             print(offer_id, status, publish)
             if status == 201:
                 #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
-                csr.ebay_offer_id = offer_id
+                listed_info.ebay_offer_id = offer_id
             else:
                 #"Error response from ebay"
-                csr.ebay_listing_id = ""
+                listed_info.ebay_listing_id = ""
             
             if group_key:
-                csr.ebay_listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
+                listed_info.ebay_listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
             elif publish:
-                csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+                listed_info.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
 
             csr.save()
+            listed_info.save()
         else:
             ebay.get_inventory_group(group_key, settings, access_token)
 
-        return True, csr.ebay_offer_id, csr.ebay_listing_id
+        return True, listed_info.ebay_offer_id, listed_info.ebay_listing_id
     
         #print("asking for token ")
         #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)

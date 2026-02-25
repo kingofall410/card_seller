@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
+from core.models.ListedInfo import ListedInfo
 from core.models.Status import StatusBase
 from core.models.CardSearchResult import CardSearchResult
 from services.models.models import Settings
@@ -12,6 +13,7 @@ from math import floor
 from services import lookup
 from django.forms.models import model_to_dict
 from django.apps import apps
+from django.db import connection, transaction, IntegrityError
 
 # Card-related views
 @csrf_exempt
@@ -196,7 +198,34 @@ def update_csr_fields(request):
         return JsonResponse({"error": True, "message": f"Update failed: {str(e)}"}, status=500)
     
     return JsonResponse({"success": True, "search_result":model_to_dict(csr, fields=CardSearchResult.calculated_fields) })
-    
+
+@csrf_exempt
+def update_li_fields(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
+
+    # Read form-encoded POST data
+    li_id = request.POST.get("li_id")
+    fieldname = request.POST.get("field")
+    fieldvalue = request.POST.get("value")
+
+    if not li_id or not fieldname:
+        return JsonResponse({"error": True, "message": "Missing parameters"}, status=400)
+
+    try:
+        listed_info = ListedInfo.objects.get(id=int(li_id))
+    except ListedInfo.DoesNotExist:
+        return JsonResponse({"error": True, "message": f"ListedInfo {li_id} not found"}, status=404)
+
+    # Update the field
+    if hasattr(listed_info, fieldname):
+        setattr(listed_info, fieldname, fieldvalue)
+        listed_info.save()
+    else:
+        return JsonResponse({"error": True, "message": f"Invalid field '{fieldname}'"}, status=400)
+
+    return JsonResponse({"success": True})
+
 
 @csrf_exempt
 def retokenize(request, csr_id):

@@ -32,6 +32,25 @@ function restoreButton(button) {
     button.disabled = false;
 }
 
+function updateLiField(el) {
+    const liId = el.dataset.cardInfoId;
+    const field = el.dataset.field;
+    const value = el.type === "checkbox" ? el.checked : el.value;
+
+    $.ajax({
+        url: "/update_li_fields/",
+        method: "POST",
+        data: {
+            li_id: liId,
+            field: field,
+            value: value
+        },
+        success: () => {
+            console.log("Updated", field, "→", value);
+        }
+    });
+}
+
 document.addEventListener("DOMContentLoaded", function () {
     const cardId = "{{ card_id }}";
     const searchResultId = "{{ search_result.id }}";
@@ -44,10 +63,14 @@ document.addEventListener("DOMContentLoaded", function () {
     const groupSelect = document.getElementById(`group-select-${cardId}`);
     const scheduleInput = document.getElementById(`schedule-${cardId}`);
     const publishInput = document.getElementById(`publish-${cardId}`);
+    const priceInput = document.getElementById(`price-${cardId}`);
+    const qtyInput = document.getElementById(`qty-${cardId}`);
 
     listBtn.addEventListener("click", () => {
         performListAction(
             listBtn,
+            priceInput,
+            qtyInput,
             searchResultId,
             groupSelect,
             publishInput,
@@ -59,6 +82,8 @@ document.addEventListener("DOMContentLoaded", function () {
     listNextBtn.addEventListener("click", () => {
         performListAction(
             listNextBtn,
+            priceInput,
+            qtyInput,
             searchResultId,
             groupSelect,
             publishInput,
@@ -70,6 +95,8 @@ document.addEventListener("DOMContentLoaded", function () {
     listUpBtn.addEventListener("click", () => {
         performListAction(
             listUpBtn,
+            priceInput,
+            qtyInput,
             searchResultId,
             groupSelect,
             publishInput,
@@ -78,15 +105,19 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     });
 
-    function performListAction(button, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
+    function performListAction(button, priceInput, qtyInput, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
         const groupKey = groupSelect.value || "";
         const publishValue = publishInput.checked ? "True" : "False";
         const scheduleTime = scheduleInput.value;
+        const price = priceInput.value;
+        const qty = qtyInput.value;
 
         showSpinnerOnButton(button);
 
         const url = `/list_card/${searchResultId}?publish=${publishValue}`
                   + `&group_key=${encodeURIComponent(groupKey)}`
+                  + `&price=${encodeURIComponent(price)}`
+                  + `&qty=${encodeURIComponent(qty)}`
                   + `&schedule=${encodeURIComponent(scheduleTime)}`;
 
         fetch(url)
@@ -133,7 +164,10 @@ document.addEventListener("DOMContentLoaded", function () {
       </label>
       <input type="text"
             id="price-{{ card_id }}"
-            value="${{ card.listed_card_info.list_price|floatformat:2 }}"
+            data-card-info-id="{{ card.listed_card_info.id }}"
+            data-field="list_price"
+            value="{{ card.listed_card_info.list_price|floatformat:2 }}"
+            onblur="updateLiField(this)"
             style="padding: 8px; border-radius: 6px; min-width: 200px;" />
     </div>
 
@@ -143,7 +177,10 @@ document.addEventListener("DOMContentLoaded", function () {
       </label>
       <input type="text"
             id="qty-{{ card_id }}"
+            data-card-info-id="{{ card.listed_card_info.id }}"
+            data-field="list_qty"
             value="{{ card.listed_card_info.list_qty }}"
+            onblur="updateLiField(this)"
             style="padding: 8px; border-radius: 6px; min-width: 200px;" />
     </div>
 
@@ -169,8 +206,8 @@ document.addEventListener("DOMContentLoaded", function () {
       </select>
     </div>
 
-    {% now "Y-m-d\\TH:i" as current_time %}
-
+    {% now "Y-m-d\TH:i" as current_time %}
+    
     <div style="display:flex; flex-direction:column;">
       <label for="schedule-{{ card_id }}" style="font-weight:600; margin-bottom:4px;">
         Schedule Time

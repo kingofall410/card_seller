@@ -1,12 +1,11 @@
 from django.db import models
-from core.models.Card import Card
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
 from core.models.Status import StatusBase
 
 class ListedInfo(models.Model):
-    card = models.OneToOneField(Card, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_card_info")
-    sub_cards = models.ManyToManyField(Card, null=True, blank=True, related_name="listed_subcard_info")
+    card = models.OneToOneField('Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
+    sub_cards = models.ManyToManyField('Card', null=True, blank=True, related_name="listed_subcard_info")
     product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
 
     listing_datetime = models.DateTimeField(null=True)
@@ -95,5 +94,6 @@ class ListedInfo(models.Model):
         return lci
 
     def save(self, *args, **kwargs):
-        self.listing_detail_text = self.card.active_search_results().title_to_be or ""
+        csr = self.card.active_search_results()
+        self.listing_detail_text = csr.title_to_be if csr else ""
         super().save(*args, **kwargs)

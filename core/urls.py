@@ -38,6 +38,7 @@ urlpatterns = [
     path("card/<int:card_id>/", card_views.view_card, name="view_card"),
     path("settings/upload/<str:file_type>/", settings_views.settings_file_upload, name="settings_file_upload"),
     path("update_csr_fields/", card_views.update_csr_fields, name="update_csr_fields"),
+    path("update_li_fields/", card_views.update_li_fields, name="update_li_fields"),
     path("update_collection/", collection_views.update_collection, name="update_collection"),
     path("new_collection/", collection_views.new_collection, name="new_collection"),
     #path('register-field/', ajax_views.register_field, name='register_field'),

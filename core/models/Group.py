@@ -1,6 +1,7 @@
 from django.db import models
 from collections import defaultdict
 from core.models.Utilities import FieldStructure
+from core.models.Status import StatusBase
 
 class ProductGroup(models.Model):
     group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
@@ -60,10 +61,11 @@ class ProductGroup(models.Model):
 
         return update_qty_payload
     
-    def export_to_ebay_variation_group(self):
+    def export_to_ebay_variation_group(self, csrs):
         
-        csrs = list(self.products.all())
-        variant_skus = [csr.sku for csr in csrs]
+        csrs += list(self.products.filter(overall_status=StatusBase.LISTED))
+        print("csrs", csrs)
+        variant_skus = [csr.parent_card.listed_card_info.sku for csr in csrs]
         variation_title_bases = [csr.variation_title_base for csr in csrs]
 
         # Group SKUs by title
@@ -76,7 +78,7 @@ class ProductGroup(models.Model):
         for title, skus in title_to_skus.items():
             variation_data[title] = (skus[0], len(skus))
 
-            image_urls = self.group_image_link if self.group_image_link else csrs[0].shareable_link_front
+        image_urls = self.group_image_link if self.group_image_link else csrs[0].parent_card.listed_card_info.shareable_link_front
 
         inventory_group_data = {
             "aspects": {"Sport": ["Baseball"]},

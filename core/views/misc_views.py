@@ -21,14 +21,23 @@ def hello_world(request):
 
 def test_view(request):
     
-    groups = ProductGroup.objects.all()
-    for group in groups:
-        for csr in group.products.all():
-            if csr.overall_status == StatusBase.FAILED:
-                
-                csr.ebay_product_group = None
-                csr.save()
-    '''ListedInfo.objects.all().delete()
+    csr = CardSearchResult.objects.get(id=3260)
+    csr.sku = "2024-TOPPS-NONE-FREDDIE-FREEMAN217"
+    li = csr.parent_card.listed_card_info
+    li.sku = "2024-TOPPS-NONE-FREDDIE-FREEMAN217"
+    li.save()
+    csr.save()
+
+    '''collections = Collection.objects.filter(id__in=[134,122])
+    for collection in collections:
+        for card in collection.cards.all():
+            csr = card.active_search_results()
+            if csr:
+                lci = ListedInfo.create_from_csr(csr)
+            else:
+                lci = ListedInfo.create_from_card(card)  
+    cards = Card.objects.filter(id__gt=2587).filter(id__lt=2605).delete()
+    ListedInfo.objects.all().delete()
 
     collections = Collection.objects.filter(id__in=[132,133])
     for collection in collections:

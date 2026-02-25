@@ -114,22 +114,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const scheduleInput = document.getElementById(`schedule-${cardId}`);
     const publishInput = document.getElementById(`publish-${cardId}`);
 
-    listBtn.addEventListener("click", () => {
-        performListAction(listBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => location.reload());
-    });
-
-    listNextBtn.addEventListener("click", () => {
-        performListAction(listNextBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => handleNext());
-    });
-
-    listUpBtn.addEventListener("click", () => {
-        performListAction(listUpBtn, searchResultId, groupSelect, publishInput, scheduleInput, () => handleUp());
-    });
-
-    clearListedInfoBtn.addEventListener("click", () => {
-        clearListedInfo(clearListedInfoBtn, cardId)
-    });
-
     function performListAction(button, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
         const groupKey = groupSelect.value || "";
         const publishValue = publishInput.checked ? "True" : "False";

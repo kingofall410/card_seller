@@ -97,7 +97,7 @@ class Queue:
                     db_task.status = StatusBase.SUCCESS
                     
                 except Exception as e:
-                    print("fail")
+                    print("fail", e)
                     db_task.status = StatusBase.FAILED
                     db_task.error_str = str(e)
                     if csr:

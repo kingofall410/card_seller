@@ -2,6 +2,7 @@ import os
 from django.db import models
 from core.models.Cropping import CropParams, CroppedImage
 from core.models.Status import StatusBase
+from core.models.ListedInfo import ListedInfo
 import numpy as np
 import cv2
 from django.core.files.base import ContentFile
@@ -81,7 +82,7 @@ class Collection(models.Model):
         
     @property
     def list_value(self):
-        return sum(card.active_search_results().list_price for card in self.cards.all())
+        return 0#sum(card.active_search_results().list_price for card in self.cards.all())
 
     @property
     def get_size(self):
@@ -158,9 +159,9 @@ class Card(models.Model):
         
     @property
     def latest_listing_task(self):
-        wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
-        print("wtf", wtf.id)
-        return wtf
+        #wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
+       # print("wtf", wtf.id)
+        return None#wtf
         
         
     @property
@@ -215,10 +216,13 @@ class Card(models.Model):
         csr.save()
         self.save()
         
+
     @classmethod
     def create(cls, collection):
         card = Card.objects.create(collection=collection)
         card.listed_card_info = ListedInfo.create_from_card(card)
+        card.save()
+        return card
 
     @classmethod
     def from_filename(cls, collection, filepath, crop=True, match_back=True, is_slab=False):
@@ -1158,7 +1162,7 @@ class Card(models.Model):
 
     def parse_and_tokenize_search_results(self, items, all_fields=[], csr=None, id_listings=False):
         csr = CardSearchResult.from_search_results(self, items=items, all_fields=all_fields, csr=csr, id_listings=id_listings)
-        self.listed_card_info.update(csr)
+        self.listed_card_info.update_from_csr(csr)
 
         return csr
 

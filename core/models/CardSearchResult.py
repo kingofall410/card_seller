@@ -247,7 +247,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ]
 
     display_fields = [
-       "year", "brand", "subset", "parallel", "full_name", "card_number", "card_name", "city", "team", "attributes" 
+       "year", "brand", "subset", "parallel", "full_name", "card_number", "card_name", "city", "team", "attributes", "condition" 
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words",  "text_search_string", "sold_search_string", "filter_terms", #"serial_number", "condition", "number_grade"

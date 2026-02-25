@@ -52,7 +52,7 @@ class Task(models.Model):
 
 class ListingTask(Task):
     
-    card = models.ForeignKey(Card, on_delete=models.DO_NOTHING, related_name='listing_tasks', null=True)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='listing_tasks', null=True)
     csr = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, related_name='listing_tasks', null=True)
     
     def img(self):
@@ -65,6 +65,6 @@ class ListingTask(Task):
 
 class PricingTask(Task):
     
-    card = models.ForeignKey(Card, on_delete=models.DO_NOTHING, related_name='pricing_tasks', null=True)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='pricing_tasks', null=True)
     csr = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, related_name='_pricing_tasks', null=True)
     
