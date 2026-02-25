@@ -39,6 +39,15 @@ class ListedInfo(models.Model):
         self.listing_id = ""
         self.offer_id = None
         self.save()
+
+    def complete_listing(self, status, csr, task):
+        if status is StatusBase.LISTED:
+            self.listing_datetime = task.scheduled_for
+            self.product_group = csr.product_group
+            self.list_qty = task.qty
+            self.listing_id = csr.ebay_listing_id
+            #self.sku = csr.sku
+            self.offer_id = csr.ebay_offer_id
     
     def update_from_csr(self, csr):
 

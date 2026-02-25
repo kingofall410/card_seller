@@ -219,15 +219,15 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             print(offer_id, status, publish)
             if status == 201:
                 #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
-                listed_info.ebay_offer_id = offer_id
+                listed_info.offer_id = offer_id
             else:
                 #"Error response from ebay"
-                listed_info.ebay_listing_id = ""
+                listed_info.listing_id = ""
             
             if group_key:
-                listed_info.ebay_listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
+                listed_info.listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
             elif publish:
-                listed_info.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
+                listed_info.listing_id = ebay.publish_offer(offer_id, access_token)
 
             csr.save()
             listed_info.save()

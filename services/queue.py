@@ -95,6 +95,11 @@ class Queue:
                     print("success")
                     csr.overall_status = on_success
                     db_task.status = StatusBase.SUCCESS
+
+                    if hasattr(db_task, "listingtask"):
+                        on_success = StatusBase.LISTED
+                        csr.parent_card.listed_card_info.complete_listing(on_success, csr, db_task)
+                        print(f"Running Listing Task {csr}")
                     
                 except Exception as e:
                     print("fail", e)

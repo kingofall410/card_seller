@@ -21,12 +21,15 @@ def hello_world(request):
 
 def test_view(request):
     
-    csr = CardSearchResult.objects.get(id=3260)
-    csr.sku = "2024-TOPPS-NONE-FREDDIE-FREEMAN217"
-    li = csr.parent_card.listed_card_info
-    li.sku = "2024-TOPPS-NONE-FREDDIE-FREEMAN217"
+    li = ListedInfo.objects.get(id=1057)
+    csr = li.card.active_search_results()
+
+    li.product_group = csr.ebay_product_group
+    li.list_qty = 1
+    li.listing_id = csr.ebay_listing_id
+    #self.sku = csr.sku
+    li.offer_id = csr.ebay_offer_id
     li.save()
-    csr.save()
 
     '''collections = Collection.objects.filter(id__in=[134,122])
     for collection in collections:
