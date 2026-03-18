@@ -69,8 +69,9 @@ ebay_item_data_template = {
             "Card": "variation_title_base",
             "Sport": "sport",
             "Player/Athlete": "full_name",
-            "Card Name": "card_name",
-            "Card Number": "card_number",
+            "Parallel/Variety": "display_parallel",
+            "Card Name": "display_card_name",
+            "Card Number": "display_card_number",
             #"Features": "features",
             "League": "league",
             "Team": "full_team",
@@ -380,8 +381,10 @@ def create_inventory_group(group_id, group_data, access_token):
     print("Inventory Group response: ", response, response.text)
     if response.status_code == 200 or response.status_code == 204:
         return True
-    else:
-        raise Exception(response.json()["errors"][0]["message"])
+    elif response.json()["errors"][0]["errorId"] == 25711:
+        #missing a previous variant SKU from the group
+        error_message = response.json()["errors"][0]["message"] + ": " + "; ".join(group_data["variantSKUs"])
+        raise Exception(error_message)
 
 def delete_inventory_group(group_id, settings, access_token=None):
     #get_user_auth()

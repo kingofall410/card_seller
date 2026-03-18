@@ -13,11 +13,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='settings',
             name='run_pricing_after_refine',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='settings',
             name='run_refine_after_id',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
     ]

@@ -13,51 +13,51 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='brand',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardattribute',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardnumber',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='city',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='condition',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='knownname',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='season',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='serialnumber',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='subset',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='team',
             name='match_source_formatting',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
     ]

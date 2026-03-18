@@ -192,9 +192,6 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
             #"conditionId":4000,
             #"storeCategoryId": "",
             "listingPolicies": {    
-                "bestOfferTerms": {
-                    "bestOfferEnabled": "true"
-                },
                 "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if listed_info.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND,
                 "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
                 "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
@@ -204,7 +201,13 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         }
         #print(csr.list_price)
         print("Offer data:", offer_data)
-        
+        #add best offer if this is not going to be part of a variation group
+        if not group_key:
+            listing = offer_data.setdefault("listingPolicies", {})
+            best_offer = listing.setdefault("bestOfferTerms", {})
+
+            best_offer["bestOfferEnabled"] = True
+
         if listed_info.list_price <= 0:
             raise Exception("List price not valid")
         elif not publish:
@@ -234,7 +237,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         else:
             ebay.get_inventory_group(group_key, settings, access_token)
 
-        return True, listed_info.ebay_offer_id, listed_info.ebay_listing_id
+        return True, listed_info.offer_id, listed_info.listing_id
     
         #print("asking for token ")
         #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)

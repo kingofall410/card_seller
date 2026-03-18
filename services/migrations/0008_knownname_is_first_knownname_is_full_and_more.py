@@ -13,16 +13,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='knownname',
             name='is_first',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='knownname',
             name='is_full',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='knownname',
             name='is_last',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
     ]

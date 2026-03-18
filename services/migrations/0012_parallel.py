@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('raw_value', models.CharField(default='', max_length=100)),
-                ('match_source_formatting', models.BooleanField(default=False)),
+                ('match_source_formatting', models.BooleanField(default=False, null=True, blank=True)),
                 ('field_key', models.CharField(default='parallel', max_length=100)),
                 ('parent_settings', models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='parallel', to='services.settings')),
             ],

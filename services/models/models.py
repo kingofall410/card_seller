@@ -12,8 +12,8 @@ class Settings(models.Model):
     price_listings = models.IntegerField(default=10)
     nr_collection_page_items = models.IntegerField(default=10)
     field_pct_threshold = models.FloatField(default=0.3)
-    run_refine_after_id = models.BooleanField(default=False)
-    run_pricing_after_refine = models.BooleanField(default=False)
+    run_refine_after_id = models.BooleanField(default=False, null=True, blank=True)
+    run_pricing_after_refine = models.BooleanField(default=False, null=True, blank=True)
 
 
     #TODO: this should be broken into separate classes, especially now I need one for sandbox
@@ -56,11 +56,11 @@ class Settings(models.Model):
         return Settings.objects.first()
 
 class SettingsToken(models.Model):
-    field_key = models.CharField(max_length=100, blank=False, default="None") 
-    raw_value = models.CharField(max_length=100, blank=False, default="")
+    field_key = models.CharField(max_length=500, blank=False, default="None") 
+    raw_value = models.CharField(max_length=500, blank=False, default="")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, default=1)
-    match_source_formatting = models.BooleanField(default=False)
-    primary_attrib = models.CharField(max_length=100, blank=True, default="")#TODO: remove in favor of primary_token
+    match_source_formatting = models.BooleanField(default=False, null=True, blank=True)
+    primary_attrib = models.CharField(max_length=500, blank=True, default="")#TODO: remove in favor of primary_token
     primary_token = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name="alias_tokens")
     disabled_date = models.DateTimeField(blank=True, null=True)
 
@@ -165,7 +165,7 @@ class SettingsToken(models.Model):
         return return_str, current_tokens, new_tokens
 
 class CardNumber(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="cardnr") 
+    field_key = models.CharField(max_length=500, blank=False, default="cardnr") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="cardnr", default=1)
 
     @classmethod    
@@ -194,7 +194,7 @@ class CardNumber(SettingsToken):
         return reduced, current_tokens, new_tokens
 
 class SerialNumber(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="serial")
+    field_key = models.CharField(max_length=500, blank=False, default="serial")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="serialnr", default=1)
 
     @classmethod    
@@ -217,7 +217,7 @@ class SerialNumber(SettingsToken):
         return return_str, current_tokens, new_tokens
 
 class Season(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="season") 
+    field_key = models.CharField(max_length=500, blank=False, default="season") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="year", default=1)
 
     #this needs cleanup
@@ -251,14 +251,14 @@ class Season(SettingsToken):
         return reduced, current_tokens, new_tokens
 
 class Brand(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="brands") 
+    field_key = models.CharField(max_length=500, blank=False, default="brands") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="brands", default=1)
 
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")
     
 class Subset(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="subsets")
+    field_key = models.CharField(max_length=500, blank=False, default="subsets")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="subsets", default=1)
     parent_brand = models.ForeignKey(Brand, on_delete=models.CASCADE, default=1, related_name="subsets")
 
@@ -276,14 +276,14 @@ class Subset(SettingsToken):
         unique_together = ("raw_value", "parent_settings", "field_key", "parent_brand") 
     
 class City(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="cities")
+    field_key = models.CharField(max_length=500, blank=False, default="cities")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="cities", default=1)
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")
 
 class Team(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="teams")
+    field_key = models.CharField(max_length=500, blank=False, default="teams")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="teams", default=1)
     home_city = models.ForeignKey(City, on_delete=models.CASCADE, related_name="teams", default=1)
     
@@ -301,11 +301,11 @@ class Team(SettingsToken):
         unique_together = ("raw_value", "parent_settings", "field_key", "home_city") 
 
 class KnownName(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="names") 
+    field_key = models.CharField(max_length=500, blank=False, default="names") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="names", default=1)
-    is_full = models.BooleanField(default=False)
-    is_first = models.BooleanField(default=False)
-    is_last = models.BooleanField(default=False)
+    is_full = models.BooleanField(default=False, null=True, blank=True)
+    is_first = models.BooleanField(default=False, null=True, blank=True)
+    is_last = models.BooleanField(default=False, null=True, blank=True)
     
     @classmethod
     def create(cls, value, settings, field, is_first=False, is_last=False):
@@ -349,7 +349,7 @@ class KnownName(SettingsToken):
         unique_together = ("raw_value", "parent_settings", "field_key")
     
 class CardAttribute(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="attribs") 
+    field_key = models.CharField(max_length=500, blank=False, default="attribs") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="attribs", default=1)
 
     @classmethod
@@ -362,7 +362,7 @@ class CardAttribute(SettingsToken):
         unique_together = ("raw_value", "parent_settings", "field_key")
 
 class Condition(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="condition")
+    field_key = models.CharField(max_length=500, blank=False, default="condition")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="conditions", default=1)
     ebay_id_value = models.CharField(max_length=50, blank=True)
     ebay_string_value = models.CharField(max_length=50, blank=True)
@@ -385,14 +385,14 @@ class Condition(SettingsToken):
         unique_together = ("raw_value", "parent_settings", "field_key")
 
 class Parallel(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="parallel")
+    field_key = models.CharField(max_length=500, blank=False, default="parallel")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="parallel", default=1)
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")
 
 class CardName(SettingsToken):
-    field_key = models.CharField(max_length=100, blank=False, default="card_name")
+    field_key = models.CharField(max_length=500, blank=False, default="card_name")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="card_name", default=1)
     
     class Meta:

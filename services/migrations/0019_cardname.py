@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('raw_value', models.CharField(default='', max_length=100)),
-                ('match_source_formatting', models.BooleanField(default=False)),
+                ('match_source_formatting', models.BooleanField(default=False, null=True, blank=True)),
                 ('primary_attrib', models.CharField(blank=True, default='', max_length=100)),
                 ('disabled_date', models.DateTimeField(blank=True, null=True)),
                 ('field_key', models.CharField(default='card_name', max_length=100)),
