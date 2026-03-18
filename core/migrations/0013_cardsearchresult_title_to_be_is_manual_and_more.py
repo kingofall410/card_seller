@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='title_to_be_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',

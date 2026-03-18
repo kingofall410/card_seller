@@ -43,8 +43,8 @@ class ListedInfo(models.Model):
     def complete_listing(self, status, csr, task):
         if status is StatusBase.LISTED:
             self.listing_datetime = task.scheduled_for
-            self.product_group = csr.product_group
-            self.list_qty = task.qty
+            self.product_group = csr.ebay_product_group
+            #self.list_qty = task.qty already set
             self.listing_id = csr.ebay_listing_id
             #self.sku = csr.sku
             self.offer_id = csr.ebay_offer_id

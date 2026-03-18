@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='brand_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='card_number_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -33,7 +33,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='city_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='first_name_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='full_name_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='last_name_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -73,7 +73,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='serial_number_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -83,7 +83,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='subset_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='team_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',
@@ -103,7 +103,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='cardsearchresult',
             name='year_is_manual',
-            field=models.BooleanField(default=False),
+            field=models.BooleanField(default=False, null=True, blank=True),
         ),
         migrations.AddField(
             model_name='cardsearchresult',

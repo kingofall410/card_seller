@@ -22,7 +22,7 @@ class Collection(models.Model):
     create_date = models.DateTimeField(auto_now_add=True)
     name = models.CharField(max_length=100, blank=True)
     parent_collection = models.ForeignKey('self', on_delete=models.CASCADE, related_name="subcollections", null=True)
-    is_default = models.BooleanField(default=False)
+    is_default = models.BooleanField(default=False, null=True, blank=True)
 
     status = models.CharField(max_length=20, choices=CollectionStatus.choices, default=CollectionStatus.IMPORTED)    
     notes = models.TextField(blank=True)

@@ -8,7 +8,7 @@ from core.models.CardSearchResult import CardSearchResult
 from services import export as export_handler
 from django.shortcuts import render, redirect, get_object_or_404
 from core.apps import CoreConfig
-from services.queue import Task
+from services.queue_service import Task
 from django.apps import apps
 from django.utils import timezone
 

@@ -23,9 +23,9 @@ class Migration(migrations.Migration):
             name='ListingGroup',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('is_sold', models.BooleanField(default=False)),
-                ('is_refined', models.BooleanField(default=False)),
-                ('is_wide', models.BooleanField(default=False)),
+                ('is_sold', models.BooleanField(default=False, null=True, blank=True)),
+                ('is_refined', models.BooleanField(default=False, null=True, blank=True)),
+                ('is_wide', models.BooleanField(default=False, null=True, blank=True)),
                 ('label', models.CharField(blank=True, max_length=100, null=True)),
                 ('search_result', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='listing_groups', to='core.cardsearchresult')),
             ],

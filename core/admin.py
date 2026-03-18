@@ -12,7 +12,7 @@ class CardSearchResultAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         model_fields = [f.name for f in self.model._meta.many_to_many]
         print("Model fields:", model_fields)
-        exclude_fields = [name for name in model_fields if 'available' in name]
+        exclude_fields = [name for name in model_fields if not 'available' in name]
         kwargs['exclude'] = exclude_fields
         print("Excluding fields:", exclude_fields)
 

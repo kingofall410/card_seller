@@ -21,7 +21,7 @@ def hello_world(request):
 
 def test_view(request):
     
-    li = ListedInfo.objects.get(id=1057)
+    '''li = ListedInfo.objects.get(id=1057)
     csr = li.card.active_search_results()
 
     li.product_group = csr.ebay_product_group
@@ -29,9 +29,9 @@ def test_view(request):
     li.listing_id = csr.ebay_listing_id
     #self.sku = csr.sku
     li.offer_id = csr.ebay_offer_id
-    li.save()
-
-    '''collections = Collection.objects.filter(id__in=[134,122])
+    li.save()'''
+    cards = Card.objects.filter(id__gt=2253).filter(id__lt=2491).delete()
+    collections = Collection.objects.filter(id__in=[131])
     for collection in collections:
         for card in collection.cards.all():
             csr = card.active_search_results()
@@ -39,7 +39,7 @@ def test_view(request):
                 lci = ListedInfo.create_from_csr(csr)
             else:
                 lci = ListedInfo.create_from_card(card)  
-    cards = Card.objects.filter(id__gt=2587).filter(id__lt=2605).delete()
+    '''cards = Card.objects.filter(id__gt=2587).filter(id__lt=2605).delete()
     ListedInfo.objects.all().delete()
 
     collections = Collection.objects.filter(id__in=[132,133])

@@ -18,18 +18,28 @@ class OverrideableFieldsMixin(models.Model):
         available_tokens_fieldname = f"{field}_available_tokens"
         selected_token_fieldname = f"{field}_selected_token"        
         selected_token = None
-        #print("c:", available_tokens_fieldname, selected_token_fieldname)
+        print("c:", available_tokens_fieldname, selected_token_fieldname)
         #TODO:This is going to be extra slow of course; don't search through every name every time
         if hasattr(self, available_tokens_fieldname) and hasattr(self, selected_token_fieldname):
+            print("D")
             avail_token_manager = getattr(self, available_tokens_fieldname)
+            print (avail_token_manager)
             if avail_token_manager and avail_token_manager.filter(raw_value__iexact=value).exists():
+                print("E")
                 selected_token = avail_token_manager.get(raw_value__iexact=value)
+                print("F")
             else:
+                print("G")
                 selected_token = app_settings.add_token(field, value, all_field_data, user_settings=None)
-                avail_token_manager.add(selected_token)
-            
+                print("H:", selected_token)
+                if selected_token:
+                    avail_token_manager.add(selected_token)
+                print("I")
+            print("J")
             if select: 
+                print("K")
                 setattr(self, selected_token_fieldname, selected_token)
+                print("L")
         else:
             #print("link not found", available_tokens_fieldname, selected_token_fieldname)
             pass
@@ -37,7 +47,7 @@ class OverrideableFieldsMixin(models.Model):
         return selected_token
 
     def set_ovr_attribute(self, field, new_field_value, is_manual, all_field_data={}):
-        #print("setting over: ", field)
+        print("setting over: ", field)
         field_to_set = f"{field}_m" if is_manual else field
         is_manual_fieldname = f"{field}_is_manual"
 
@@ -54,17 +64,19 @@ class OverrideableFieldsMixin(models.Model):
         if isinstance(is_manual, str):
             is_manual = is_manual.lower() in ["true", "1", "yes"]
 
-        #print("Setting:", field_to_set, "=", new_field_value)
-        #print("Setting:", is_manual_fieldname, "=", is_manual)
+        print("Setting:", field_to_set, "=", new_field_value)
+        print("Setting:", is_manual_fieldname, "=", is_manual)
+        try:
+            if new_field_value:
+                setattr(self, field_to_set, new_field_value)
+                
+            else:
+                setattr(self, field_to_set, None)
+
+            setattr(self, is_manual_fieldname, is_manual)
+        except Exception as e:
+            print(e)
         
-        if new_field_value:
-            setattr(self, field_to_set, new_field_value)
-            
-        else:
-            setattr(self, field_to_set, None)
-
-        setattr(self, is_manual_fieldname, is_manual)
-
         #remove this hardcode
         if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
@@ -105,91 +117,91 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     #TODO: this class needs to be broken up
     parent_card = models.ForeignKey("core.Card", on_delete=models.CASCADE, default=1, related_name="search_results") 
     #needed for backwards compat until I address the name knot
-    name = models.CharField(max_length=100, blank=True)
-    name_m = models.CharField(max_length=100, blank=True)
-    name_is_manual = models.BooleanField(default=False)
+    name = models.CharField(max_length=500, blank=True)
+    name_m = models.CharField(max_length=500, blank=True)
+    name_is_manual = models.BooleanField(default=False, blank=True, null=True)
     
-    full_name = models.CharField(max_length=100, blank=True, null=True)
-    full_name_m = models.CharField(max_length=100, blank=True, null=True)
-    full_name_is_manual = models.BooleanField(default=False)
+    full_name = models.CharField(max_length=500, blank=True, null=True)
+    full_name_m = models.CharField(max_length=500, blank=True, null=True)
+    full_name_is_manual = models.BooleanField(default=False, blank=True, null=True)
     full_name_available_tokens = models.ManyToManyField(KnownName, blank=True, related_name="csr_as_available_full_name")
     full_name_selected_token = models.ForeignKey(KnownName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_full_name")
     
     year = models.CharField(max_length=20, blank=True, null=True)
     year_m = models.CharField(max_length=20, blank=True, null=True)
-    year_is_manual = models.BooleanField(default=False)
+    year_is_manual = models.BooleanField(default=False, blank=True, null=True)
     year_available_tokens = models.ManyToManyField(Season, blank=True, related_name="csr_as_available_year")
     year_selected_token = models.ForeignKey(Season, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_year")
     
-    brand = models.CharField(max_length=100, blank=True, null=True)
-    brand_m = models.CharField(max_length=100, blank=True, null=True)
-    brand_is_manual = models.BooleanField(default=False)
+    brand = models.CharField(max_length=500, blank=True, null=True)
+    brand_m = models.CharField(max_length=500, blank=True, null=True)
+    brand_is_manual = models.BooleanField(default=False, blank=True, null=True)
     brand_available_tokens = models.ManyToManyField(Brand, blank=True, related_name="csr_as_available_brand")
     brand_selected_token = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_brand")
     
-    subset = models.CharField(max_length=100, blank=True, null=True)
-    subset_m = models.CharField(max_length=100, blank=True, null=True)
-    subset_is_manual = models.BooleanField(default=False)
+    subset = models.CharField(max_length=500, blank=True, null=True)
+    subset_m = models.CharField(max_length=500, blank=True, null=True)
+    subset_is_manual = models.BooleanField(default=False, blank=True, null=True)
     subset_available_tokens = models.ManyToManyField(Subset, blank=True, related_name="csr_as_available_subset")
     subset_selected_token = models.ForeignKey(Subset, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_subset")
     
-    card_number = models.CharField(max_length=50, blank=True, null=True)
-    card_number_m = models.CharField(max_length=50, blank=True, null=True)
-    card_number_is_manual = models.BooleanField(default=False)
+    card_number = models.CharField(max_length=100, blank=True, null=True)
+    card_number_m = models.CharField(max_length=100, blank=True, null=True)
+    card_number_is_manual = models.BooleanField(default=False, blank=True, null=True)
     card_number_available_tokens = models.ManyToManyField(CardNumber, blank=True, related_name="csr_as_available_card_number")
     card_number_selected_token = models.ForeignKey(CardNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_number")
 
-    card_name = models.CharField(max_length=100, blank=True, null=True)
-    card_name_m = models.CharField(max_length=100, blank=True, null=True)
-    card_name_is_manual = models.BooleanField(default=False)
+    card_name = models.CharField(max_length=500, blank=True, null=True)
+    card_name_m = models.CharField(max_length=500, blank=True, null=True)
+    card_name_is_manual = models.BooleanField(default=False, blank=True, null=True)
     card_name_available_tokens = models.ManyToManyField(CardName, blank=True, related_name="csr_as_available_card_name")
     card_name_selected_token = models.ForeignKey(CardName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_name")
 
-    team = models.CharField(max_length=100, blank=True, null=True)
-    team_m = models.CharField(max_length=100, blank=True, null=True)
-    team_is_manual = models.BooleanField(default=False)
+    team = models.CharField(max_length=500, blank=True, null=True)
+    team_m = models.CharField(max_length=500, blank=True, null=True)
+    team_is_manual = models.BooleanField(default=False, blank=True, null=True)
     team_available_tokens = models.ManyToManyField(Team, blank=True, related_name="csr_as_available_team")
     team_selected_token = models.ForeignKey(Team, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_team")
     
-    city = models.CharField(max_length=100, blank=True, null=True)
-    city_m = models.CharField(max_length=100, blank=True, null=True)
-    city_is_manual = models.BooleanField(default=False)
+    city = models.CharField(max_length=500, blank=True, null=True)
+    city_m = models.CharField(max_length=500, blank=True, null=True)
+    city_is_manual = models.BooleanField(default=False, blank=True, null=True)
     city_available_tokens = models.ManyToManyField(City, blank=True, related_name="csr_as_available_city")
     city_selected_token = models.ForeignKey(City, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_city")
     
-    serial_number = models.CharField(max_length=50, blank=True, null=True)
-    serial_number_m = models.CharField(max_length=50, blank=True, null=True)
-    serial_number_is_manual = models.BooleanField(default=False)    
+    serial_number = models.CharField(max_length=100, blank=True, null=True)
+    serial_number_m = models.CharField(max_length=100, blank=True, null=True)
+    serial_number_is_manual = models.BooleanField(default=False, blank=True, null=True)    
     serial_number_available_tokens = models.ManyToManyField(SerialNumber, blank=True, related_name="csr_as_available_serial_number")
     serial_number_selected_token = models.ForeignKey(SerialNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_serial_number")
     
-    parallel = models.CharField(max_length=50, blank=True, null=True)
-    parallel_m = models.CharField(max_length=50, blank=True, null=True)
-    parallel_is_manual = models.BooleanField(default=False)    
+    parallel = models.CharField(max_length=100, blank=True, null=True)
+    parallel_m = models.CharField(max_length=100, blank=True, null=True)
+    parallel_is_manual = models.BooleanField(default=False, blank=True, null=True)    
     parallel_available_tokens = models.ManyToManyField(Parallel, blank=True, related_name="csr_as_available_parallel")
     parallel_selected_token = models.ForeignKey(Parallel, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_parallel")
     
-    title_to_be = models.CharField(max_length=100, blank=True)
-    title_to_be_m = models.CharField(max_length=100, blank=True)
-    title_to_be_is_manual = models.BooleanField(default=False)
+    title_to_be = models.CharField(max_length=500, blank=True)
+    title_to_be_m = models.CharField(max_length=500, blank=True)
+    title_to_be_is_manual = models.BooleanField(default=False, blank=True, null=True)
 
-    sold_search_string = models.CharField(max_length=100, blank=True, null=True)
-    sold_search_string_m = models.CharField(max_length=100, blank=True, null=True)
-    sold_search_string_is_manual = models.BooleanField(default=False)
+    sold_search_string = models.CharField(max_length=500, blank=True, null=True)
+    sold_search_string_m = models.CharField(max_length=500, blank=True, null=True)
+    sold_search_string_is_manual = models.BooleanField(default=False, blank=True, null=True)
     
-    text_search_string = models.CharField(max_length=100, blank=True, null=True)
-    text_search_string_m = models.CharField(max_length=100, blank=True, null=True)
-    text_search_string_is_manual = models.BooleanField(default=False)
+    text_search_string = models.CharField(max_length=500, blank=True, null=True)
+    text_search_string_m = models.CharField(max_length=500, blank=True, null=True)
+    text_search_string_is_manual = models.BooleanField(default=False, null=True, blank=True)
     
     filter_terms = models.CharField(max_length=250, blank=True, null=True)
     filter_terms_m = models.CharField(max_length=250, blank=True, null=True)
-    filter_terms_is_manual = models.BooleanField(default=False)
+    filter_terms_is_manual = models.BooleanField(default=False, null=True, blank=True)
 
     attributes = models.TextField(blank=True)
     unknown_words = models.TextField(blank=True)   
     collapsed_tokens = models.JSONField(default=dict, blank=True)
     response_count = models.IntegerField(default=0)
-    condition = models.CharField(max_length=100, blank=True)
+    condition = models.CharField(max_length=500, blank=True)
     number_grade = models.CharField(max_length=10, blank=True, null=True)
 
     attribute_flags = models.JSONField(default=dict)
@@ -199,13 +211,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     reverse_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_reverse", null=True)
 
     #these are listing specific thus far
-    sport = models.CharField(max_length=100, blank=True)
-    league = models.CharField(max_length=100, blank=True)
-    features = models.CharField(max_length=100, blank=True)
-    ebay_listing_id = models.CharField(max_length=50, blank=True)
+    sport = models.CharField(max_length=500, blank=True)
+    league = models.CharField(max_length=500, blank=True)
+    features = models.CharField(max_length=500, blank=True)
+    ebay_listing_id = models.CharField(max_length=100, blank=True)
     ebay_listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
-    sku = models.CharField(max_length=50, blank=True)
-    ebay_offer_id = models.CharField(max_length=50, blank=True, null=True)
+    sku = models.CharField(max_length=100, blank=True)
+    ebay_offer_id = models.CharField(max_length=100, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
 
@@ -222,7 +234,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_avg_sold_price = models.FloatField(default=0.0)
     ebay_msrp = models.FloatField(default=0.0, null=True)
     ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="products")
-    variation_title_base = models.CharField(max_length=50, blank=True, null=True)
+    variation_title_base = models.CharField(max_length=100, blank=True, null=True)
 
     id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
     refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
@@ -559,9 +571,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             
                 if field_name in self.overrideable_fields:    
                     print("over")
-                    #print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
+                    print(field_name, field_value, all_field_data[f"{field_name}_is_manual"])                
                     is_manual = all_field_data.get(f"{field_name}_is_manual", True)
                     self.set_ovr_attribute(field_name, field_value, is_manual, all_field_data)
+                    print("over done")
                 elif field_name.find('.') > 0:#checkbox groups
                     group_name, field_name = field_name.split('.')                     
                     print(group_name, field_name)
@@ -789,9 +802,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def full_set(self):
         year = self.display_value("year")
         brand = self.display_value("brand")
-        subset = self.display_value("subset")
-        
-        subset = "" if subset == "-" else subset
+        subset = self.display_value("subset") or ""
+
         #print (f"build_full_set: {year} {brand} {subset}")
         return f"{year} {brand} {subset}".strip()
     
@@ -853,7 +865,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         filled_template = traverse(template)
         if filled_template["product"]["aspects"]["Card Name"] == "":
             filled_template["product"]["aspects"]["Card Name"] == []
-            
+        
+        if filled_template["product"]["aspects"]["Parallel/Variety"] == "" or \
+            filled_template["product"]["aspects"]["Parallel/Variety"] == " ":
+            del filled_template["product"]["aspects"]["Parallel/Variety"]
         filled_template["sku"] = sku
         filled_template["product"]["aspects"]["Autographed"] = "Yes" if "Auto" in self.attributes else "No"
         filled_template["condition"] = "USED_VERY_GOOD"
@@ -935,19 +950,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 class ListingGroup(models.Model):
     search_result = models.ForeignKey(CardSearchResult, on_delete=models.CASCADE, related_name="listing_groups")
     
-    is_sold = models.BooleanField(default=False)
-    is_refined = models.BooleanField(default=False)
-    is_wide = models.BooleanField(default=False)
-    is_img = models.BooleanField(default=False)
-    label = models.CharField(max_length=100, blank=True, null=True)  # e.g. "Sold Refined Wide"
+    is_sold = models.BooleanField(default=False, blank=True, null=True)
+    is_refined = models.BooleanField(default=False, blank=True, null=True)
+    is_wide = models.BooleanField(default=False, blank=True, null=True)
+    is_img = models.BooleanField(default=False, blank=True, null=True)
+    label = models.CharField(max_length=500, blank=True, null=True)  # e.g. "Sold Refined Wide"
     search_string = models.CharField(max_length=500, blank=True, null=True)
     filter_terms = models.CharField(max_length=250, blank=True, null=True)
     id_string = models.CharField(max_length=250, blank=True, null=True)
 
-    color = models.CharField(max_length=50, default="rgba(204, 153, 0, 0.8)")
+    color = models.CharField(max_length=100, default="rgba(204, 153, 0, 0.8)")
     border_width = models.IntegerField(default=2)
     line_style = models.CharField(max_length=10, choices=[("solid", "Solid"), ("dotted", "Dotted")], default="solid")
-    display = models.BooleanField(default=False)
+    display = models.BooleanField(default=False, blank=True, null=True)
 
     min_price = models.FloatField(default=0.0)
     max_price = models.FloatField(default=0.0)
@@ -1019,13 +1034,13 @@ class ListingGroup(models.Model):
 #TODO:needs to be split further into types of listings (ebay, psa, etc) and merged with the mess that CSRs has become
 class ProductListing(models.Model):
 
-    item_id = models.CharField(max_length=100, blank=True)
+    item_id = models.CharField(max_length=500, blank=True)
     listing_date = models.DateTimeField(blank=False, null=True)
     sold_date = models.DateTimeField(blank=False, null=True)
     img_url = models.CharField(max_length=250, null=True, blank=True)
     thumb_url = models.CharField(max_length=250, blank=False)    #title is declared below
     ebay_price = models.FloatField(default=0.0)
-    format = models.CharField(max_length=100, blank=True)
+    format = models.CharField(max_length=500, blank=True)
     qty = models.IntegerField(default=1)
     
     #legacy
@@ -1090,7 +1105,7 @@ class ProductListing(models.Model):
 
 
 class ListingTitle(models.Model):
-    title = models.CharField(max_length=100, blank=True, null=True)
+    title = models.CharField(max_length=500, blank=True, null=True)
     tokens = models.JSONField(default=dict, blank=True)
     
     parent_listing = models.OneToOneField(ProductListing, on_delete=models.CASCADE, default=1, related_name="title")  

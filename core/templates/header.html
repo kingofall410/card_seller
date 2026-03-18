@@ -78,22 +78,11 @@
 
 
       {% get_collections as collections %}
-        {% for collection in collections %}
-        <a href="{% url 'collection' collection.id %}" class="nav-link">
-            {{ collection.id }}. {{ collection.name }}
+      {% for collection in collections %}
+        <a href="{% url 'collection' collection.id %}" class="nav-link status-{{ collection.status|slugify }}">
+          {{ collection.id }}. {{ collection.name }}
         </a>
-        {% comment %}{% with status_counts=collection.status_counts %}
-          <a href="{% url 'collection' collection.id %}" class="nav-link status-{{ collection.status|slugify }}">
-            {{ collection.id }}. {{ collection.name }}
-            {% comment %}
-            (
-              <span class="status-listed" style="background-color: #ffffff00">{{ status_counts.listed_and_pending }}</span> /
-              <span class="status-failed" style="background-color: #ffffff00">{{ status_counts.failed }}</span> /
-              <span class="status-other" style="background-color: #ffffff00">{{ status_counts.other }}</span>
-            )
-            {% endcomment %}
-    
-        {% endfor %}
+      {% endfor %}
 
     </div>
   </div>
