@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Any, Dict
 from django.utils import timezone
-from services.models.task import Task, ListingTask, PricingTask
+from services.models.task import Task, ListingTask, PricingTask, IDTask, UploadTask
 from core.models.Status import StatusBase
 from importlib import import_module
 import json
@@ -16,6 +16,7 @@ class MemoryTask:
     callback: Callable = field(compare=False)
     params: Dict[str, Any] = field(compare=False, default_factory=dict)
     db_id: int = field(compare=False, default=None)
+    predecessor = None
 
     def run(self):
         self.callback(**self.params)
@@ -43,7 +44,11 @@ class Queue:
         self.tasks = []
         self._load_pending_tasks()
 
+    def _reset_running_tasks(self):
+        runing = Task.objects.filter(status="running").update(status=StatusBase.PENDING)
+
     def _load_pending_tasks(self):
+        self._reset_running_tasks()
         pending = Task.objects.filter(status=StatusBase.PENDING)
         for t in pending:
             print(t.id)
@@ -73,18 +78,23 @@ class Queue:
             #print("loop:", ready)
             csr = None
             for task in ready:
-                
+                #all this needs to be baked into the task
                 db_task = Task.objects.get(id=task.db_id)
                 
                 try:
                     if hasattr(db_task, "listingtask"):
-                        on_success = StatusBase.LISTED
+                        on_success_status = StatusBase.LISTED
                         csr = db_task.listingtask.csr
                         print(f"Running Listing Task {csr}")
                     elif hasattr(db_task, "pricingtask"):
                         csr = db_task.pricingtask.csr
-                        on_success = csr.overall_status
-                        print(f"Running Pricing Task {csr}")
+                        on_success_status = csr.overall_status
+                        print(f"Running Pricing Task {csr}")                        
+                    elif hasattr(db_task, "idtask"):
+                        print(f"Running ID Task {db_task.name}")
+
+                    elif hasattr(db_task, "uploadtask"):
+                        print(f"Running Upload Task")
                     else:
                         csr = None                    
                         print(db_task)
@@ -93,7 +103,8 @@ class Queue:
                     db_task.save(update_fields=["status"])
                     task.run()
                     print("success")
-                    csr.overall_status = on_success
+                    if csr:
+                        csr.overall_status = on_success_status
                     db_task.status = StatusBase.SUCCESS
 
                     if hasattr(db_task, "listingtask"):
@@ -107,6 +118,7 @@ class Queue:
                     db_task.error_str = str(e)
                     if csr:
                         csr.overall_status = StatusBase.FAILED
+                    
                 finally:
                     db_task.save(update_fields=["status", "error_str"])
                     if csr:
@@ -131,3 +143,17 @@ class Queue:
         self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))
         csr.overall_status = StatusBase.PENDING
         csr.save()
+
+    def schedule_upload_task(self, name, callback, params):
+        now = timezone.now()
+        t = IDTask.objects.create(name=name, scheduled_for=now, callback_path=f"{callback.__module__}.{callback.__name__}", \
+                                params_json=json.dumps(params), status=StatusBase.PENDING)
+        
+        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))        
+
+    def schedule_id_task(self, name, callback, params):
+        now = timezone.now()
+        t = IDTask.objects.create(name=name, scheduled_for=now, callback_path=f"{callback.__module__}.{callback.__name__}", \
+                                params_json=json.dumps(params), status=StatusBase.PENDING)
+        
+        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))

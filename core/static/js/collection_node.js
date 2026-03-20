@@ -40,27 +40,34 @@ function handlePaste(event, collectionId) {
 }
 
   
-function priceCollection(collectionId) {
+function submitCollection(url) {
+    console.log("here");
+    launchSequence()
+    // 1. Get the data
+    const rawData = sessionStorage.getItem('card_sequence');
+    const selections = rawData ? JSON.parse(rawData) : [];
     
+    console.log("Sending IDs to backend:", selections);
+
     $.ajax({
-  url: `/price_collection/${collectionId}/`,
-  method: "GET",
-  traditional: true,  // ✅ prevents jQuery from adding [] to array keys
-  success: function(response) {
-    if (response.error) {
-      alert("Error: " + response.message);
-    } else {
-      location.reload();
-    }
-  },
-  error: function(xhr, status, error) {
-    console.error("AJAX error:", error);
-    alert("Request failed: " + error);
-  }
-});
-
+        url: url,//,
+        method: "GET",
+        traditional: true, // This makes the URL: ?card_ids=1&card_ids=2
+        data: {
+            'card_ids': selections 
+        },
+        success: function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert("Server error: " + response.error);
+            }
+        },
+        error: function(xhr) {
+            alert("Request failed. Check dev tools console.");
+        }
+    });
 }
-
 
 function updateAttributeVisibility() {
   const selected = Array.from(document.querySelectorAll('.attr-toggle:checked'))
@@ -352,48 +359,71 @@ function moveToCollection(cardId, collectionToMoveId, targetCollectionId) {
   });
 }
 
-//single card move clicked (could be selections)
-function moveCardToCollection(cardId, collectionId) {
-  fetch(`/move_to_collection/${cardId}/${collectionId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ collection_id: collectionId })
-  })
-  .then(response => {
-    if (!response.ok) throw new Error('Move failed');
-    return response.json();
-  })
-  .then(data => {
-    const cardElement = document.querySelector(`#card-${cardId}`);
-    const oldContainer = cardElement?.closest('.collection');
-    const newContainer = document.querySelector(`#collection-${collectionId}`);
+function toggleMoveMenu(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Close any other open menus first
+    document.querySelectorAll('.move-menu').forEach(menu => {
+        if (menu.id !== `dropdown-${cardId}`) menu.style.display = 'none';
+    });
 
-    if (cardElement && newContainer) {
-      const oldId = oldContainer?.dataset?.id;
-
-      // 🔒 Close the dropdown before moving
-      const dropdown = cardElement.querySelector('.move-dropdown');
-      if (dropdown) dropdown.style.display = 'none';
-
-      // 🧹 Remove the card before updating counts
-      cardElement.remove();
-
-      // 📦 Insert into new container (second-to-last)
-      const cardList = newContainer.querySelector('.card-list');
-      const children = cardList?.children || [];
-      const insertBeforeTarget = children.length > 1 ? children[children.length - 1] : null;
-      cardList?.insertBefore(cardElement, insertBeforeTarget);
-
-      // 🔄 Refresh counts
-      if (oldId) refreshCollectionCount(oldId);
-      refreshCollectionCount(collectionId);
-    }
-  })
-  .catch(error => {
-    console.error('Error moving card:', error);
-  });
+    const menu = document.getElementById(`dropdown-${cardId}`);
+    menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
 }
 
+// Close dropdowns if user clicks anywhere else on the page
+window.onclick = function(event) {
+    if (!event.target.matches('.nav-button')) {
+        document.querySelectorAll('.move-menu').forEach(menu => {
+            menu.style.display = 'none';
+        });
+    }
+};
+
+function moveCardToCollection(cardId, collectionId) {
+    
+  const menu = document.getElementById(`dropdown-${cardId}`);
+  if (menu) menu.style.display = 'none';
+  launchSequence()
+  // 1. Get the current selection (if any). Fallback to the single cardId.
+    const rawSeq = sessionStorage.getItem('card_sequence');
+    const selections = rawSeq ? JSON.parse(rawSeq) : [cardId];
+    console.log(selections, collectionId)
+    
+    fetch(`/move_to_collection/${collectionId}/`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            card_ids: selections
+        })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Move failed');
+        return response.json();
+    })
+    .then(data => {
+        // 3. remove each card in the DOM
+        selections.forEach(id => {
+            const cardElement = document.querySelector(`#card-${id}`);
+            cardElement.remove();
+        });
+
+        // 4. Refresh count for the new container (only once)
+        refreshCollectionCount(collectionId);
+        
+        // 5. Clear sequence after a successful move
+        sessionStorage.removeItem('card_sequence');
+        
+        if (event && event.target) restoreButton(event.target);
+    })
+    .catch(error => {
+        console.error('Error moving cards:', error);
+        if (event && event.target) restoreButton(event.target);
+    });
+}
 function removeCollection(collectionId) {
   // AJAX call to delete card
   $.post("/delete/", {
@@ -470,4 +500,16 @@ function cropCollection(collectionId) {
   const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
   const cardIds = JSON.parse(visibleCards.value).map(Number);
   window.location.href = "/crop_review/"+collectionId
+}
+
+function loadReverse(wrapper) {
+    const hoverImg = wrapper.querySelector('.thumbnail.hover');
+    
+    // Only set the src if it hasn't been loaded yet
+    if (hoverImg && !hoverImg.src && hoverImg.dataset.src) {
+        hoverImg.src = hoverImg.dataset.src;
+        
+        // Optional: Remove the data-src once loaded to keep DOM clean
+        hoverImg.removeAttribute('data-src');
+    }
 }

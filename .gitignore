@@ -49,3 +49,5 @@ ebay_profile/
 tmp/
 celerybeat.pid
 celeryd.pid
+*.json
+*.load

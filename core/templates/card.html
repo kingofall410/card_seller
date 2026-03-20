@@ -310,7 +310,7 @@
 
 
   {% include "header.html" %}
-  {% include "nav_buttons.html" with url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
+  {% include "nav_buttons.html" with root_id=card_tuple.1 url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
 
   <div class="overview-wrapper">
 

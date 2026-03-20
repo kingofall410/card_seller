@@ -51,9 +51,10 @@ urlpatterns = [
     path('set_default_collection/<int:collection_id>/', collection_views.set_default_collection, name='set_default_collection'),
     path('manage/', collection_views.manage_collection, name='manage_collection'),
     #path('move_to_collection/<int:card_id>/<int:collection_id>', collection_views.move_to_collection, name="move_to_collection"),
-    path('move_to_collection/', collection_views.move_to_collection2, name="move_to_collection2"),
+    path('move_to_collection/<int:collection_id>/', collection_views.move_to_collection3, name="move_to_collection3"),
     path('price_only/<int:csr_id>/', card_views.price_only, name="price_only"),
-    path('price_collection/<int:collection_id>/', card_views.price_collection, name="price_collection"),
+    path('price_collection/<int:collection_id>/', collection_views.price_collection, name="price_collection"),
+    path('identify_collection/<int:collection_id>/', collection_views.identify_collection, name="identify_collection"),
     path('listings/', collection_views.listing_view, name="listing_view")
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

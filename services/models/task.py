@@ -13,6 +13,8 @@ class Task(models.Model):
     scheduled_for = models.DateTimeField()
     callback_path = models.CharField(max_length=300)
     params_json = models.TextField(default="{}")
+
+    predecessor = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="next")
     
     status = models.CharField(
         max_length=20,
@@ -67,4 +69,11 @@ class PricingTask(Task):
     
     card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='pricing_tasks', null=True)
     csr = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, related_name='_pricing_tasks', null=True)
-    
+
+
+class UploadTask(Task):
+    pass
+
+
+class IDTask(Task):
+    pass

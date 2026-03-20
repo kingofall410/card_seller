@@ -1,21 +1,20 @@
 <div class="nav-buttons">
+  <button id="prev" class="nav-button prev" 
+          data-url="{% if previous %}{% url url_name previous %}{% endif %}" 
+          onclick="handlePrev()">← Previous</button>
 
-  {% if previous %}
-    <button id="prev" class="nav-button prev" data-url="{% url url_name previous %}" onclick="handlePrev()">← Previous</button>
+    <button id="up" class="nav-button up" 
+            data-url="{% url up_url up %}" 
+            onclick="handleUp()">Up ↑</button>
 
-  {% else %}
-    <span class="nav-button disabled">← Previous</span>
-  {% endif %}
-
-  <button id="up" class="nav-button up" data-url="{% url up_url up %}" onclick="handleUp()">Up ↑</button>
-
-  {% if next %}
-    <button id="next" class="nav-button next" data-url="{% url url_name next %}" onclick="handleNext()">Next →</button>
-
-  {% else %}
-    <span class="nav-button disabled">Next →</span>
-  {% endif %}
+  <button id="next" class="nav-button next" 
+          data-url="{% if next %}{% url url_name next %}{% endif %}" 
+          onclick="handleNext()">Next →</button>
 </div>
+  <div class="nav-info-container">
+    <span id="sequence-info" class="sequence-count"></span>
+  </div>
+
 
 <style>
 .nav-buttons {
@@ -45,33 +44,87 @@
   cursor: default;
   pointer-events: none;
 }
+.nav-info-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sequence-count {
+  font-size: 20px;
+  font-weight: bold;
+  color: #666;
+  font-family: sans-serif;
+  height: 24px; /* Prevents layout shift when text appears */
+}
 </style>
-
 <script>
-function handleNext() {
+document.addEventListener("DOMContentLoaded", function() {
+    const rawSeq = sessionStorage.getItem('card_sequence');
+    const infoSpan = document.getElementById('sequence-info');
 
-  el = document.getElementById("next")
-  url = el.dataset.url;
+    if (!rawSeq) {
+        checkDisable('prev');
+        checkDisable('next');
+        return;
+    }
 
-  console.log("Navigating to:", url);
-  window.location.href = url;
+    const sequence = JSON.parse(rawSeq);
+    const currentId = "{{ root_id }}"; 
+    const index = sequence.indexOf(currentId);
+    
+    // Only show page count if we are actually in the sequence
+    if (index !== -1) {
+        const prevBtn = document.getElementById('prev');
+        const nextBtn = document.getElementById('next');
+
+        // Update the Page Count Text
+        infoSpan.innerText = `${index + 1} of ${sequence.length}`;
+
+        // Override Prev
+        if (index > 0) {
+            prevBtn.dataset.url = `/card/${sequence[index - 1]}/`;
+            prevBtn.classList.remove('disabled');
+        } else {
+            prevBtn.classList.add('disabled');
+        }
+
+        // Override Next
+        if (index < sequence.length - 1) {
+            nextBtn.dataset.url = `/card/${sequence[index + 1]}/`;
+            nextBtn.classList.remove('disabled');
+        } else {
+            nextBtn.classList.add('disabled');
+        }
+    }
+});
+
+function checkDisable(id) {
+    const el = document.getElementById(id);
+    if (!el.dataset.url || el.dataset.url === "") {
+        el.classList.add('disabled');
+    }
 }
 
-function handlePrev() {
+function handleNext() { navigate('next'); }
+function handlePrev() { navigate('prev'); }
+function handleUp() { navigate('up'); }
 
-  el = document.getElementById("prev")
-  url = el.dataset.url;
-
-  console.log("Navigating to:", url);
-  window.location.href = url;
+function navigate(id) {
+    const el = document.getElementById(id);
+    if (el.classList.contains('disabled')) return;
+    
+    const url = el.dataset.url;
+    if (url) {
+        console.log("Navigating to:", url);
+        window.location.href = url;
+    }
 }
 
-function handleUp() {
-
-  el = document.getElementById("up")
-  url = el.dataset.url;
-
-  console.log("here");
-  window.location.href = url;
-}
+// Add Keyboard Support (Optional but recommended for power users)
+document.addEventListener('keydown', (e) => {
+    if (e.key === "ArrowRight") handleNext();
+    if (e.key === "ArrowLeft") handlePrev();
+});
 </script>

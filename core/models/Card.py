@@ -159,9 +159,11 @@ class Card(models.Model):
         
     @property
     def latest_listing_task(self):
-        #wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
+        wtf = None
+        if self.active_search_results():
+            wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
        # print("wtf", wtf.id)
-        return None#wtf
+        return wtf
         
         
     @property

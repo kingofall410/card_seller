@@ -7,8 +7,22 @@ from django.core.files.storage import default_storage
 from django.utils.timezone import now
 from services import lookup
 from services.models.models import Settings 
-from core.models.Card import Card, Collection
+from core.models.Card import Card, Collection 
 from django.views.decorators.csrf import csrf_exempt
+from django.apps import apps
+
+#this stuff needs to move!!!!
+def upload(collection, timestamp_folder, filename, file):
+
+    relative_path = default_storage.save(timestamp_folder + filename, file)
+    absolute_path = os.path.join(app_settings.MEDIA_ROOT, relative_path)
+    print("📎 File path:", relative_path, "| Absolute:", absolute_path)
+    return absolute_path
+
+def perform_id(card_id, is_slab=False):
+    lookup_sites = ["psa"] if is_slab else ["ebay"]
+    source_card = Card.objects.get(id=card_id)
+    lookup.single_image_lookup(source_card, {}, None, sites=lookup_sites, scrape_sold_data=False, result_count_max=50)
 
 # Image-related views
 def perform_upload(uploaded_files, collection=None, is_slab=False):
@@ -19,29 +33,25 @@ def perform_upload(uploaded_files, collection=None, is_slab=False):
     if len(uploaded_files) > 0:
         timestamp_folder = now().strftime("%Y%m%d_%H%M%S/")  # e.g., '20250701_125342'
 
-        uploaded_file_paths = []
+        core_config = apps.get_app_config("core")
+        skip_next = False
+        image_paths = []
         for uploaded_file in uploaded_files:
             filename = uploaded_file.name
+            #not going to do this with a task just yet - need to deal with the file immediately?
+            absolute_path = upload(collection, timestamp_folder, filename, uploaded_file)
+            image_paths.append(absolute_path)           
             print(f"📂 Uploaded filename: {filename}")
-            relative_path = default_storage.save(timestamp_folder + filename, uploaded_file)
-            absolute_path = os.path.join(app_settings.MEDIA_ROOT, relative_path)
-            print("📎 File path:", relative_path, "| Absolute:", absolute_path)
-            uploaded_file_paths.append(absolute_path)
         
-        # 🔍 Phase 2: Process files after all uploads complete
-        skip_next = False
-        settings = Settings.get_default()
-        lookup_sites = ["psa"] if is_slab else ["ebay"]
-        for i, absolute_path in enumerate(uploaded_file_paths):
-            #print("FP", uploaded_file_paths)
+        for absolute_path in image_paths:
             if skip_next:
                 skip_next = not skip_next
-                print("Skipping")
             else:
-                print("not skipping")
-                skip_next = (absolute_path == uploaded_file_paths[-1])
-                source_card, skip_next = Card.from_filename(collection, absolute_path, crop=True, match_back=not skip_next, is_slab=is_slab)
-                lookup.single_image_lookup(source_card, {}, settings, sites=lookup_sites, scrape_sold_data=False, result_count_max=settings.id_listings)
+                
+                source_card, _ = Card.from_filename(collection, absolute_path, crop=True, match_back=True, is_slab=False)
+                print("Source", source_card.id)
+                core_config.queue.schedule_id_task(name=f"ID image {filename}", callback=perform_id, params={"card_id":source_card.id})
+                skip_next = True
 
 @csrf_exempt
 def upload_image(request, collection_id=None):

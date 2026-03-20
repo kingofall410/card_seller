@@ -4,7 +4,6 @@ from core.models.Card import Card
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 
-
 def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay"], refine=False, scrape_sold_data=False, retry_limit=5, result_count_max=50, csr=None):
     print("SIL")
     settings = settings or Settings.get_default()

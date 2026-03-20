@@ -253,31 +253,6 @@ def price_only(request, csr_id):
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
-def price_collection(request, collection_id):  
-
-    collection = Collection.objects.get(id=collection_id)
-    if request.method == "POST":
-        try:
-            card_ids = json.loads(request.POST.get('card_ids', '[]'))
-            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
-        except json.JSONDecodeError:
-            card_list = list(collection.cards.order_by('id'))
-    else:
-        card_list = list(collection.cards.order_by('id'))
-
-    if not card_list:
-        print("no cards")
-        collection = Collection.objects.get(id=collection_id)
-        card_list = collection.cards.all()
- 
-    for card in card_list:
-        cc_asr = card.active_search_results()
-        lookup.text_refinement(cc_asr)
-        lookup.price_only(cc_asr.id, Settings.get_default().id)
-
-    return JsonResponse({"success": True, "error": ""})
-
-@csrf_exempt
 def text_filter(request):
     all_fields = {}
     csr_ids = []    

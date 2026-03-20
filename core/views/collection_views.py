@@ -10,12 +10,49 @@ from django.utils.timezone import now
 from services import lookup
 from services.models.models import Settings
 from core.models.Card import Card, Collection
+from services import lookup
 from core.models.CardSearchResult import CardSearchResult
+from core.views import card_views, image_views
 from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
 from django.db.models import Q, F
 from django.forms.models import model_to_dict
+from django.apps import apps
+from django.db.models import Prefetch
+@csrf_exempt
+def price_collection(request, collection_id):  
 
+    collection = Collection.objects.get(id=collection_id)
+    try:
+        card_ids = request.GET.getlist('card_ids')
+        print(card_ids)
+        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+    except json.JSONDecodeError:
+        card_list = list(collection.cards.order_by('id'))
+    print(card_list)
+    for card in card_list:
+        cc_asr = card.active_search_results()
+        #lookup.text_refinement(cc_asr)
+        card_views.price_only(request, cc_asr.id)
+
+    return JsonResponse({"success": True, "error": ""})
+
+def identify_collection(request, collection_id):
+
+    collection = Collection.objects.get(id=collection_id)
+    try:
+        card_ids = request.GET.getlist('card_ids')
+        print(card_ids)
+        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+    except json.JSONDecodeError:
+        card_list = list(collection.cards.order_by('id'))
+    
+    
+    core_config = apps.get_app_config("core")
+    for card in card_list:
+        core_config.queue.schedule_id_task(name=f"ID card {card.id}", callback=image_views.perform_id, params={"card_id":card.id})
+
+    return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
 def update_collection(request):
@@ -111,15 +148,21 @@ def spreadsheet_rows_from_search_result(cards, field_names):
 
 def new_collection(request):
     collection = Collection.objects.create()
-    return view_collection(request, collection.id)
+    return redirect('view_collection', collection.id)
+
 
 def view_collection(request, collection_id):
     
-    collection = Collection.objects.get(id=collection_id)
+    collection = Collection.objects.prefetch_related(
+        'cards__search_results',
+        'cards__listed_card_info',
+        'cards__listing_tasks'
+    ).get(id=collection_id)
     settings = Settings.get_default()
-
-    columns = CardSearchResult.mini_spreadsheet_fields
-    rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
+    columns = []
+    rows = []
+    #columns = CardSearchResult.mini_spreadsheet_fields
+    #rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
     return render(request, "collection.html", {"collection":collection, "settings":settings, "columns":columns, "rows":rows})
 
 def listing_view(request):
@@ -154,27 +197,25 @@ def move_card_to_collection(card_or_id, collection_or_id):
     card_or_id.save()
 
 @csrf_exempt
-def move_to_collection2(request):
-    print("mtc")
-    print(request.body)
-    if request.method == "POST":
-        data = json.loads(request.body)
-        print(data)
-        collection_to_move_id = data.get('collection_to_move')
-        target_collection_id = data.get('target_collection')
-        cards_to_move = data.get('cards_to_move')
-        
-        collection_to_move = get_object_or_404(Collection, id=int(collection_to_move_id))
-        target_collection = get_object_or_404(Collection, id=int(target_collection_id))
+def move_to_collection3(request, collection_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            card_ids = data.get('card_ids', [])
+            target_collection = Collection.objects.get(id=collection_id)
 
-        #cards passed in: send the cards to the new collection
-        if cards_to_move:
-            for card in cards_to_move:
-                move_card_to_collection(card, target_collection)
-        else:
-            print("move collection", collection_to_move_id, target_collection_id)
-            collection_to_move.parent_collection = target_collection
+            if not card_ids:
+                return JsonResponse({'ok': False, 'message': 'No cards specified'}, status=400)
+
+            # Bulk update the collection_id for all selected cards
+            Card.objects.filter(id__in=card_ids).update(collection=target_collection)
+
+            return JsonResponse({
+                'ok': True, 
+                'message': f'Moved {len(card_ids)} cards successfully.'
+            })
+
+        except Exception as e:
+            return JsonResponse({'ok': False, 'message': str(e)}, status=500)
             
-        collection_to_move.save()
-
-    return JsonResponse({"success": True})
+    return JsonResponse({'ok': False, 'message': 'Invalid method'}, status=405)

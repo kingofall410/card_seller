@@ -1,28 +1,51 @@
 {% load custom_tags %}
 {% load static %}
+{% get_collections as collections %}
 <script src="{% static 'js/collection_node.js' %}"></script>
 <style>
   
 .card-list {
   display: flex;
-  flex-wrap: wrap; /* allows wrapping to next line if needed */
-  gap: 12px;        /* spacing between cards */
-  padding: 8px 0;
+  flex-wrap: wrap;
+  gap: 16px; /* Increased gap for better breathing room */
+  padding: 15px;
+  align-items: flex-start; /* Keeps tops aligned even if meta text varies */
 }
 
 .card-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 150px;
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background-color: #f9f9f9;
-  text-align: center;
-  position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* This centers the text and image horizontally */
+    width: 160px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    text-align: center; /* Ensures text aligns to center */
 }
 
+.card-main-link {
+    text-decoration: none;
+    color: inherit;
+    display: block; /* Makes the link behave like a container */
+    width: 100%;
+}
+
+.card-main-link:hover .card-meta {
+    color: #007bff; /* Optional: highlight text on hover so users know it's a link */
+}
+
+/* Ensure actions stay on top and clickable */
+.card-actions {
+    position: relative;
+    z-index: 5; 
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 5px;
+}
 .card-count {
   position: absolute;
   top: 8px;
@@ -30,36 +53,45 @@
   z-index: 10;
   margin-bottom: 4px;
 }
+
 .image-wrapper {
-  position: relative;
-  width: 150px;
-  height: 210px; /* or match your image height */
-  overflow: hidden;
-  margin-bottom: 6px;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    margin: 8px 0;
+    border-radius: 4px;
+    background-color: #eee; /* Shows a grey box if images fail to load */
 }
 
 .thumbnail {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(100% - 8px); /* ⬅️ account for padding */
-  height: auto;
-  border-radius: 4px;
-  transition: opacity 0.3s ease;
+    position: absolute; /* Stack them on top of each other */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.3s ease;
+}
+/* The default image is always visible unless hovered */
+.thumbnail.default {
+    opacity: 1;
+    z-index: 1;
 }
 
-
+/* The hover image sits on top but is invisible until hovered */
 .thumbnail.hover {
-  opacity: 0;
-  z-index: 2;
+    opacity: 0;
+    z-index: 2;
 }
 
+/* Switch opacities on hover */
 .image-wrapper:hover .thumbnail.hover {
-  opacity: 1;
+    opacity: 1;
 }
 
 .image-wrapper:hover .thumbnail.default {
-  opacity: 0;
+    opacity: 0;
 }
 
 .tooltip-wrapper {
@@ -164,15 +196,16 @@
   z-index: 10;
 }
 
-
 .card-meta {
+  width: 100%;
+  font-size: 16px;
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
-  min-height: 20px;           /* Ensures vertical space is reserved */
-  visibility: visible;     
+  color: #444;
 }
+
 .card-item.status-unexecuted {
   background-color: #fff1f0; /* soft red */
   border-color: #ffa39e
@@ -218,15 +251,78 @@
     font-weight: 600;
     color: #fff;
 }
+.move-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
 
+.move-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%; 
+    left: 0;
+    background-color: #ffffff;
+    min-width: 180px; /* Slightly wider for scrollbar clearance */
+    max-height: 200px; /* ⬅️ Limits the height */
+    overflow-y: auto;  /* ⬅️ Adds the scrollbar when needed */
+    box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+    z-index: 1001;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    text-align: left;
+    
+    /* ⬅️ Optional: smooth scrolling for mobile/trackpads */
+    scroll-behavior: smooth; 
+}
+
+/* Optional: Make the scrollbar look a bit cleaner */
+.move-menu::-webkit-scrollbar {
+    width: 8px;
+}
+
+.move-menu::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+.move-menu::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
+.move-menu a {
+    color: #333;
+    padding: 8px 12px;
+    text-decoration: none;
+    display: block;
+    font-size: 13px;
+}
+
+.move-menu a:hover {
+    background-color: #f1f1f1;
+}
+
+.menu-header {
+    padding: 8px 12px;
+    margin: 0;
+    font-weight: bold;
+    font-size: 11px;
+    color: #888;
+    border-bottom: 1px solid #eee;
+}
 /* Map to your existing status colors */
 
 .status-listed          { background: #00aaff; color: #000;}
 .status-identified      { background: #ff6666; }
 .status-pending         { background: #ffcc0020; color: #000; }
-.status-failed          { background: #ff333320; }
+.status-failed          { background: #ff333320; color: #000;}
 .status-success         { background: #33cc3320; color: #000;}
 .status-none            { background: #aaa; }
+.status-link {
+    text-decoration: none; /* Remove underline */
+    display: inline-block;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
 
 </style>
 <div id="collection-{{ collection.id }}" class="collection">
@@ -256,9 +352,10 @@
     </div>
     <button onclick="removeCollection({{ collection.id }})">🗑️</button>
     <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
-    <button onclick="submitCardForm({{ collection.id }}, null, '/image_search_collection/{{ collection.id }}/')">🔍</button>
-    <a href="/price_collection/{{ collection.id }}/" style="display:inline-block; padding:8px 12px; border-radius:6px; background:#eee; cursor:pointer; text-decoration:none;">💲</a>
+    <button onclick="submitCollection('/identify_collection/{{ collection.id }}/')">🔍</button>
+    <button onclick="submitCollection('/price_collection/{{ collection.id }}/')">💲</button>
 
+  
     <input type="text"
       name="collection_name_{{ collection.id }}"
       value="{{ collection.name }}"
@@ -267,7 +364,7 @@
       placeholder="Change collection name..."
       onchange="saveCollectionField({{ collection.id }}, 'name', this.value)">
   </div>
-  
+  {% comment %}
   <div style="text-align: center; margin-top: 20px;">
     <button onclick="toggleAttributePanel()">⚙️ Select Attributes</button>
   </div>
@@ -288,115 +385,79 @@
       <label><input type="checkbox" class="attr-toggle" value="avgonly">Avg Sale</label>
       <label><input type="checkbox" class="attr-toggle" value="msrp" checked>MSRP</label>
     </div>
-    
+    {% endcomment %}
     <div class="card-list">
-      {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
+    {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
 
     {% for card in collection.cards.all %}
-      {% with display_name=card.active_search_results|get_attribute:"display_full_name" display_year=card.active_search_results|get_attribute:"display_year" display_brand=card.active_search_results|get_attribute:"display_brand" display_subset=card.active_search_results|get_attribute:"display_subset" display_team=card.active_search_results|get_attribute:"display_team" display_city=card.active_search_results|get_attribute:"display_city" display_serial=card.active_search_results|get_attribute:"display_serial" %}
-      {% with tooltip_string=display_name|stringformat:"s"|add:" "|add:display_year|stringformat:"s"|add:" "|add:display_brand|stringformat:"s"|add:" "|add:display_subset|stringformat:"s" %}
-      {% comment %} {% with refinement_status=card.active_search_results.refinement_status|status_icon_meta pricing_status=card.active_search_results.pricing_status|status_icon_meta id_status=card.active_search_results.id_status|status_icon_meta%} {% endcomment %}
-      
-      <div id="card-{{ card.id }}" class="card">    
-      <div class="card-item status-{{ card.active_search_results.overall_status|lower }}">
-        <div class="card-checkbox">
-            <input type="checkbox" onchange="updateSelection({{collection.id}})" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}"><br><br>
-        </div>
-  
-        <div class="card-meta" data-attr="name">
-          {{ display_name }}
-        </div>
-
-        <div class="card-meta" data-attr="set">
-          {{ display_year }} {{ display_brand }} {{ display_subset }}
-        </div>
-
-        <div class="card-meta" data-attr="list_price">
-          List: ${{ card.active_search_results.list_price|floatformat:2 }}
-        </div>
-
-        <div class="card-meta" data-attr="ebay-msrp">
-          MSRP: ${{ card.active_search_results.ebay_msrp|floatformat:2 }}
-        </div>
-
-        <div class="card-meta" data-attr="ids">
-          {{ card.id }}:{{ card.active_search_results.id }}
-        </div>
-          
-        <div class="image-wrapper" data-attr="thumb">
-          <a href="/card/{{card.id}}/")' class="image-button">
-            <img src="{{ card.cropped_image.url }}" loading="lazy" alt="{{ card.id }}" onerror="this.onerror=null; this.src='/static/images/missing_card.png';" class="thumbnail default">
-            <img src="{{ card.cropped_reverse.url }}" loading="lazy" alt="{{ card.id }} hover" onerror="this.onerror=null; this.src='/static/images/missing_reverse.png';" class="thumbnail hover">
-          </a>
-        </div>
-
-        <div class="card-actions">
-
-          {% with listing_task=card.latest_listing_task %}
-              {% if listing_task %}
-                  <span class="status-badge status-{{ listing_task.status|slugify }}">
-                      {{ listing_task.get_status_display }}
-                  </span>
-              {% else %}
-                  <span class="status-badge status-none">No Status</span>
-              {% endif %}
-          {% endwith %}
-          <button onclick="removeCard({{ card.id }})" title="Delete">🗑️</button>
-
-        </div>
-
-        <div>  
-          <span title="ID Status: {{ card.active_search_results.id_status.title }}">{{ id_status.icon }}</span>
-          <span title="Refinement Status: {{ card.active_search_results.refinement_status.title }}">{{ refinement_status.icon }}</span>
-          <span title="Pricing Status: {{ card.active_search_results.pricing_status.title }}">{{ pricing_status.icon }}</span>
-        </div>
-
-        {% endwith %}
-        {% endwith %}
-        {% comment %} {% endwith %}{% endcomment %}
+    {% with asr=card.active_search_results %}
+    {% with display_name=asr|get_attribute:"display_full_name" display_year=asr|get_attribute:"display_year" display_brand=asr|get_attribute:"display_brand" display_subset=asr|get_attribute:"display_subset" %}
         
-    </div>
-    </div>
-    {% endfor %}
-    {% for subcollection in collection.subcollections.all %}
-    
-  <div class="card-item" 
-    data-year="{{ display_year }}"
-    data-brand="{{ display_brand }}"
-    data-subset="{{ display_subset }}"
-    data-search_count="{{ card.search_count }}">
-    <div class="card-meta">
-        {{subcollection.id}}<br>
-    </div>
-    <div class="card-meta">
-         {{subcollection.name}}
-    </div>
-    
-        <div class="image-wrapper">
-            <img src="/static/images/missing_collection.png" alt="{{ subcollection.id }}" class="thumbnail default">
-            <img src="/static/images/missing_collection_reverse.png" alt="{{ subcollection.id }} hover" class="thumbnail hover">
+    <div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}">
+        
+        <div class="card-checkbox">
+            <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
         </div>
-        <div class="card-actions">
 
-            {% with asr=card.active_search_results %}
-                {% if asr and asr.task and asr.task.listing_task %}
-                    {% with lt=asr.task.listing_task %}
-                        <span class="status-badge status-{{ lt.status|slugify }}">
-                            {{ lt.get_status_display }}
+        <a href="/card/{{ card.id }}/" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
+            <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
+            <div class="card-meta">{{ display_year }} {{ display_brand }}</div>
+            <div class="card-meta">List: ${{ card.listed_card_info.list_price|floatformat:2 }}</div>
+            
+            <div class="image-wrapper" onmouseenter="loadReverse(this)">
+                <img src="{{ card.cropped_image.url }}" class="thumbnail default" onerror="this.src='/static/images/missing_card.png';" loading="lazy">
+                <img data-src="{{ card.cropped_reverse.url }}" class="thumbnail hover" onerror="this.src='/static/images/missing_reverse.png';">
+            </div>
+        </a>
+
+        <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ card.id }}</div>
+
+        <div class="card-actions">
+            {% with listing_task=card.latest_listing_task %}
+                {% if listing_task %}
+                    <a href="{% url 'calendar' %}" 
+                       class="status-link"
+                       onclick="event.stopPropagation();"
+                       {% if listing_task.error_str %}
+                       title="Error: {{ listing_task.error_str }}"
+                       {% endif %}>
+                        <span class="status-badge status-{{ listing_task.status|slugify }}">
+                            {{ listing_task.get_status_display }}
                         </span>
-                    {% endwith %}
-                {% else %}
-                    <span class="status-badge status-none">No Status</span>
+                    </a>
                 {% endif %}
             {% endwith %}
-
+            
+            <button onclick="event.stopPropagation(); removeCard({{ card.id }})" title="Delete">🗑️</button>
+            
+            <div class="move-dropdown-container">
+                <button class="nav-button" onclick="toggleMoveMenu(event, {{ card.id }})">📁</button>
+                <div id="dropdown-{{ card.id }}" class="move-menu" onclick="event.stopPropagation();">
+                    <p class="menu-header">Move to...</p>
+                    {% for coll in collections %}
+                        {% if coll.id != collection.id %}
+                        <a href="javascript:void(0)" 
+                           onclick="event.stopPropagation(); moveCardToCollection({{ card.id }}, {{ coll.id }})">
+                           {{ coll.id }}. {{ coll.name }}
+                        </a>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-        
+    </div>
+
+    {% endwith %}
+    {% endwith %}
+{% endfor %}
+
+    {% for subcollection in collection.subcollections.all %}
+    <div class="card-item folder">
+        <div class="card-meta">ID: {{ subcollection.id }}</div>
+        <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
+        <div class="image-wrapper">
+            <img src="/static/images/missing_collection.png" class="thumbnail">
+        </div>
     </div>
     {% endfor %}
-    
-    
-
-    </div>
-</div>
 </div>
