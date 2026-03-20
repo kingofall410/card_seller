@@ -1,0 +1,18 @@
+<html>
+<head>
+    <title>Manage Collections</title>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+<body>
+{% include "header.html" %}
+{% load static %}
+
+{% comment %}{% include "nav_buttons.html" with root_id=card_tuple.1 url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %} {% endcomment %}
+{% include "spreadsheet.html" with columns=columns rows=rows %}
+
+
+<button onclick="addRootCollection()">➕ Add Root Collection</button>
+</body>
+</html>

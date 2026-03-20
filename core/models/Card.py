@@ -27,6 +27,10 @@ class Collection(models.Model):
     status = models.CharField(max_length=20, choices=CollectionStatus.choices, default=CollectionStatus.IMPORTED)    
     notes = models.TextField(blank=True)
     
+    spreadsheet_fields = [
+        "id", "name", "create_date", "status"
+    ]
+
     @classmethod
     def get_default(cls):
         return Collection.objects.get(name="Default")

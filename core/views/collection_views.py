@@ -19,6 +19,8 @@ from django.db.models import Q, F
 from django.forms.models import model_to_dict
 from django.apps import apps
 from django.db.models import Prefetch
+from core.models.Status import StatusBase
+
 @csrf_exempt
 def price_collection(request, collection_id):  
 
@@ -100,30 +102,37 @@ def export_collection(request, collection_id):
     csrs = collection.get_default_exports()
 
     return export_handler.export_zip(csrs)
+from django.db.models import Count, Sum, Q
 
-def render_collection_list(request, collections, per_page, collection_id=None):
-    print("render", per_page, collection_id)
-    
-    settings = Settings.get_default()       
-    paginator = Paginator(collections, per_page)
-    
-    if collection_id:
-        page_number = next((c.id for c in collections if c.id == collection_id), None)
-    else:
-        page_number = request.GET.get('page')
-
-    page_obj = paginator.get_page(page_number)
-    columns = CardSearchResult.mini_spreadsheet_fields
-    #rows = (spreadsheet_rows_from_search_result(collection.cards.all(), columns) for collection in collections)
-    return render(request, "manage_collection.html", {"page_obj": page_obj, "settings": settings, "columns":columns, "rows":rows})
-
-#view specific manage-collections
 def manage_collection(request):
-    collections = Collection.objects.filter(
-        Q(parent_collection__isnull=True) | Q(id=F('parent_collection_id'))
-    ).order_by('-id')
-    settings = Settings.get_default()    
-    return render_collection_list(request, collections, settings.nr_collection_page_items)
+    # This single query calculates all stats for every collection at once
+    collections = Collection.objects.annotate(
+        total_cards=Count('cards'),
+        num_listed=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.LISTED)),
+        num_pending=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.PENDING)),
+        num_failed=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.FAILED)),
+        total_value=Sum('cards__listed_card_info__list_price')
+    )
+    
+    columns = ['id', 'name', 'total_cards', 'todos', 'num_failed', 'total_value', 'num_listed', 'num_pending']
+    rows = []
+
+    for c in collections:
+        rows.append({
+            'id': c.id,
+            'name': c.name,
+            'total_cards': c.total_cards,
+            'todos': c.total_cards-(c.num_listed+c.num_pending), 
+            'num_failed': c.num_failed,
+            'num_listed': c.num_listed,
+            'num_pending': c.num_pending,
+            'total_value': float(c.total_value or 0), # Ensure it's a number for Handsontable
+        })
+    print(rows)
+    return render(request, "collection_management.html", {
+        "columns": columns,
+        "rows": rows
+    })
 
 def spreadsheet_rows_from_search_result(cards, field_names):
     rows = []
