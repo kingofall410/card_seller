@@ -218,16 +218,25 @@ document.addEventListener("DOMContentLoaded", function () {
              style="padding: 8px; border-radius: 6px; min-width: 200px;" />
     </div>
 
-    <div style="display:flex; flex-direction:column;">
-      <label for="msrp-{{ card_id }}" style="font-weight:600; margin-bottom:4px;">
-        MSRP
-      </label>
-      <input type="text"
-            id="msrp-{{ card_id }}"
-            value="${{ card.listed_card_info.msrp|floatformat:2 }}"
-            style="padding: 8px; border-radius: 6px; min-width: 200px;" />
+    <div style="display:flex; flex-direction:row; gap: 20px; flex-wrap: wrap; width: 100%;">
+      {% for group in search_result.get_pricing_groups %}
+        <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
+          <label for="msrp-{{ card_id }}-{{ group.id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            {{ group.label }}
+          </label>
+          <div style="position: relative; display: flex; align-items: center;">
+            <span style="position: absolute; left: 10px; color: #888;">$</span>
+            <input type="text" 
+                  id="msrp-{{ card_id }}-{{ group.id }}" 
+                  value="{{ group.recent_avg_price|floatformat:2 }}" 
+                  style="padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; background-color: #f9f9f9;" 
+                  readonly />
+          </div>
+        </div>
+      {% empty %}
+        <p style="font-size: 0.9rem; color: #999;">No pricing groups found.</p>
+      {% endfor %}
     </div>
-
     <div style="display:flex; flex-direction:column;">
       <label style="font-weight:600; margin-bottom:4px;">
         Publish

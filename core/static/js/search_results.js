@@ -99,6 +99,22 @@ $(document).ready(function () {
 
 
 
+function updateCharCount(input) {
+    const maxLength = 80;
+    const currentLength = input.value.length;
+
+    if (currentLength >= maxLength) {
+        // Red highlight
+        input.style.borderColor = "#ff4d4d";
+        input.style.boxShadow = "0 0 5px rgba(255, 77, 77, 0.5)";
+        input.style.outline = "none";
+    } else {
+        // Return to default
+        input.style.borderColor = "#ccc";
+        input.style.boxShadow = "none";
+    }
+}
+
 function collectAllFields(cardId, required_only = false) {
   console.log(`collectAllFields called for cardId=${cardId}, required_only=${required_only}`);
   const allFields = {};

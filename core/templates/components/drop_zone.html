@@ -13,6 +13,7 @@
         #dropzone {
             width: 350px;
             height: 200px;
+            position: relative;
             border: 3px dashed #888;
             border-radius: 10px;
             display: flex;
@@ -27,6 +28,16 @@
             border-color: #007bff;
             color: #007bff;
             background: #eef6ff;
+        }
+    
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-active {
+            pointer-events: none;
+            background-color: #f8f9fa !important;
         }
 
         #loading {
@@ -64,6 +75,29 @@
     const results = document.getElementById("results");
     const collectionId = document.getElementById("collectionId").value;
 
+    // Spinner Logic
+    function showSpinnerOnButton(button) {
+        button.originalText = button.innerHTML;
+        button.classList.add('loading-active');
+
+        const spinner = document.createElement('span');
+        spinner.style.display = 'inline-block';
+        spinner.style.width = '30px';
+        spinner.style.height = '30px';
+        spinner.style.border = '3px solid #ccc';
+        spinner.style.borderTop = '3px solid #333';
+        spinner.style.borderRadius = '50%';
+        spinner.style.animation = 'spin 0.6s linear infinite';
+
+        button.innerHTML = '';
+        button.appendChild(spinner);
+    }
+
+    function restoreButton(button) {
+        button.innerHTML = button.originalText;
+        button.classList.remove('loading-active');
+    }
+
     // Click → open file picker
     dropzone.addEventListener("click", () => fileInput.click());
 
@@ -92,30 +126,25 @@
         }
     });
 
-    // ⭐ Paste support — convert clipboard image → File → upload
+    // Paste support
     document.addEventListener("paste", (e) => {
         const items = e.clipboardData.items;
-
         for (let item of items) {
             if (item.type.startsWith("image/")) {
                 const blob = item.getAsFile();
-
-                // Create a temporary filename
                 const filename = `pasted_${Date.now()}.png`;
-
-                // Wrap blob in a File object
                 const file = new File([blob], filename, { type: blob.type });
-
                 uploadImages([file]);
             }
         }
     });
 
-    // ⭐ Upload to Django synchronously
     function uploadImages(files) {
+        showSpinnerOnButton(dropzone);
+
         const form = new FormData();
         form.append("collection_id", collectionId);
-        form.append("slab", "true");   // <-- THIS is what Django reads
+        form.append("slab", "true");
 
         for (let f of files) {
             form.append("images", f);
@@ -125,15 +154,14 @@
             method: "POST",
             body: form
         })
-
         .then(res => res.text())
         .then(html => {
-            loading.style.display = "none";
+            restoreButton(dropzone);
             results.style.display = "block";
             results.innerHTML = html;
         })
         .catch(err => {
-            loading.style.display = "none";
+            restoreButton(dropzone);
             results.style.display = "block";
             results.innerHTML = `<p>Error: ${err}</p>`;
         });

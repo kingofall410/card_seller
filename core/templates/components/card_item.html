@@ -1,0 +1,39 @@
+{% load custom_tags %}
+
+{% with asr=card.active_search_results %}
+{% with display_name=asr|get_attribute:"display_full_name" display_year=asr|get_attribute:"display_year" display_brand=asr|get_attribute:"display_brand" %}
+        
+<div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}" data-id-status="{{ card.latest_id_task.status }}" data-pricing-status="{{ card.latest_pricing_task.status }}" data-listing-status="{{ card.latest_listing_task.status }}" data-id="{{ card.id }}">
+    
+    <div class="card-checkbox">
+        <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
+    </div>
+
+    <a href="/card/{{ card.id }}/" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
+        <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
+        <div class="card-meta">{{ display_year }} {{ display_brand }}</div>
+        <div class="card-meta">${{ card.value|floatformat:2 }}</div>
+        
+        <div class="image-wrapper" onmouseenter="loadReverse(this)">
+            <img src="{{ card.cropped_image.url }}" class="thumbnail default" onerror="this.src='/static/images/missing_card.png';" loading="lazy">
+            <img data-src="{{ card.cropped_reverse.url }}" class="thumbnail hover" onerror="this.src='/static/images/missing_reverse.png';">
+        </div>
+    </a>
+
+    <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ card.id }}</div>
+
+    <div class="card-status-footer">
+        <div class="status-column">
+            {% include "components/status_badge.html" with task=card.latest_id_task %}
+        </div>
+        <div class="status-column">
+            {% include "components/status_badge.html" with task=card.latest_pricing_task %}
+        </div>
+        <div class="status-column">
+            {% include "components/status_badge.html" with task=card.latest_listing_task %}
+        </div>
+    </div>
+</div>
+
+{% endwith %}
+{% endwith %}

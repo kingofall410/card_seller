@@ -52,7 +52,7 @@ class Settings(models.Model):
         )'''
     
     @classmethod
-    def get_default(cls):
+    def get_default(cls): 
         return Settings.objects.first()
 
 class SettingsToken(models.Model):
@@ -77,13 +77,12 @@ class SettingsToken(models.Model):
     def create(cls, value, settings, field, primary_token=None):
         
         obj, _ = cls.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
-        obj.primary_token=obj
-
+        
         if primary_token:
             obj.primary_token = primary_token
         else:
             obj.primary_token = obj
-        
+        obj.save()
         return obj
     
     class Meta:
@@ -105,7 +104,7 @@ class SettingsToken(models.Model):
 
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        #print("me:", input_str)
+        print("me:", cls, input_str)
 
         #doing this joining repeatedly will cause previously un-adjacent strings to be adjacent after the first match/extract
         #problem?
@@ -122,8 +121,8 @@ class SettingsToken(models.Model):
             field_key=key,
             disabled_date__isnull=True
         ).filter(query).all()
-        #print(joined_input_phrases)
-        #print("***", matching_tokens)
+        print("JIP:", joined_input_phrases)
+        print("***", matching_tokens)
         matching_tokens_sorted = sorted(
             matching_tokens,
             key=lambda token: (

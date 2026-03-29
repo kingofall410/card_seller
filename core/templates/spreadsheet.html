@@ -23,7 +23,7 @@
 
 {{ columns|json_script:"sheet_columns" }}
 {{ rows|json_script:"sheet_rows" }}
-
+{% static "js/search_results.js" %}
 <script>
 /**
  * RENDERERS
@@ -41,6 +41,15 @@ function simpleCurrencyRenderer(instance, td, row, col, prop, value, cellPropert
     td.innerText = !isNaN(numValue) 
         ? '$' + numValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
         : '$0.00';
+    td.className = 'htRight';
+    return td;
+}
+
+function simplePctRenderer(instance, td, row, col, prop, value, cellProperties) {
+    const numValue = parseFloat(value);
+    td.innerText = !isNaN(numValue) 
+        ? (numValue*100).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) 
+        : '-';
     td.className = 'htRight';
     return td;
 }
@@ -72,8 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (colName === 'id') {
                 return { data: colName, renderer: collectionLinkRenderer, readOnly: true };
             }
-            if (['total_cards', 'num_listed', 'num_pending', 'num_failed'].includes(colName)) {
+            if (['total_cards', 'num_listed', 'num_pending', 'num_failed', 'todos'].includes(colName)) {
                 return { data: colName, type: 'numeric', readOnly: true, className: 'htCenter' };
+            }
+            if (['completion_pct', 'weighted_completion_pct'].includes(colName)) {
+                return { data: colName, renderer: simplePctRenderer, readOnly: true, className: 'htCenter' };
             }
             if (colName === 'total_value') {
                 return { data: colName, renderer: simpleCurrencyRenderer, readOnly: true };

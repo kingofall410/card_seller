@@ -1,0 +1,146 @@
+{% include "header.html" %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center bg-dark text-white rounded">
+            <div>
+                <h4 class="mb-0">⚡ Queue Monitor 
+                    <small class="text-success ms-2" style="font-size: 0.8rem;" id="heartbeat-status">● Active</small>
+                </h4>
+            </div>
+            
+            <div class="d-flex align-items-center gap-3">
+                <div class="d-flex gap-2 me-3">
+                    <span class="badge rounded-pill bg-primary">Pending: <span id="count-pending">0</span></span>
+                    <span class="badge rounded-pill bg-warning text-dark">Staged: <span id="count-staged">0</span></span>
+                    <span class="badge rounded-pill bg-danger">Failed: <span id="count-failed">0</span></span>
+                </div>
+
+                <div class="btn-group shadow-sm">
+                    <button onclick="queueAction('start_queue')" class="btn btn-sm btn-success px-3" title="Start Engine">Start</button>
+                    <button onclick="queueAction('stop_queue')" class="btn btn-sm btn-warning px-3" title="Stop Engine">Stop</button>
+                    <button onclick="queueAction('reset_queue')" class="btn btn-sm btn-outline-light px-3" title="Reload Queue from DB">Reset</button>
+                    <button onclick="queueAction('clear_tasks/pending')" class="btn btn-sm btn-danger px-3" title="Delete all Pending tasks">Flush Pending</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div id="task-grid" style="width: 100%; height: 70vh;"></div>
+    </div>
+</div>
+
+<style>
+    /* Center text in headers */
+    .handsontable th { text-align: center !important; font-weight: bold; background: #f8f9fa; }
+    
+    /* Vertically Center Content */
+    .handsontable td { vertical-align: middle !important; padding: 8px !important; font-size: 0.9rem; }
+
+    /* Action Button Styling */
+    .btn-xs { padding: 1px 6px; font-size: 0.75rem; line-height: 1.5; border-radius: 3px; }
+
+    /* Handsontable Overrides */
+    .ht_master .wtHolder { background-color: #ffffff; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css">
+
+<script>
+    const container = document.getElementById('task-grid');
+    const hot = new Handsontable(container, {
+        data: [],
+        colHeaders: ['ID', 'Type', 'Name', 'Status', 'Scheduled', 'Errors'],
+        columns: [
+            { data: 'id', width: 50, readOnly: true },
+            { data: 'type', width: 100, readOnly: true },
+            { data: 'name', width: 200, readOnly: true },
+            { data: 'status', width: 100, renderer: statusRenderer, readOnly: true },
+            { data: 'scheduled', width: 150, readOnly: true },
+            { data: 'error', width: 250, readOnly: true },
+            { 
+                data: 'id', // We use ID to know which task to affect
+                width: 120, 
+                renderer: actionRenderer, 
+                readOnly: true,
+                className: 'htCenter htMiddle'
+            }
+        ],
+        rowHeaders: true,
+        filters: true,
+        dropdownMenu: true,
+        licenseKey: 'non-commercial-and-evaluation'
+    });
+
+    function statusRenderer(instance, td, row, col, prop, value, cellProperties) {
+        Handsontable.renderers.TextRenderer.apply(this, arguments);
+        td.style.textAlign = 'center';
+        
+        let color = '#6c757d'; // default staged
+        if (value === 'pending') color = '#0d6efd';
+        if (value === 'running') color = '#ffc107';
+        if (value === 'success') color = '#198754';
+        if (value === 'failed')  color = '#dc3545';
+
+        td.innerHTML = `<span style="color: ${color}; font-weight: bold;">${value.toUpperCase()}</span>`;
+    }
+
+    function actionRenderer(instance, td, row, col, prop, value, cellProperties) {
+        // value is the Task ID
+        td.innerHTML = `
+            <div class="d-flex justify-content-center gap-1">
+                <button class="btn btn-xs btn-outline-primary" onclick="taskAction('retry_task', ${value})">RETRY</button>
+                <button class="btn btn-xs btn-outline-danger" onclick="taskAction('delete_task', ${value})">DEL</button>
+            </div>
+        `;
+        return td;
+    }
+
+    async function refreshData() {
+        const response = await fetch('/services/task_monitor_data/');
+        const result = await response.json();
+        hot.loadData(result.data);
+        
+        // Update counts for the "Heartbeat" section
+        document.getElementById('count-pending').innerText = result.data.filter(t => t.status === 'pending').length;
+        document.getElementById('count-failed').innerText = result.data.filter(t => t.status === 'failed').length;
+        document.getElementById('count-staged').innerText = result.data.filter(t => t.status === 'staged').length;
+    }
+
+    // Refresh every 2 seconds to match your Queue interval
+    setInterval(refreshData, 2000);
+    refreshData();
+
+    async function queueAction(action) {
+        // Add a confirmation for the destructive "Clear Pending" action
+        if (action === 'clear_tasks/pending' && !confirm('Are you sure you want to delete ALL pending tasks?')) return;
+
+        const response = await fetch(`/services/${action}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        });
+        const result = await response.json();
+        if (result.success) {
+            refreshData();
+        } else {
+            alert("Error: " + result.error);
+        }
+    }
+
+    async function taskAction(action, taskId) {
+        if (action.includes('delete') && !confirm('Delete this task?')) return;
+        
+        const response = await fetch(`/services/${action}/${taskId}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        });
+        const result = await response.json();
+        if (result.success) {
+            refreshData();
+        } else {
+            alert("Error: " + result.error);
+        }
+    }
+</script>
+{% endblock %}

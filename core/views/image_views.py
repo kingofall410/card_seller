@@ -24,6 +24,9 @@ def perform_id(card_id, is_slab=False):
     source_card = Card.objects.get(id=card_id)
     lookup.single_image_lookup(source_card, {}, None, sites=lookup_sites, scrape_sold_data=False, result_count_max=50)
 
+    #temp hack to see if this works
+    return source_card.successful_id()
+
 # Image-related views
 def perform_upload(uploaded_files, collection=None, is_slab=False):
     
@@ -49,8 +52,10 @@ def perform_upload(uploaded_files, collection=None, is_slab=False):
             else:
                 
                 source_card, _ = Card.from_filename(collection, absolute_path, crop=True, match_back=True, is_slab=False)
-                print("Source", source_card.id)
-                core_config.queue.schedule_id_task(name=f"ID image {filename}", callback=perform_id, params={"card_id":source_card.id})
+                csr = source_card.active_search_results()
+                
+                id_task = core_config.queue.schedule_id_task(name=f"ID image {filename}", callback=perform_id, params={"card_id":source_card.id}, card=source_card)
+                core_config.queue.schedule_pricing_task(name=f"auto-price card {source_card.id}", csr=csr, card=source_card, callback=lookup.price_only_card, params={"card_id": source_card.id, "settings_id":2}, predecessor=id_task)
                 skip_next = True
 
 @csrf_exempt
@@ -74,7 +79,7 @@ def upload_image(request, collection_id=None):
             collection = Collection.objects.get(id=collection_id)           
     
         perform_upload(uploaded_files, collection, is_slab=is_slab)                   
-        return redirect('collection', collection_id)
+        return JsonResponse({'success': True, 'message': ''}, status=200)
 
 @csrf_exempt
 def upload_crop(request):

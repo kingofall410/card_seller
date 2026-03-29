@@ -1,0 +1,12 @@
+{% if task %}
+    <a href="{% url 'calendar' %}" 
+       class="status-link"
+       onclick="event.stopPropagation();"
+       title="{% if task.error_str %}Error: {{ task.error_str }}{% else %}Task: {{ task.name }}{% endif %}">
+        <span class="status-badge status-{{ task.status|slugify }}">
+            {{ task.get_status_display }}
+        </span>
+    </a>
+{% else %}
+    <span class="status-badge status-none" style="opacity: 0.3;">None</span>
+{% endif %}

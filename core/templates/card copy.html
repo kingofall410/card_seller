@@ -1,0 +1,93 @@
+{% load static %}
+{% load custom_tags %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Card Overview</title>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #f9f9f9; }
+    .overview-wrapper { max-width: 1400px; margin: auto; display: flex; flex-direction: column; gap: 32px; }
+    
+    .uicard { 
+      background: #fff; border-radius: 12px; padding: 24px; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); 
+      box-sizing: border-box;
+    }
+
+    /* --- THE FLEX FIX --- */
+    .info-flex-container {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    .info-main-column { flex: 1; min-width: 0; } /* Takes all available space */
+    .info-image-column { width: 400px; flex-shrink: 0; } /* Fixed width */
+
+    /* --- WIDE MODE TOGGLE --- */
+    .chart-wide-active .info-image-column {
+      display: none; /* Removes image so main column hits 100% */
+    }
+
+    /* Tab Styling */
+    .csr-tab-buttons { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #eee; }
+    .csr-tab-btn { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; background: #f1f1f1; }
+    .csr-tab-btn.active { background: #fff; font-weight: bold; border-top: 2px solid #007bff; position: relative; top: 1px; }
+    .csr-tab-content { display: none; }
+    .csr-tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+  {% include "header.html" %}
+
+  <div class="overview-wrapper" id="page-wrapper">
+    <div class="uicard">
+      {% include "listing_buttons.html" with card=card_tuple.0 %}
+    </div>
+
+    <div class="uicard" id="main-card-container">
+      {% include "card_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 datasetConfigs=card_tuple.11 %}
+    </div>
+
+    <div class="listing-groups-wrapper">
+      {% for listing_group in card_tuple.2.display_order_listing_groups %}
+        {% include "product_listings.html" with listing_group=listing_group %}
+      {% endfor %}
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("click", function(e) {
+      if (!e.target.classList.contains("csr-tab-btn")) return;
+      
+      const tabId = e.target.dataset.tab;
+      const container = document.getElementById("main-card-container");
+
+      // Toggle Active Tabs
+      container.querySelectorAll(".csr-tab-btn").forEach(b => b.classList.remove("active"));
+      container.querySelectorAll(".csr-tab-content").forEach(c => c.classList.remove("active"));
+      
+      e.target.classList.add("active");
+      const targetContent = document.getElementById(tabId);
+      if (targetContent) targetContent.classList.add("active");
+
+      // Handle Wide Mode
+      if (tabId === "csr-charts") {
+        container.classList.add("chart-wide-active");
+      } else {
+        container.classList.remove("chart-wide-active");
+      }
+
+      // Tell Chart.js to resize to the new container width
+      window.dispatchEvent(new Event('resize'));
+    });
+  </script>
+</body>
+</html>

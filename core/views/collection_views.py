@@ -20,39 +20,53 @@ from django.forms.models import model_to_dict
 from django.apps import apps
 from django.db.models import Prefetch
 from core.models.Status import StatusBase
+from django.views.decorators.http import require_POST
 
+@require_POST
 @csrf_exempt
 def price_collection(request, collection_id):  
 
-    collection = Collection.objects.get(id=collection_id)
+    collection = Collection.objects.filter(id=collection_id).first()
+    print("cid", collection_id)
     try:
-        card_ids = request.GET.getlist('card_ids')
-        print(card_ids)
-        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        card_ids = request.POST.getlist('card_ids[]')
+        if len(card_ids):
+            print("lenny", len(card_ids))
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        else:
+            print("no cards", len(card_ids))
+            card_list = list(collection.cards.order_by('id'))
     except json.JSONDecodeError:
         card_list = list(collection.cards.order_by('id'))
     print(card_list)
+
+    core_config = apps.get_app_config("core")
     for card in card_list:
-        cc_asr = card.active_search_results()
-        #lookup.text_refinement(cc_asr)
-        card_views.price_only(request, cc_asr.id)
+        core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=card.active_search_results(), card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2})
 
     return JsonResponse({"success": True, "error": ""})
 
+@require_POST # Ensure only POST requests hit this
+@csrf_exempt
 def identify_collection(request, collection_id):
+    print("cid", collection_id)
 
     collection = Collection.objects.get(id=collection_id)
     try:
-        card_ids = request.GET.getlist('card_ids')
-        print(card_ids)
-        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        card_ids = request.POST.getlist('card_ids[] ') 
+        
+        if len(card_ids):           
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        else:
+            card_list = list(collection.cards.order_by('id'))
     except json.JSONDecodeError:
         card_list = list(collection.cards.order_by('id'))
     
+    print(card_list)
     
     core_config = apps.get_app_config("core")
     for card in card_list:
-        core_config.queue.schedule_id_task(name=f"ID card {card.id}", callback=image_views.perform_id, params={"card_id":card.id})
+        core_config.queue.schedule_id_task(name=f"ID card {card.id}", callback=image_views.perform_id, params={"card_id":card.id}, card=card)
 
     return JsonResponse({"success": True, "error": ""})
 
@@ -110,11 +124,10 @@ def manage_collection(request):
         total_cards=Count('cards'),
         num_listed=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.LISTED)),
         num_pending=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.PENDING)),
-        num_failed=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.FAILED)),
-        total_value=Sum('cards__listed_card_info__list_price')
+        num_failed=Count('cards', filter=Q(cards__search_results__overall_status=StatusBase.FAILED))
     )
     
-    columns = ['id', 'name', 'total_cards', 'todos', 'num_failed', 'total_value', 'num_listed', 'num_pending']
+    columns = ['id', 'name', 'completion_pct', 'weighted_completion_pct', 'total_cards', 'todos', 'num_failed', 'total_value', 'num_listed', 'num_pending']
     rows = []
 
     for c in collections:
@@ -123,12 +136,14 @@ def manage_collection(request):
             'name': c.name,
             'total_cards': c.total_cards,
             'todos': c.total_cards-(c.num_listed+c.num_pending), 
+            'completion_pct': (c.num_listed+c.num_pending+c.num_failed)/c.total_cards if (c.total_cards > 0) else 0,
+            'weighted_completion_pct': c.num_listed+c.num_pending+c.num_failed, 
+            'todos': c.total_cards-(c.num_listed+c.num_pending), 
             'num_failed': c.num_failed,
             'num_listed': c.num_listed,
             'num_pending': c.num_pending,
-            'total_value': float(c.total_value or 0), # Ensure it's a number for Handsontable
+            'total_value': c.value or 0
         })
-    print(rows)
     return render(request, "collection_management.html", {
         "columns": columns,
         "rows": rows
@@ -142,11 +157,14 @@ def spreadsheet_rows_from_search_result(cards, field_names):
         if asr:
             for field in field_names:
                 display_attr = f'display_{field}'
-                value = getattr(asr, display_attr)
-                row[field] = value if value is not None else ''
-            row["thumb_url"] = card.cropped_image.url() if card.cropped_image else ""
-            row["reverse_thumb_url"] = card.cropped_reverse.url() if card.cropped_reverse else ""
-            row["card_id"] = card.id
+                if hasattr(asr, display_attr):
+                    value = getattr(asr, display_attr)
+                    row[field] = value if value is not None else ''
+                elif field=="card_id":
+                    row[field] = card.id
+            row["front"] = card.cropped_image.url() if card.cropped_image else ""
+            row["reverse"] = card.cropped_reverse.url() if card.cropped_reverse else ""
+            #row["card_id"] = card.id
             rows.append(row)
     return rows
 
@@ -157,7 +175,7 @@ def spreadsheet_rows_from_search_result(cards, field_names):
 
 def new_collection(request):
     collection = Collection.objects.create()
-    return redirect('view_collection', collection.id)
+    return redirect('collection', collection.id)
 
 
 def view_collection(request, collection_id):
@@ -174,8 +192,24 @@ def view_collection(request, collection_id):
     #rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
     return render(request, "collection.html", {"collection":collection, "settings":settings, "columns":columns, "rows":rows})
 
+def view_ad_hoc_collection(request, card_ids=None):
+    cards = []
+    if card_ids:
+        cards = Card.objects.prefetch_related(
+            'search_results',
+            'listed_card_info',
+            'listing_tasks'
+        ).filter(id__in=card_ids)
+
+    settings = Settings.get_default()
+    columns = []
+    rows = []
+    columns = CardSearchResult.listing_fields
+    #rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
+    return render(request, "ad_hoc_collection.html", {"cards":cards, "settings":settings, "columns":columns, "rows":rows})
+    
 def listing_view(request):
-    columns = CardSearchResult.listing_spreadsheet_fields
+    columns = CardSearchResult.listing_fields
 
     cards = Card.objects.filter(
         Q(search_results__ebay_listing_id__isnull=False) & ~Q(search_results__ebay_listing_id='') |
@@ -204,6 +238,37 @@ def move_card_to_collection(card_or_id, collection_or_id):
     
     card_or_id.collection = collection_or_id
     card_or_id.save()
+
+def card_search_spreadsheet_view(request):
+    columns = CardSearchResult.listing_fields
+    query = request.GET.get('q', '').strip()
+    
+    # Base Queryset: Start with all cards or a filtered subset
+    cards = Card.objects.all()
+
+    if query:
+        # Generic search across common fields
+        cards = cards.filter(
+            Q(name__icontains=query) |
+            Q(search_results__ebay_listing_id__icontains=query) |
+            Q(search_results__sku__icontains=query) |
+            Q(search_results__ebay_offer_id__icontains=query)
+        ).distinct()
+    else:
+        # Optional: Limit results if no search is performed to prevent crashing the browser
+        cards = cards.none() 
+
+    rows = spreadsheet_rows_from_search_result(cards, columns)
+
+    # If the request is AJAX, return JSON for Handsontable to consume
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({"data": rows})
+
+    return render(request, "spreadsheet_search.html", {
+        "columns": columns, 
+        "rows": rows,
+        "query": query
+    })
 
 @csrf_exempt
 def move_to_collection3(request, collection_id):

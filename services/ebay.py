@@ -7,6 +7,9 @@ from datetime import datetime, timedelta
 from requests.exceptions import Timeout, RequestException
 from urllib.parse import quote, quote_plus, urlencode
 
+import fcntl
+from playwright.sync_api import sync_playwright
+
 
 CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
 CLIENT_SECRET = 'PRD-113ecf9c5fd1-5956-4012-a05a-9770'
@@ -63,7 +66,7 @@ ebay_item_data_template = {
             }
         },
     "product": {    
-        "title":"title_to_be",
+        "title":"display_title_to_be",
         "imageUrls":"image_links",
         "aspects": {
             "Card": "variation_title_base",
@@ -570,85 +573,112 @@ def get_ebay_date_range(days=90):
 
     return start_ts, end_ts
 
-
-#TODO: if this persists, will need to improve the login process
-from playwright.sync_api import TimeoutError
-import time
-
-def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
+def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=1095):
     print("keywords:", keyword_strings)
     result_data = {}
+    
+    # Define paths
+    user_data_dir = "/home/dcrown/.config/chrome-clean-playwright"
+    exe_path = "/usr/bin/google-chrome"
+    # We use a custom lock file to coordinate between our own python processes
+    lock_file_path = os.path.join(user_data_dir, "profile.lock")
+    
+    # Ensure directory exists for the lock file
+    os.makedirs(user_data_dir, exist_ok=True)
 
-    #launch_and_login()
+    # The 'with' block opens the lock file; fcntl.flock then BLOCKS execution 
+    # if another task is already running.
+    print("Requesting profile lock...")
+    with open(lock_file_path, "w") as lock_f:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+        print("Lock acquired. Starting Chrome...")
 
-    with sync_playwright() as p:
-        #linux config
-        user_data_dir = "/home/dcrown/.config/chrome-clean-playwright"
-        exe_path = "/usr/bin/google-chrome"
-        args = ["--use-gl=desktop", "--use-angle=gl", "--ignore-gpu-blocklist", "--password-store=basic", "--no-first-run", "--no-default-browser-check",  "--disable-extensions", "--disable-sync", "--disable-default-apps", "--disable-component-update"]
-        
-        #windows config
-        #user_data_dir = "ebay_profile"
-        #exe_path = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-        #args = []
-                
-        browser = p.chromium.launch_persistent_context(user_data_dir, headless=False, executable_path=exe_path, args=args)
-
-        start_date, end_date = get_ebay_date_range(days=days)
-
-        base_url = "http://www.ebay.com/sh/research"
-        query = {
-            "marketplace": "EBAY-US",
-            "dayRange": str(days),
-            "categoryId": "0",
-            "tabName": "SOLD",
-            "tz": "America/New_York",
-            "limit": str(limit),
-            "startDate": start_date,
-            "endDate": end_date,
-        }
-
-        for keywords in keyword_strings:
-            row_count = 0
-            page_num = 0
-
-            query["keywords"] = quote_plus(keywords[0])
-            result_data[keywords[0]] = (keywords[1], [])
-            while row_count < limit and page_num < max_pages:
-                
-                query["offset"] = page_num*limit
-                url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
-                print("url", url)
-                page = browser.pages[0]
-                page.goto(url, timeout=60000)
-                #page.screenshot(path="headless_debug.png")
+        try:
+            # Clear any stale Chrome-internal locks that might cause an abort
+            singleton_lock = os.path.join(user_data_dir, "SingletonLock")
+            if os.path.exists(singleton_lock):
                 try:
-                    page.wait_for_selector("table", timeout=60000)
-                    #page.wait_for_timeout(2000)
-                except TimeoutError:
-                    #exit after a perfect match between limit and query
-                    print(f"Timedout waiting for table on page {page_num}.")
-                    break
+                    os.remove(singleton_lock)
+                except OSError:
+                    pass
 
-                rows = page.query_selector_all(".research-table-row")
-                row_count = len(rows)
-                print("row_count:", len(rows))
+            with sync_playwright() as p:
+                args = [
+                    "--use-gl=desktop", 
+                    "--use-angle=gl", 
+                    "--ignore-gpu-blocklist", 
+                    "--password-store=basic", 
+                    "--no-first-run", 
+                    "--no-default-browser-check", 
+                    "--disable-extensions", 
+                    "--disable-sync", 
+                    "--disable-default-apps", 
+                    "--disable-component-update"
+                ]
+                
+                browser = p.chromium.launch_persistent_context(
+                    user_data_dir, 
+                    headless=False, 
+                    executable_path=exe_path, 
+                    args=args
+                )
 
-                rows_data = page.evaluate("""() => {
-                return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
-                    const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
-                    const img = row.querySelector('img');
-                    const imgUrl = img ? img.src : null;
-                    return { cells, imgUrl };
-                });
-                }""")
+                # Subtract the window (e.g., 180 days)
+                start_date, end_date = get_ebay_date_range(days)
 
-                for row_data in rows_data:
-                    cells = row_data["cells"]
-                    if len(cells) < 8:
-                        continue
+                base_url = "http://www.ebay.com/sh/research"
+                query = {
+                    "marketplace": "EBAY-US",
+                    "dayRange": str(days),
+                    "categoryId": "0",
+                    "tabName": "SOLD",
+                    "tz": "America/New_York",
+                    "limit": str(limit),
+                    "startDate": start_date,
+                    "endDate": end_date,
+                    "sorting":"-datelastsold"
+                }
+                for keywords in keyword_strings:
+                    row_count = 0
+                    page_num = 0
 
-                    result_data[keywords[0]][1].append({
+                    # keywords is expected to be a tuple/list: (search_string, some_id)
+                    current_search = keywords[0]
+                    query["keywords"] = quote_plus(current_search)
+                    result_data[current_search] = (keywords[1], [])
+
+                    while row_count < limit and page_num < max_pages:
+                        query["offset"] = page_num * limit
+                        url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
+                        print("URL:", url)
+                        
+                        page = browser.pages[0]
+                        page.goto(url, timeout=60000)
+
+                        try:
+                            page.wait_for_selector("table, h2.page-notice__title", timeout=60000)
+                        except Exception:
+                            print(f"Timed out waiting for table on page {page_num}.")
+                            break
+
+                        rows_data = page.evaluate("""() => {
+                            return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
+                                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                                const img = row.querySelector('img');
+                                const imgUrl = img ? img.src : null;
+                                return { cells, imgUrl };
+                            });
+                        }""")
+
+                        print(f"Found {len(rows_data)} rows.")
+                        
+                        for row_data in rows_data:
+                            cells = row_data["cells"]
+                            if len(cells) < 8:
+                                continue
+
+                            # Assuming get_split_part_text exists in your scope
+                            result_data[keywords[0]][1].append({
                             "title": get_split_part_text(cells[0], 0, 1),
                             "price": get_split_part_text(cells[2], 0, 0),
                             "format": get_split_part_text(cells[2], 0, 1),
@@ -657,11 +687,19 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=180):
                             "qty": cells[4],
                             "itemWebUrl": row_data["imgUrl"]
                         })
-                    
-                page_num += 1
-                row_count += limit
+                        
+                        page_num += 1
+                        row_count += len(rows_data)
+                        
+                        # Break if we didn't get a full page (means no more results)
+                        if len(rows_data) < limit:
+                            break
 
-        browser.close()
-        return result_data
+                browser.close()
+                
+        finally:
+            # Release the file lock so the next task waiting can proceed
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
+            print("Lock released.")
 
-
+    return result_data

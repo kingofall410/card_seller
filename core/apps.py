@@ -11,3 +11,4 @@ class CoreConfig(AppConfig):
         from services.queue_service import Queue
         self.queue = Queue()
         self.queue.start()
+        

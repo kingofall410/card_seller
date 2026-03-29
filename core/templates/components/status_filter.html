@@ -1,0 +1,298 @@
+<div class="filter-toolbar">
+    <div class="toolbar-side-spacer"></div>
+
+    <div class="filter-container">
+        <div class="badge-toggle toggle-cycle" data-group="id" data-state="none" onclick="cycleFilter(this)">
+            {% include "components/status_badge.html" with task=None %}
+        </div>
+        <div class="badge-toggle toggle-cycle" data-group="pricing" data-state="none" onclick="cycleFilter(this)">
+            {% include "components/status_badge.html" with task=None %}
+        </div>
+        <div class="badge-toggle toggle-cycle" data-group="listing" data-state="none" onclick="cycleFilter(this)">
+            {% include "components/status_badge.html" with task=None %}
+        </div>
+    </div>
+
+    <div class="toolbar-side-counter">
+        <label class="lock-wrapper">
+            <input type="checkbox" id="lock-selection" onchange="toggleLock(this)">
+            <span>Lock</span>
+        </label>
+        <div id="selection-count" onclick="clearSelection()" title="Click to clear selection">
+            Selected: 0
+        </div>
+    </div>
+</div>
+
+<style>
+    .filter-toolbar {
+        padding-top: 30px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        min-height: 60px;
+    }
+
+    .toolbar-side-spacer, .toolbar-side-counter {
+        flex: 1; 
+        display: flex;
+        padding: 0 20px;
+        gap: 12px; /* Space between Lock and Counter */
+        align-items: center;
+    }
+    .toolbar-side-spacer { justify-content: flex-start; }
+    .toolbar-side-counter { justify-content: flex-end; }
+
+    /* Compact Lock Styling for the right side */
+    .lock-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #666;
+        cursor: pointer;
+        user-select: none;
+        background: #eee;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        transition: all 0.2s;
+    }
+
+    .lock-wrapper:hover { background: #e5e5e5; }
+    .lock-wrapper input { margin: 0; cursor: pointer; }
+    .lock-wrapper input:checked + span { color: #d1242f; font-weight: bold; }
+
+    .filter-container {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex: 0 0 auto;
+    }
+
+    .badge-toggle {
+        cursor: pointer;
+        user-select: none;
+        width: 100px; 
+        display: flex;
+        justify-content: center;
+    }
+
+    .filter-container .status-badge {
+        display: inline-block;
+        width: 100%;
+        min-width: 100px;
+        text-align: center;
+        box-sizing: border-box;
+        white-space: nowrap;
+        opacity: 1 !important;
+        transition: all 0.1s ease;
+    }
+
+    #selection-count {
+        cursor: pointer;
+        font-size: 11px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: bold;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+        border: 1px solid #ddd;
+        background: #f5f5f5;
+        color: #888;
+    }
+
+    #selection-count.active {
+        color: #d1242f;
+        background: #fff5f5;
+        border: 1px solid #ffebe9;
+    }
+
+    .hidden-card { display: none !important; }
+
+    .card-item.status-stale {
+       border: 2px dashed #ffd54f !important;
+        transition: all 0.3s ease;
+    }
+</style>
+
+<script>
+// --- STORAGE HELPERS ---
+const getPageKey = (suffix) => `page_${window.location.pathname}_${suffix}`;
+const getSavedFilters = () => JSON.parse(sessionStorage.getItem(getPageKey('active_filters')) || "{}");
+const isLocked = () => sessionStorage.getItem(getPageKey('locked')) === 'true';
+
+const saveFilter = (group, state) => {
+    const filters = getSavedFilters();
+    filters[group] = state;
+    sessionStorage.setItem(getPageKey('active_filters'), JSON.stringify(filters));
+};
+
+// --- CORE FUNCTIONS ---
+function cycleFilter(el) {
+    const states = ['none', 'pending', 'success', 'failed'];
+    const displayNames = { 'none': 'None', 'pending': 'Pending', 'success': 'Success', 'failed': 'Failed' };
+    
+    let currentState = el.getAttribute('data-state') || 'none';
+    let nextState = states[(states.indexOf(currentState) + 1) % states.length];
+    
+    el.setAttribute('data-state', nextState);
+    saveFilter(el.getAttribute('data-group'), nextState);
+    
+    const badge = el.querySelector('.status-badge');
+    if (badge) {
+        badge.className = `status-badge status-${nextState}`;
+        badge.innerText = displayNames[nextState];
+    }
+    applyFilters();
+}
+
+function toggleLock(checkbox) {
+    sessionStorage.setItem(getPageKey('locked'), checkbox.checked);
+    // When unlocking, sync the sequence to the current visual filter immediately
+    if (!checkbox.checked) {
+        applyFilters();
+    }
+}
+
+function applyFilters() {
+    const cards = document.querySelectorAll('.card-item:not(.folder)');
+    const filters = document.querySelectorAll('.toggle-cycle');
+    const locked = isLocked();
+
+    cards.forEach(card => {
+        // --- The Sync Point ---
+        // Clicking a filter clears the "stale" state and finally 
+        // applies the visibility logic to the new data.
+        card.classList.remove('status-stale');
+
+        let isVisible = true;
+        filters.forEach(filter => {
+            const group = filter.getAttribute('data-group');
+            const filterState = filter.getAttribute('data-state');
+            if (filterState !== 'none') {
+                const cardStatus = card.getAttribute(`data-${group}-status`);
+                if (cardStatus !== filterState) isVisible = false;
+            }
+        });
+        card.classList.toggle('hidden-card', !isVisible);
+    });
+
+    // Handle checkboxes/sequence (Only if NOT locked)
+    if (!locked) {
+        let sequence = [];
+        const checkboxes = document.querySelectorAll('input[name="selected_cards"]');
+        const isFilterActive = Array.from(filters).some(f => f.getAttribute('data-state') !== 'none');
+
+        if (isFilterActive) {
+            checkboxes.forEach(checkbox => {
+                const cardElement = checkbox.closest('.card-item');
+                const isHidden = cardElement.classList.contains('hidden-card');
+                
+                checkbox.checked = !isHidden;
+                if (checkbox.checked) sequence.push(checkbox.value);
+            });
+            sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
+        } else {
+            if (document.readyState === 'complete') clearSelection(false); 
+        }
+    }
+
+    if (hotInstance) {
+        filterSpreadsheet();
+    }
+    updateCountUI();
+}
+
+function restoreFilters() {
+    const savedFilters = getSavedFilters();
+    const displayNames = { 'none': 'None', 'pending': 'Pending', 'success': 'Success', 'failed': 'Failed' };
+    
+    document.querySelectorAll('.toggle-cycle').forEach(f => {
+        const group = f.getAttribute('data-group');
+        const state = savedFilters[group] || 'none';
+        
+        f.setAttribute('data-state', state);
+        const badge = f.querySelector('.status-badge');
+        if (badge) {
+            badge.className = `status-badge status-${state}`;
+            badge.innerText = displayNames[state];
+        }
+    });
+}
+
+function refreshCheckboxState() {
+    const savedSequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+    document.querySelectorAll('input[name="selected_cards"]').forEach(checkbox => {
+        checkbox.checked = savedSequence.includes(checkbox.value);
+    });
+}
+
+function updateCountUI() {
+    const sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+    const counter = document.getElementById('selection-count');
+    if (counter) {
+        if (sequence.length > 0) {
+            counter.innerText = `Selected: ${sequence.length} (Clear)`;
+            counter.classList.add('active');
+            counter.style.pointerEvents = isLocked() ? "none" : "auto";
+        } else {
+            counter.innerText = `Selected: 0`;
+            counter.classList.remove('active');
+            counter.style.pointerEvents = "none"; 
+        }
+    }
+}
+
+function clearSelection(resetBadges = true) {
+    if (isLocked()) return;
+
+    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify([]));
+    if (resetBadges) {
+        sessionStorage.setItem(getPageKey('active_filters'), JSON.stringify({}));
+        document.querySelectorAll('.toggle-cycle').forEach(f => {
+            f.setAttribute('data-state', 'none');
+            const badge = f.querySelector('.status-badge');
+            if (badge) {
+                badge.className = "status-badge status-none";
+                badge.innerText = "None";
+            }
+        });
+        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('hidden-card'));
+    }
+    
+    document.querySelectorAll('input[name="selected_cards"]').forEach(cb => cb.checked = false);
+    updateCountUI();
+}
+
+// --- INITIALIZATION & EVENTS ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Restore lock state checkbox
+    const lockCheckbox = document.getElementById('lock-selection');
+    if (lockCheckbox) lockCheckbox.checked = isLocked();
+
+    restoreFilters();
+    refreshCheckboxState();
+    applyFilters(); 
+});
+
+document.addEventListener('change', function(e) {
+    if (e.target.name === 'selected_cards') {
+        if (isLocked()) {
+            e.target.checked = !e.target.checked; // Revert visually
+            return;
+        }
+
+        let sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+        if (e.target.checked) {
+            if (!sequence.includes(e.target.value)) sequence.push(e.target.value);
+        } else {
+            sequence = sequence.filter(id => id !== e.target.value);
+        }
+        sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
+        updateCountUI();
+    }
+});
+</script>

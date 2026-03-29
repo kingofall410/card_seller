@@ -2,14 +2,22 @@ from django.db import models
 
 class StatusBase(models.TextChoices):
     
-    UNEXECUTED = "unexecuted", "Unexecuted"
+    #card
+    IMPORTED = "imported", "Imported"
+    IDED = "identified", "Identified"
+    PRICED = "priced", "Priced"
     LISTED = "listed", "Listed"
+    #pending, failed
+
+    #task
+    RUNNING = "running", "Running"
+    STAGED = "staged", "Staged" 
     PENDING = "pending", "Pending"
-    MANUAL = "manual", "Manual"
-    AUTO = "auto", "Auto"
-    LOCKED = "locked", "Locked"
     FAILED = "failed", "Failed"
     SUCCESS = "success", "Success"
+
+    #collection
+    #imported, ided, priced, listed
     CLOSED = "closed", "Closed"
 
     @classmethod
@@ -20,11 +28,12 @@ class StatusBase(models.TextChoices):
     def get_meta(cls, value):
         #print(value)
         return {
-            cls.UNEXECUTED: {"icon": "🚫", "color": "#ffffff"},
-            cls.MANUAL: {"icon": "✋", "color": "#fffbe6"},
-            cls.AUTO: {"icon": "🤖", "color": "#fff1f0"},
-            cls.LOCKED: {"icon": "", "color": "#f6ffed"},
-            cls.LISTED: {"icon": "✔️", "color": "#ff0000"},
+            cls.IMPORTED: {"icon": "🚫", "color": "#ffffff"},
+            cls.IDED: {"icon": "✋", "color": "#fffbe6"},
+            cls.STAGED: {"icon": "✋", "color": "#fffbe6"},
+            cls.PRICED: {"icon": "🤖", "color": "#fff1f0"},
+            cls.LISTED: {"icon": "", "color": "#f6ffed"},
+            cls.RUNNING: {"icon": "✔️", "color": "#ff0000"},
             cls.PENDING: {"icon": "⏳", "color": "#fff4cc"},
             cls.FAILED: {"icon": "❌", "color": "#ff0000"},
             cls.CLOSED: {"icon": "🔒", "color": "#e6f7ff"},

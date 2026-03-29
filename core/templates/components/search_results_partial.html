@@ -1,0 +1,7 @@
+{% for card in cards %}
+    {% include "components/card_item.html" with card=card %}
+{% empty %}
+    <div style="width: 100%; text-align: center; padding: 40px; color: #888;">
+        No cards found matching that search.
+    </div>
+{% endfor %}

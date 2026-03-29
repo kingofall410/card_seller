@@ -14,6 +14,10 @@ from services import lookup
 from django.forms.models import model_to_dict
 from django.apps import apps
 from django.db import connection, transaction, IntegrityError
+from django.db.models import Q
+from django.template.loader import render_to_string
+from core.views import collection_views
+
 
 # Card-related views
 @csrf_exempt
@@ -123,6 +127,48 @@ def next_card(request, card_id):
         next_card_id = card_id + delta
         return redirect("crop_review", card_id=next_card_id)
 
+def card_search_ajax(request):
+    query = request.GET.get('q', '')
+    page_number = request.GET.get('page', 1)
+    
+    if query:
+        cards_list = Card.objects.filter(
+            Q(search_results__full_name__icontains=query) |
+            Q(search_results__year__icontains=query) |
+            Q(search_results__brand__icontains=query) |
+            Q(search_results__team__icontains=query) |
+            Q(search_results__city__icontains=query) |
+            Q(search_results__subset__icontains=query)
+        ).distinct().order_by('-id') # Ordering is required for consistent pagination
+    else:
+        cards_list = Card.objects.none()
+
+    paginator = Paginator(cards_list, 40) # 40 cards per "chunk"
+    page_obj = paginator.get_page(page_number)
+
+    html = render_to_string('components/search_results_partial.html', {'cards': page_obj}, request=request)
+    
+    # If it's the FIRST page of a new search, also send the table data
+    # Get the actual labels/headers
+    columns = CardSearchResult.listing_fields 
+    table_data = []
+    if request.GET.get('page') == '1':
+        table_data = collection_views.spreadsheet_rows_from_search_result(cards_list, columns)
+
+    
+    return JsonResponse({
+        'html': html,
+        'table_data': table_data,
+        'col_headers': columns,
+        'has_next': page_obj.has_next(),
+        'next_page': page_obj.next_page_number() if page_obj.has_next() else None # Check this!
+    })
+
+def get_card_item(request, card_id):
+    card = get_object_or_404(Card, id=card_id)
+        
+    return render(request, 'components/card_item.html', {'card': card})
+
 @csrf_exempt
 def hold_card(request, csr_id):
     print("hold", csr_id)
@@ -177,6 +223,8 @@ def update_csr_fields(request):
         data = json.loads(request.body)
         csr_id = data["csrId"]
         all_fields = data["allFields"]
+        print(csr_id)
+        print(all_fields)
 
     if not csr_id:
         return JsonResponse({"error": True, "message": "Missing or invalid csrId"}, status=400)
@@ -187,7 +235,7 @@ def update_csr_fields(request):
     
     # Convert POST data to dict and sanitize
     field_data = convert_and_sanitize(all_fields, csr)    
-    
+    print("sanitized", field_data)
     #overwrite the product group info to clear a broken group
     #right now this is only used by Clear group.  It will have to be improved to handle other use cases
     if "group_key" in field_data:
@@ -226,6 +274,22 @@ def update_li_fields(request):
 
     return JsonResponse({"success": True})
 
+def render_single_card(request, card_id):
+    """
+    Returns the HTML partial for a single card to be swapped into the grid.
+    """
+    card = get_object_or_404(Card, id=card_id)
+    
+    # Context should match what your main grid loop uses
+    context = {
+        'card': card,
+        # If your status_badge logic requires specific task data:
+        'id_task': card.get_latest_id_task(), 
+        'pricing_task': card.get_latest_pricing_task(),
+        'listing_task': card.get_latest_listing_task(),
+    }
+    
+    return render(request, 'components/card_item_partial.html', context)
 
 @csrf_exempt
 def retokenize(request, csr_id):
@@ -240,15 +304,12 @@ def retokenize(request, csr_id):
 
 @csrf_exempt
 def price_only(request, csr_id):
-    print("reprice")
+    print("reprice", csr_id)
 
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
-    csr = CardSearchResult.objects.get(id=csr_id)
 
-    core_config = apps.get_app_config("core")
-    core_config.queue.schedule_pricing_task(name=f"list csr {csr_id}", card=csr.parent_card,
-        csr=csr, callback=lookup.price_only, params={"csr_id": csr_id, "settings_id":2})
+    lookup.price_only(csr_id, 2)
 
     return JsonResponse({"success": True, "error": ""})
 

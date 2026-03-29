@@ -8,7 +8,9 @@ import cv2
 from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult
 from django.conf import settings as app_settings
-
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+import traceback
 class CollectionStatus(models.TextChoices):
     
     IMPORTED = "imported", "Imported"
@@ -26,6 +28,7 @@ class Collection(models.Model):
 
     status = models.CharField(max_length=20, choices=CollectionStatus.choices, default=CollectionStatus.IMPORTED)    
     notes = models.TextField(blank=True)
+    value = models.FloatField(default=0.0)
     
     spreadsheet_fields = [
         "id", "name", "create_date", "status"
@@ -83,10 +86,10 @@ class Collection(models.Model):
             "total": len(self.cards.all())
         }
         return self._status_counts
-        
-    @property
-    def list_value(self):
-        return 0#sum(card.active_search_results().list_price for card in self.cards.all())
+
+    def save(self, *args, **kwargs):
+        self.value = sum(c.value for c in self.cards.all())
+        super().save(*args, **kwargs)
 
     @property
     def get_size(self):
@@ -98,6 +101,10 @@ class Collection(models.Model):
     def previous(self, card_id):
         return self.cards.filter(id__lt=card_id).order_by('-id').first()
 
+    def update_value(self):
+        print("c.update_value")
+        self.value = sum(c.value for c in self.cards.all())
+        self.save(update_fields=['value'])
 
 class Card(models.Model):
     upload_date = models.DateTimeField(auto_now_add=True)
@@ -114,7 +121,29 @@ class Card(models.Model):
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
     notes = models.TextField(blank=True)
-        
+    
+    value = models.FloatField(default=True)
+
+    def save(self, *args, **kwargs):
+        print("Card save")
+        try:
+            info = getattr(self, 'listed_card_info', None)
+
+            if info and info.list_price > 0.0:
+                print("if")
+                self.value = self.listed_card_info.list_price
+            else:
+                print("else")
+                self.value = self.active_search_results().ebay_msrp
+            self.collection.update_value()
+            super().save(*args, **kwargs)            
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+    
+    def successful_id(self):
+        return self.active_search_results().successful_id()
+    
     @property
     def next(self):
         return self.collection.next(self.id)
@@ -122,10 +151,6 @@ class Card(models.Model):
     @property
     def previous(self):
         return self.collection.previous(self.id)
-
-    @property
-    def listed_card_info(self):
-        return self.listed_card
 
     def get_lookup_image(self):
         if self.cropped_image:
@@ -160,15 +185,23 @@ class Card(models.Model):
     def listing_title(self):
         return self.active_search_results().display_title_to_be
 
-        
     @property
-    def latest_listing_task(self):
-        wtf = None
-        if self.active_search_results():
-            wtf = self.active_search_results().listing_tasks.latest("scheduled_for")
+    def latest_id_task(self):
+        wtf = self.id_tasks.latest("scheduled_for")
        # print("wtf", wtf.id)
         return wtf
-        
+
+    @property
+    def latest_listing_task(self):
+        wtf = self.listing_tasks.latest("scheduled_for")
+       # print("wtf", wtf.id)
+        return wtf
+
+    @property
+    def latest_pricing_task(self):
+        wtf = self.pricing_tasks.latest("scheduled_for")
+       # print("wtf", wtf.id)
+        return wtf
         
     @property
     def listing_group(self):
@@ -1195,12 +1228,10 @@ class Card(models.Model):
             crop_params = last_csr.reverse_crop_params
             target_image = self.cropped_reverse
             portrait_image = self.portrait_reverse
-            last_csr.front_cropping_status = StatusBase.MANUAL
         else:
             crop_params = last_csr.front_crop_params
             target_image = self.cropped_image
             portrait_image = self.portrait_image
-            last_csr.back_cropping_status = StatusBase.MANUAL
 
         
         last_csr.save()

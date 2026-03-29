@@ -25,6 +25,53 @@
   text-decoration: underline;
 }
 
+/* Ensure the main dropdown doesn't clip the sub-menu */
+.task-dropdown .dropdown-menu {
+  overflow: visible !important;
+}
+
+/* Hover Logic */
+.nav-item-wrapper:hover .sub-dropdown-menu {
+  display: block;
+}
+
+/* Sub-dropdown positioning */
+.sub-dropdown-container:hover .sub-dropdown-menu {
+  display: block;
+}
+/* Sub-menu styling */
+.sub-dropdown-menu {
+  display: none;
+  position: absolute;
+  left: 100%; /* Spits it out to the right */
+  top: 0;
+  background-color: white;
+  box-shadow: 5px 2px 10px rgba(0,0,0,0.15);
+  border-radius: 0 6px 6px 0;
+  border-left: 1px solid #eee;
+  min-width: 180px;
+  z-index: 1001;
+
+
+}/* Reset buttons inside forms to look like nav links */
+.sub-nav-link {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: white;
+  border: none;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.sub-nav-link:hover {
+  background-color: #f2f4f7;
+}
 /* card status colors */
 .nav-link .status-pending { color: #fff4cc; background-color: #fff4cc20;}
 .nav-link .status-failed  { color: #af1e1e; background-color: #af1e1e20;}
@@ -89,30 +136,53 @@
 
   <!-- TASK QUEUE DROPDOWN -->
   <div class="dropdown task-dropdown" style="position: relative; margin-right: 24px;">
-    <button class="dropdown-toggle"
-            style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
-      📤 TASK QUEUE ▾
-    </button>
+      <button class="dropdown-toggle"
+              style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
+        📤 TASK QUEUE ▾
+      </button>
 
-    <div class="dropdown-menu"
-         style="
-           display: none;
-           position: absolute;
-           top: 100%;
-           left: 0;
-           background-color: white;
-           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-           border-radius: 6px;
-           overflow: hidden;
-           min-width: 520px;
-           z-index: 1000;
-         ">
-      <a href="{% url 'tasks_list' %}" class="nav-link">
-        Task List...
-      </a>
-      <a href="{% url 'calendar' %}" class="nav-link">
-        Task Calendar...
-      </a>
+      <div class="dropdown-menu"
+          style="
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 6px;
+            min-width: 520px;
+            z-index: 1000;
+            overflow: visible; /* CRITICAL: Allows the sub-menu to pop out the side */
+          ">
+        
+        <div class="nav-item-wrapper" style="position: relative;">
+          <a href="{% url 'task_queue' %}" class="nav-link" style="display: flex; justify-content: space-between;">
+            <span>Task Queue...</span>
+            <span style="color: #ccc;">▶</span>
+          </a>
+
+          <div class="sub-dropdown-menu">
+            <form method="POST" action="{% url 'start_queue' %}">
+              {% csrf_token %}
+              <button type="submit" class="sub-nav-link">▶ Start Queue</button>
+            </form>
+            <form method="POST" action="{% url 'stop_queue' %}">
+              {% csrf_token %}
+              <button type="submit" class="sub-nav-link">⏹ Stop Queue</button>
+            </form>
+            <form method="POST" action="{% url 'reset_queue' %}" onsubmit="return confirm('Reset all tasks?');">
+              {% csrf_token %}
+              <button type="submit" class="sub-nav-link" style="color: #af1e1e; border-bottom: none;">🔄 Reset Queue</button>
+            </form>
+          </div>
+        </div>
+
+        <a href="{% url 'calendar' %}" class="nav-link">
+          Task Calendar...
+        </a>
+
+        </div>
+    </div>
       {% get_tasks as tasks %}    
       {% for task in tasks %}
         <span

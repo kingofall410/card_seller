@@ -8,6 +8,75 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from types import SimpleNamespace
 from django.http import JsonResponse
+from django.shortcuts import redirect
+from django.contrib import messages
+from django.apps import apps
+from django.views.decorators.http import require_POST
+
+def task_monitor_data(request):
+    # Fetch latest 100 tasks or filter by PENDING
+    tasks = Task.objects.all().order_by('-created_at')[:40]
+    data = []
+    for t in tasks:
+        data.append({
+            "id": t.id,
+            "name": t.name,
+            "status": t.status,
+            "scheduled": t.scheduled_for.strftime("%Y-%m-%d %H:%M:%S"),
+            "error": t.error_str or "",
+            "type": t.__class__.__name__
+        })
+    return JsonResponse({"data": data})
+
+# views.py
+def retry_task(request, task_id):
+    if request.method == "POST":
+        task = get_object_or_404(Task, id=task_id)
+        task.status = "pending"
+        task.error_str = ""
+        task.save()
+        
+        # Also tell the Singleton Queue to re-add it if it's not there
+        from core.apps import CoreConfig
+        # Check if it's already in memory; if not, reload
+        # Or simply call Queue().reset() to sync memory with DB
+        
+        return JsonResponse({"success": True})
+
+def delete_task_json(request, task_id):
+    if request.method == "POST":
+        task = get_object_or_404(Task, id=task_id)
+        task.delete()
+        # Ensure memory is also cleared
+        return JsonResponse({"success": True})
+
+def task_queue(request):
+    return render(request, 'services/task_queue.html')
+
+def start_queue(request):
+    if request.method == "POST":
+        # Logic to start your background worker or update status
+        core_config = apps.get_app_config("core")
+        core_config.queue.start()
+        messages.success(request, "Queue started successfully!")
+    return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
+
+def stop_queue(request):
+    if request.method == "POST":
+        # Logic to pause/stop processing
+        core_config = apps.get_app_config("core")
+        core_config.queue.stop()
+        messages.warning(request, "Queue has been stopped.")
+    return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
+
+def reset_queue(request):
+    if request.method == "POST":
+        # Example: Move all 'failed' or 'processing' tasks back to 'pending'
+        core_config = apps.get_app_config("core")
+        core_config.queue.start()
+        messages.info(request, "Queue has been reset to pending status.")
+    return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
+
 
 def task_calendar(request):
     # Determine month

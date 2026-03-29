@@ -14,7 +14,7 @@ class Task(models.Model):
     callback_path = models.CharField(max_length=300)
     params_json = models.TextField(default="{}")
 
-    predecessor = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="next")
+    predecessor = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="successor")
     
     status = models.CharField(
         max_length=20,
@@ -68,7 +68,7 @@ class ListingTask(Task):
 class PricingTask(Task):
     
     card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='pricing_tasks', null=True)
-    csr = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, related_name='_pricing_tasks', null=True)
+    csr = models.ForeignKey(CardSearchResult, on_delete=models.DO_NOTHING, related_name='pricing_tasks', null=True)
 
 
 class UploadTask(Task):
@@ -76,4 +76,5 @@ class UploadTask(Task):
 
 
 class IDTask(Task):
-    pass
+
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='id_tasks', null=True)

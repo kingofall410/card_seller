@@ -22,6 +22,7 @@
 }
 </style>
 
+<script src="{% static 'js/task_monitor.js' %}"></script>
 <script>
 function showSpinnerOnButton(element) {
     // Save original state
@@ -62,15 +63,79 @@ function launchSequence() {
     } else {
         idQueue = Array.from(uncheckedBoxes).map(cb => cb.value);
     }
-    console.log(idQueue)
+    //console.log(idQueue)
     // 3. Clear any old session data and save the new sequence
     sessionStorage.removeItem('card_sequence');
     sessionStorage.setItem('card_sequence', JSON.stringify(idQueue));
 }
+
+window.reloadCard = async function(cardId) {
+    
+    // 1. Find the current card in the grid
+    const cardElement = document.querySelector(`.card-item[data-card-id="${cardId}"]`);
+    console.log(cardId)
+    if (!cardElement) return; // Card isn't on this page/view
+
+    try {
+        const response = await fetch(`../get_card_item/${cardId}/`);
+        if (!response.ok) return;
+        
+        const freshHtml = await response.text();
+
+        // 2. The Swap
+        cardElement.outerHTML = freshHtml;
+
+        // 3. Re-Sync UI Logic
+        // This is the "Magic" that makes it feel like a single-page app
+        if (window.refreshCheckboxState) window.refreshCheckboxState();
+        if (window.applyFilters) window.applyFilters();
+        
+        console.log(`Card ${cardId} hot-swapped.`);
+    } catch (err) {
+        console.error("Reload failed:", err);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.StatelessTaskMonitor) {
+        const monitor = window.StatelessTaskMonitor.getInstance();
+
+        monitor.onUpdate((cardId, newStatus) => {
+            console.log(`Update detected for ${cardId}: ${newStatus}`);
+            
+            const card = document.querySelector(`.card-item[data-id="${cardId}"]`);
+            if (card) {
+                // 1. Capture current visibility BEFORE reloading
+                const wasHidden = card.classList.contains('hidden-card');
+
+                // 2. Reload the card content
+                if (typeof window.reloadCard === 'function') {
+                    // We wrap the reload in a way that preserves the 'hidden' state
+                    window.reloadCard(cardId).then(() => {
+                        const refreshedCard = document.querySelector(`.card-item[data-id="${cardId}"]`);
+                        if (refreshedCard) {
+                            // 3. FORCE the visibility to stay what it was
+                            refreshedCard.classList.toggle('hidden-card', wasHidden);
+                            
+                            // 4. Mark as stale so the user knows a filter sync is pending
+                            refreshedCard.classList.add('status-stale');
+                            
+                            // 5. If we are NOT locked, we should probably update the checkbox 
+                            // to match the fact that the card is still visible/selected
+                            if (typeof updateCountUI === 'function') updateCountUI();
+                        }
+                    });
+                }
+            }
+        });
+    }
+});
+
+
 </script>
 
 <div id="collection-tree">
-    {% include "collection_details.html" with collection=collection settings=settings %}
+    {% include "ad_hoc_collection.html" with collection=collection settings=settings %}
 </div>
 
 

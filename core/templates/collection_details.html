@@ -1,5 +1,5 @@
-{% load custom_tags %}
 {% load static %}
+{% load custom_tags %}
 {% get_collections as collections %}
 <script src="{% static 'js/collection_node.js' %}"></script>
 <style>
@@ -324,140 +324,104 @@
     transition: transform 0.1s ease;
 }
 
+.card-status-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 5px;
+    margin-top: auto;
+}
+
+.status-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-right: 1px solid #f0f0f0;
+}
+
+.status-column:last-child {
+    border-right: none;
+}
+
+.column-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+/* Adjust your existing badge CSS to be slightly smaller for the row */
+.status-badge {
+    font-size: 0.75rem !important;
+    padding: 2px 8px !important;
+    white-space: nowrap;
+}
 </style>
+
 <div id="collection-{{ collection.id }}" class="collection">
-<div class="collection-node" data-id="{{ collection.id }}">
-  <div class="collection-header">
-    
-    <div class="collection-title-{{ collection.id }}">
-    <h2 id="collection-title-{{ collection.id }}">
-        ${{collection.list_value}} {{ collection.id }}. {{ collection.name }} (<span id="card-count-{{ collection.id }}">{{ collection.cards.count }}</span>) {{ collection.status.field }}
-
-    </h2>
-    <div class="collection-status-group" id="status-group-{{ collection.id }}">
-      {% get_choices as status_choices %}
-    {% for value, label in status_choices %}
-      <label class="status-option">
-        <input 
-            type="radio"
-            name="status-{{ collection.id }}"
-            value="{{ value }}"
-            {% if collection.status == value %}checked{% endif %}
-            onchange="saveCollectionField({{ collection.id }}, 'status', this.value)"
-        >
-        {{ label }}
-      </label>
-
-    {% endfor %}
-    </div>
-    <button onclick="removeCollection({{ collection.id }})">🗑️</button>
-    <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')">✂</button>
-    <button onclick="submitCollection('/identify_collection/{{ collection.id }}/')">🔍</button>
-    <button onclick="submitCollection('/price_collection/{{ collection.id }}/')">💲</button>
-
-  
-    <input type="text"
-      name="collection_name_{{ collection.id }}"
-      value="{{ collection.name }}"
-      style="width: 50%; box-sizing: border-box;"
-      data-id="{{ collection.id }}"
-      placeholder="Change collection name..."
-      onchange="saveCollectionField({{ collection.id }}, 'name', this.value)">
-  </div>
-  {% comment %}
-  <div style="text-align: center; margin-top: 20px;">
-    <button onclick="toggleAttributePanel()">⚙️ Select Attributes</button>
-  </div>
-
-    <div id="attributePanel" style="display: none; margin: 10px auto; text-align: center;">
-      <label><input type="checkbox" class="attr-toggle" value="name" checked> Name</label>
-      <label><input type="checkbox" class="attr-toggle" value="thumb" checked> Thumbnail</label>
-      <label><input type="checkbox" class="attr-toggle" value="set"> Set</label>
-      <label><input type="checkbox" class="attr-toggle" value="nr" >Card #</label>
-      <label><input type="checkbox" class="attr-toggle" value="team" >Team</label>
-      <label><input type="checkbox" class="attr-toggle" value="serial" >Serial</label><br>
-      <label><input type="checkbox" class="attr-toggle" value="list_price" >List Price</label>
-      <label><input type="checkbox" class="attr-toggle" value="highlow" >Ebay Low / High</label>
-      <label><input type="checkbox" class="attr-toggle" value="mmm" >Ebay Mean / Meadian / Mode</label>
-      <label><input type="checkbox" class="attr-toggle" value="ids" >IDs</label>
-      <label><input type="checkbox" class="attr-toggle" value="highlowsold" >Sold Low / High</label>
-      <label><input type="checkbox" class="attr-toggle" value="soldavgs" >Last Sale / Last 5 Avg</label>
-      <label><input type="checkbox" class="attr-toggle" value="avgonly">Avg Sale</label>
-      <label><input type="checkbox" class="attr-toggle" value="msrp" checked>MSRP</label>
-    </div>
-    {% endcomment %}
-    <div class="card-list">
-    {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
-
-    {% for card in collection.cards.all %}
-    {% with asr=card.active_search_results %}
-    {% with display_name=asr|get_attribute:"display_full_name" display_year=asr|get_attribute:"display_year" display_brand=asr|get_attribute:"display_brand" display_subset=asr|get_attribute:"display_subset" %}
+    <div class="collection-node" data-id="{{ collection.id }}">
         
-    <div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}">
+        {# Extracted Header Component #}
+        {% include "components/collection_tools.html" with collection=collection %}
         
-        <div class="card-checkbox">
-            <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
+        <div class="container">      
+            {% include "components/status_filter.html" %}          
         </div>
 
-        <a href="/card/{{ card.id }}/" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
-            <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
-            <div class="card-meta">{{ display_year }} {{ display_brand }}</div>
-            <div class="card-meta">List: ${{ card.listed_card_info.list_price|floatformat:2 }}</div>
-            
-            <div class="image-wrapper" onmouseenter="loadReverse(this)">
-                <img src="{{ card.cropped_image.url }}" class="thumbnail default" onerror="this.src='/static/images/missing_card.png';" loading="lazy">
-                <img data-src="{{ card.cropped_reverse.url }}" class="thumbnail hover" onerror="this.src='/static/images/missing_reverse.png';">
-            </div>
-        </a>
+        <div class="card-list">
+            {# Individual Cards #}
+            {% for card in collection.cards.all %}
+                {% include "components/card_item.html" with card=card %}
+            {% empty %}
+                <p>No cards found in this collection.</p>
+            {% endfor %}
 
-        <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ card.id }}</div>
-
-        <div class="card-actions">
-            {% with listing_task=card.latest_listing_task %}
-                {% if listing_task %}
-                    <a href="{% url 'calendar' %}" 
-                       class="status-link"
-                       onclick="event.stopPropagation();"
-                       {% if listing_task.error_str %}
-                       title="Error: {{ listing_task.error_str }}"
-                       {% endif %}>
-                        <span class="status-badge status-{{ listing_task.status|slugify }}">
-                            {{ listing_task.get_status_display }}
-                        </span>
-                    </a>
-                {% endif %}
-            {% endwith %}
-            
-            <button onclick="event.stopPropagation(); removeCard({{ card.id }})" title="Delete">🗑️</button>
-            
-            <div class="move-dropdown-container">
-                <button class="nav-button" onclick="toggleMoveMenu(event, {{ card.id }})">📁</button>
-                <div id="dropdown-{{ card.id }}" class="move-menu" onclick="event.stopPropagation();">
-                    <p class="menu-header">Move to...</p>
-                    {% for coll in collections %}
-                        {% if coll.id != collection.id %}
-                        <a href="javascript:void(0)" 
-                           onclick="event.stopPropagation(); moveCardToCollection({{ card.id }}, {{ coll.id }})">
-                           {{ coll.id }}. {{ coll.name }}
-                        </a>
-                        {% endif %}
-                    {% endfor %}
+            {# Subcollections / Folders #}
+            {% for subcollection in collection.subcollections.all %}
+            <div class="card-item folder">
+                <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ subcollection.id }}</div>
+                <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
+                <div class="image-wrapper">
+                    <img src="/static/images/missing_collection.png" class="thumbnail">
                 </div>
             </div>
+            {% endfor %}
+            
+            {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
         </div>
     </div>
+</div>
+<div id="collection-{{ collection.id }}" class="collection">
+    <div class="collection-node" data-id="{{ collection.id }}">
+        
+        {# Extracted Header Component #}
+        {% include "components/collection_tools.html" with collection=collection %}
+        
+        <div class="container">      
+            {% include "components/status_filter.html" %}          
+        </div>
 
-    {% endwith %}
-    {% endwith %}
-{% endfor %}
+        <div class="card-list">
+            {# Individual Cards #}
+            {% for card in collection.cards.all %}
+                {% include "components/card_item.html" with card=card %}
+            {% empty %}
+                <p>No cards found in this collection.</p>
+            {% endfor %}
 
-    {% for subcollection in collection.subcollections.all %}
-    <div class="card-item folder">
-        <div class="card-meta">ID: {{ subcollection.id }}</div>
-        <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
-        <div class="image-wrapper">
-            <img src="/static/images/missing_collection.png" class="thumbnail">
+            {# Subcollections / Folders #}
+            {% for subcollection in collection.subcollections.all %}
+            <div class="card-item folder">
+                <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ subcollection.id }}</div>
+                <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
+                <div class="image-wrapper">
+                    <img src="/static/images/missing_collection.png" class="thumbnail">
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
         </div>
     </div>
-    {% endfor %}
 </div>

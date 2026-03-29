@@ -1,0 +1,42 @@
+{% load custom_tags %}
+<div class="collection-header">
+    <div class="collection-title-{{ collection.id }}">
+        <h2 id="collection-title-{{ collection.id }}">
+            {{ collection.id }}. {{ collection.name }} (
+            <span id="card-count-{{ collection.id }}">
+                {{ collection.cards.count }}; ${{ collection.value|floatformat:2 }}
+            </span>)
+        </h2>
+        
+        <div class="collection-status-group" id="status-group-{{ collection.id }}">
+            {% get_choices as status_choices %}
+            {% for value, label in status_choices %}
+            <label class="status-option">
+                <input 
+                    type="radio"
+                    name="status-{{ collection.id }}"
+                    value="{{ value }}"
+                    {% if collection.status == value %}checked{% endif %}
+                    onchange="saveCollectionField({{ collection.id }}, 'status', this.value)"
+                >
+                {{ label }}
+            </label>
+            {% endfor %}
+        </div>
+        
+        <div class="collection-actions">
+            <button onclick="removeCollection({{ collection.id }})" title="Remove Collection">🗑️</button>
+            <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')" title="Crop Review">✂</button>
+            <button onclick="submitCollection('/identify_collection/{{ collection.id }}/')" title="Identify">🔍</button>
+            <button onclick="submitCollection('/price_collection/{{ collection.id }}/')" title="Price">💲</button>
+        </div>
+
+        <input type="text"
+            name="collection_name_{{ collection.id }}"
+            value="{{ collection.name }}" 
+            style="width: 50%; box-sizing: border-box; margin-top: 10px;"
+            data-id="{{ collection.id }}"
+            placeholder="Change collection name..."
+            onchange="saveCollectionField({{ collection.id }}, 'name', this.value)">
+    </div>
+</div>

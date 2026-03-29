@@ -105,4 +105,5 @@ class ListedInfo(models.Model):
     def save(self, *args, **kwargs):
         csr = self.card.active_search_results()
         self.listing_detail_text = csr.title_to_be if csr else ""
+        self.card.save()
         super().save(*args, **kwargs)

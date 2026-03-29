@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models.models import Brand, Subset, Settings, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
-from .models.task import Task, ListingTask
+from .models.task import Task, ListingTask, PricingTask, IDTask
 
 admin.site.register(Brand)
 admin.site.register(Subset)
@@ -32,6 +32,16 @@ class TaskAdmin(admin.ModelAdmin):
 class ListingTaskAdmin(admin.ModelAdmin):
     list_display = ['id']
 
+
+class IDTaskAdmin(admin.ModelAdmin):
+    list_display = ['card']
+
+
+class PricingTaskAdmin(admin.ModelAdmin):
+    list_display = ['card', 'csr']
+
 admin.site.register(Task, TaskAdmin)
 
 admin.site.register(ListingTask, ListingTaskAdmin)
+admin.site.register(IDTask, IDTaskAdmin)
+admin.site.register(PricingTask, PricingTaskAdmin)

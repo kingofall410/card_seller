@@ -50,23 +50,24 @@ function submitCollection(url) {
     console.log("Sending IDs to backend:", selections);
 
     $.ajax({
-        url: url,//,
-        method: "GET",
-        traditional: true, // This makes the URL: ?card_ids=1&card_ids=2
-        data: {
-            'card_ids': selections 
-        },
-        success: function(response) {
-            if (response.success) {
-                location.reload();
-            } else {
-                alert("Server error: " + response.error);
-            }
-        },
-        error: function(xhr) {
-            alert("Request failed. Check dev tools console.");
-        }
-    });
+      url: url,
+      method: "POST", // Change to POST
+      data: {
+          'card_ids': selections, // Selections is your [3691, 3692, ...]
+      },
+      success: function(response) {
+          if (response.success) {
+              location.reload();
+          } else {
+              alert("Server error: " + response.error);
+          }
+      },
+      error: function(xhr) {
+          // Since you got a 500 error, this block will now catch it
+          console.log(xhr.responseText); 
+          alert("Request failed. Check the Django terminal for the traceback.");
+      }
+  });
 }
 
 function updateAttributeVisibility() {
@@ -97,6 +98,35 @@ function getSelectedAttributes() {
   return Array.from(checkboxes)
     .filter(cb => cb.checked)
     .map(cb => cb.value);
+}
+
+function filterCards(statusClass, element) {
+    const allCards = document.querySelectorAll('.card-item:not(.folder)');
+    const allButtons = document.querySelectorAll('.filter-btn');
+
+    // 1. Handle Button Active States
+    allButtons.forEach(btn => btn.classList.remove('active'));
+    if (statusClass !== 'all') {
+        element.classList.add('active');
+    }
+
+    // 2. Filter the Cards
+    allCards.forEach(card => {
+        if (statusClass === 'all') {
+            card.classList.remove('hidden-card');
+        } else {
+            // Check if the card has the specific status class
+            if (card.classList.contains(statusClass)) {
+                card.classList.remove('hidden-card');
+            } else {
+                card.classList.add('hidden-card');
+            }
+        }
+    });
+
+    // 3. Update a "Results Found" count (Optional)
+    const visibleCount = document.querySelectorAll('.card-item:not(.hidden-card):not(.folder)').length;
+    console.log(`Showing ${visibleCount} cards`);
 }
 
 function sortCardsInModule(selectEl) {

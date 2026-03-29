@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from services.models.models import Settings
+from services.models.models import Settings, Brand
 from services.models.task import Task, ListingTask
 from core.models.Status import StatusBase
 from core.models.ListedInfo import ListedInfo
@@ -8,7 +8,7 @@ from core.models.Group import ProductGroup
 
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Collection, CollectionStatus
-from core.models.CardSearchResult import CardSearchResult
+from core.models.CardSearchResult import CardSearchResult, ListingGroup
 from core.models.Card import Card
 # Miscellaneous views
 from django.apps import apps
@@ -20,16 +20,27 @@ def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
-    
-    '''li = ListedInfo.objects.get(id=1057)
+    card = Card.objects.filter(id=3693).first()
+    csr = card.active_search_results()
+    for listing_group in csr.listing_groups.all():
+        listing_group.save()
+
+    '''for csr in csrs:
+        if not csr.listing_tasks.exists() or not csr.listing_tasks.last()==StatusBase.PENDING:
+            csr.overall_status = StatusBase.PRICED
+            csr.save()
+        
+
+    #core_config.queue.reset()
+    li = ListedInfo.objects.get(id=1057)
     csr = li.card.active_search_results()
 
     li.product_group = csr.ebay_product_group
     li.list_qty = 1
-    li.listing_id = csr.ebay_listing_id
+    li.listing_id = csr.ebay_listing_id 
     #self.sku = csr.sku
     li.offer_id = csr.ebay_offer_id
-    li.save()'''
+    li.save()
     cards = Card.objects.filter(id__gt=2253).filter(id__lt=2491).delete()
     collections = Collection.objects.filter(id__in=[131])
     for collection in collections:
@@ -39,7 +50,7 @@ def test_view(request):
                 lci = ListedInfo.create_from_csr(csr)
             else:
                 lci = ListedInfo.create_from_card(card)  
-    '''cards = Card.objects.filter(id__gt=2587).filter(id__lt=2605).delete()
+    cards = Card.objects.filter(id__gt=2587).filter(id__lt=2605).delete()
     ListedInfo.objects.all().delete()
 
     collections = Collection.objects.filter(id__in=[132,133])
