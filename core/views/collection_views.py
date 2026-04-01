@@ -42,7 +42,7 @@ def price_collection(request, collection_id):
 
     core_config = apps.get_app_config("core")
     for card in card_list:
-        core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=card.active_search_results(), card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2})
+        core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=card.active_search_results(), card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2}, on_success_status=StatusBase.PRICED)
 
     return JsonResponse({"success": True, "error": ""})
 
@@ -151,6 +151,7 @@ def manage_collection(request):
 
 def spreadsheet_rows_from_search_result(cards, field_names):
     rows = []
+    print("sr", cards, field_names)
     for card in cards:
         asr = card.active_search_results()
         row = {}
@@ -206,7 +207,7 @@ def view_ad_hoc_collection(request, card_ids=None):
     rows = []
     columns = CardSearchResult.listing_fields
     #rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
-    return render(request, "ad_hoc_collection.html", {"cards":cards, "settings":settings, "columns":columns, "rows":rows})
+    return render(request, "ad_hoc_collection.html", {"cards":cards, "settings":settings, "columns":columns, "rows":rows, "StatusBase":StatusBase})
     
 def listing_view(request):
     columns = CardSearchResult.listing_fields

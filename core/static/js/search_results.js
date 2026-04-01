@@ -252,13 +252,8 @@ function rebuildTitle(fieldName, cardId) {
           fields.brand,
           fields.subset !=" " ? `${fields.subset}` : null,
           fields.full_name,
-          fields["attributes.1st"] ? "1st" : null,
-          fields["attributes.RC"] ? "RC" : null,
-          fields["attributes.HOF"] ? "HOF" : null,
-          fields["attributes.Auto"] ? "Auto" : null,
-          fields["attributes.All-Star"] ? "All-Star" : null,
           fields.parallel !=" " ? `${fields.parallel}` : null,
-          fields.serial_number !="-" ? `${fields.serial_number}` : null, 
+          fields.card_name !="" ? `${fields.card_name}` : null, 
           fields.card_number != "" ? `#${fields.card_number}` : null,
           fields.city,
           fields.team,
@@ -344,9 +339,9 @@ function handleEnterPress(fieldName, cardId, csrId) {
           const fieldInput = document.getElementById(`field_${key}-${cardId}`);
           const manualCheckbox = document.getElementById(`${key}_is_manual-${cardId}`);
 
-          if (fieldInput && manualCheckbox) {
+          if (fieldInput) {
             if ((fieldInput.tagName === "TEXTAREA" || fieldInput.type === "text")
-                && (!manualCheckbox.checked)) {
+                && (!manualCheckbox || !manualCheckbox.checked)) {
               fieldInput.value = val;
             } 
           }

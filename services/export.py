@@ -82,9 +82,9 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
         group_key = csrs[0].full_set + "Commons"
     
     #find or create django group object
-    group = ProductGroup.create(group_key, csrs)
+    group = ProductGroup.get_or_create(group_key, csrs)
     
-    inventory_group_data = group.export_to_ebay_variation_group(csrs=csrs)
+    inventory_group_data = group.export_to_ebay_variation_group(new_csrs=csrs)
     
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
@@ -150,7 +150,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
 
         item_data = None
         if group_key:
-            group = ProductGroup.create(group_key, [csr])
+            group = ProductGroup.get_or_create(group_key, [csr])
             print(csr.variation_title_base)
             print(group.variation_data)
             #print("single row:", group.variation_data[csr.variation_title_base])

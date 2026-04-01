@@ -243,14 +243,7 @@
     align-items: center;
     gap: 0.25rem;
 }
-.status-badge {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #fff;
-}
+
 .move-dropdown-container {
     position: relative;
     display: inline-block;
@@ -316,7 +309,7 @@
 .status-pending         { background: #ffcc0020; color: #000; }
 .status-failed          { background: #ff333320; color: #000;}
 .status-success         { background: #33cc3320; color: #000;}
-.status-none            { background: #aaa; }
+.status-none            { background: #969696ff; color: #000;}
 .status-link {
     text-decoration: none; /* Remove underline */
     display: inline-block;
@@ -353,9 +346,6 @@
 
 /* Adjust your existing badge CSS to be slightly smaller for the row */
 .status-badge {
-    font-size: 0.75rem !important;
-    padding: 2px 8px !important;
-    white-space: nowrap;
 }
 </style>
 
@@ -369,6 +359,21 @@
             {% include "components/status_filter.html" %}          
         </div>
 
+        {% regroup collection.cards.all by overall_status as StatusBase.choices %}
+
+        <div class="status-counts-bar" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div class="status-pill all" style="padding: 4px 12px; background: #eee; border-radius: 20px; font-size: 13px; font-weight: bold;">
+                All: {{ collection.cards.count }}
+            </div>
+            
+            {% for status in StatusBase.choices %}
+                <div class="status-pill" 
+                    style="padding: 4px 12px; background: #f1f3f5; border: 1px solid #ddd; border-radius: 20px; font-size: 13px;">
+                    {# Use your StatusBase labels if possible, otherwise use the raw status value #}
+                    <b>{{ status.grouper|title }}:</b> {{ status.list|length }}
+                </div>
+            {% endfor %}
+        </div>
         <div class="card-list">
             {# Individual Cards #}
             {% for card in collection.cards.all %}

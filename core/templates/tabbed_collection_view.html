@@ -1,0 +1,24 @@
+<div class="tabbed-card-container">
+    <div class="tabs-header" style="margin-bottom: 20px; border-bottom: 2px solid #ddd; display: flex; gap: 20px;">
+        <button class="tab-btn active" onclick="switchTab('card-view', event)">Card View</button>
+        <button class="tab-btn" onclick="switchTab('table-view', event)">Spreadsheet View</button>
+    </div>
+    <div style="display: flex; justify-content: center; width: 100%;">
+        {% include "components/status_filter.html" with groups="id,pricing,listing" %}
+    </div>
+    <div id="card-view" class="tab-content active" style="display: block;">
+        <div id="search-stats" style="margin-bottom: 10px; font-size: 13px; color: #666; font-weight: 500;">
+            Showing <span id="count-displayed">0</span> of <span id="count-total">0</span> cards
+        </div>
+
+        <div class="card-list" id="global-card-list">
+            </div>
+        <div id="search-spinner" style="display: none; width: 100%; text-align: center; padding: 30px 0;">
+            <div class="spinner-icon"></div>
+        </div>
+    </div>
+
+    <div id="table-view" class="tab-content" style="display: none;">
+        <div id="hot-spreadsheet" style="width: 100%; height: 70vh;"></div>
+    </div>
+</div>

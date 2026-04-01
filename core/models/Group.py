@@ -17,7 +17,7 @@ class ProductGroup(models.Model):
         return self.products.count()
     
     @classmethod
-    def create(cls, group_key, csrs, group_image=None):
+    def get_or_create(cls, group_key, csrs, group_image=None):
         group, created = ProductGroup.objects.get_or_create(group_key=group_key)
         if created:
             group.group_title = group_key
@@ -27,6 +27,13 @@ class ProductGroup(models.Model):
             csr.ebay_product_group = group
             csr.save()
         
+        group.save()
+        return group
+
+    @classmethod
+    def create(cls, name):
+        group = ProductGroup.objects.create(group_title=name)
+        group.group_key=str(group.id)
         group.save()
         return group
 
@@ -61,12 +68,13 @@ class ProductGroup(models.Model):
 
         return update_qty_payload
     
-    def export_to_ebay_variation_group(self, csrs):
+    def export_to_ebay_variation_group(self, new_csrs):
         
-        csrs += list(self.products.filter(overall_status=StatusBase.LISTED))
+        csrs = new_csrs+list(self.products.filter(overall_status=StatusBase.LISTED))
         print("csrs", csrs)
-        variant_skus = [csr.parent_card.listed_card_info.sku for csr in csrs]
-        variation_title_bases = [csr.variation_title_base for csr in csrs]
+        sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
+        variant_skus = [csr.parent_card.listed_card_info.sku for csr in sorted_csrs]
+        variation_title_bases = [csr.variation_title_base for csr in sorted_csrs]
 
         # Group SKUs by title
         title_to_skus = defaultdict(list)

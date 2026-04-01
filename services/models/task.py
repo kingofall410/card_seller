@@ -21,6 +21,11 @@ class Task(models.Model):
         default=StatusBase.PENDING,
         choices=StatusBase.choices
     )
+    on_success_status = models.CharField(
+        max_length=20,
+        default=StatusBase.SUCCESS,
+        choices=StatusBase.choices
+    )
     error_str = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
 

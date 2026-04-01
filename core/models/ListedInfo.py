@@ -99,11 +99,12 @@ class ListedInfo(models.Model):
         lci.shareable_link_front=csr.shareable_link_front
         lci.shareable_link_reverse=csr.shareable_link_reverse
         lci.save()
-
+        
         return lci
 
     def save(self, *args, **kwargs):
         csr = self.card.active_search_results()
         self.listing_detail_text = csr.title_to_be if csr else ""
         self.card.save()
+        self.card.update_mod_date()
         super().save(*args, **kwargs)

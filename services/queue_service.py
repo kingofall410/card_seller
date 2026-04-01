@@ -22,6 +22,7 @@ class MemoryTask:
     db_id: int = field(compare=False, default=None)
     successor_id: Any = field(compare=False, default=None)
     status: str = field(compare=False, default=StatusBase.PENDING)
+    on_success_status: str = field(compare=False, default=StatusBase.SUCCESS)
 
     def run(self):
         try:
@@ -92,7 +93,8 @@ class Queue:
                     params=t.params(),
                     db_id=t.id,
                     successor_id=succ.id if succ else None,
-                    status=t.status
+                    status=t.status,
+                    on_success_status=t.on_success_status
                 )
                 self.tasks.append(mem_task)
             except Exception as e:
@@ -128,9 +130,6 @@ class Queue:
                 on_success_status = StatusBase.SUCCESS 
 
                 try:
-                    # (Your existing hasattr logic for csr and on_success_status...)
-                    # ...
-
                     db_task.status = StatusBase.RUNNING
                     task.status = StatusBase.RUNNING # Update memory too
                     db_task.save(update_fields=["status"])
@@ -164,7 +163,10 @@ class Queue:
                 finally:
                     db_task.save(update_fields=["status", "error_str"])
                     if csr:
+                        console.log("onsuccess", db_task.on_success_status)
+                        csr.overall_status = db_task.on_success_status
                         csr.save(update_fields=["overall_status"])
+                        console.log("onsuccess2", csr.overall_status)
             
                     if self._stop.wait(timeout=self.interval):
                         break
@@ -191,7 +193,7 @@ class Queue:
             csr.save(update_fields=['overall_status'])
         return t
 
-    def schedule_pricing_task(self, name, card, csr, callback, params, predecessor=None):
+    def schedule_pricing_task(self, name, card, csr, callback, params, predecessor=None, on_success_status=StatusBase.PRICED):
         now = timezone.now()
         starting_status = StatusBase.STAGED if predecessor else StatusBase.PENDING
         

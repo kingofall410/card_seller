@@ -1,15 +1,45 @@
 {% load custom_tags %}
 
+
+
+<style>
+    /* The Footer Container */
+    .card-status-footer {
+        display: flex;
+        width: 100%;
+        border-top: 1px solid #eee;
+        margin-top: 8px;
+        padding-top: 8px;
+        gap: 4px; /* Tiny gap between columns */
+    }
+
+    /* Individual Columns */
+    .status-column {
+        flex: 1; /* Forces all 3 to be equal width */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 0; /* Prevents overflow issues */
+    }
+    .status-column .status-badge {
+        display: inline-block;
+        width: 100%;
+        text-align: center;
+        white-space: nowrap;
+        opacity: 1 !important;
+        transition: all 0.1s ease;
+    }
+</style>
 {% with asr=card.active_search_results %}
 {% with display_name=asr|get_attribute:"display_full_name" display_year=asr|get_attribute:"display_year" display_brand=asr|get_attribute:"display_brand" %}
+{% with display_subset=asr|get_attribute:"display_subset" display_team=asr|get_attribute:"display_team" %}
         
-<div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}" data-id-status="{{ card.latest_id_task.status }}" data-pricing-status="{{ card.latest_pricing_task.status }}" data-listing-status="{{ card.latest_listing_task.status }}" data-id="{{ card.id }}">
-    
+<div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}" data-id-status="{{ card.latest_id_task.status }}" data-pricing-status="{{ card.latest_pricing_task.status }}" data-listing-status="{{ card.latest_listing_task.status }}" data-id="{{ card.id }}" data-year="{{ display_year }}" data-brand="{{ display_brand }}" data-subset="{{ display_subset }}" data-name="{{ display_full_name }}" data-team="{{ display_team }}" data-value="{{ card.value }}" data-modification_date="{{ card.modification_date }}" data-status="{{ asr.overall_status }}">   
     <div class="card-checkbox">
         <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
     </div>
 
-    <a href="/card/{{ card.id }}/" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
+    <a href="/card/{{ card.id }}/" onclick="launchSequence('{{ card.id }}');" class="card-main-link" title="hello">
         <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
         <div class="card-meta">{{ display_year }} {{ display_brand }}</div>
         <div class="card-meta">${{ card.value|floatformat:2 }}</div>
@@ -35,5 +65,6 @@
     </div>
 </div>
 
+{% endwith %}
 {% endwith %}
 {% endwith %}

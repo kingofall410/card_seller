@@ -1,5 +1,5 @@
 <a href="/card/{{ task.listingtask.card.id }}/" style="text-decoration:none; color:inherit;">
-<div class="task-item status-{{ task.status|slugify }}">
+<div class="task-item status-{{ task.status|slugify }}" data-card-id="{{ task.card_id }}">
     <table style="width:100%; border-collapse:collapse;">
         <tr>
             <td colspan=2>

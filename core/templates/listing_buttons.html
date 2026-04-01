@@ -57,6 +57,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const listBtn = document.getElementById(`list-btn-${cardId}`);
     const listNextBtn = document.getElementById(`list-next-btn-${cardId}`);
+    const priceNextBtn = document.getElementById(`price-next-btn-${cardId}`);
+    const holdNextBtn = document.getElementById(`hold-next-btn-${cardId}`);
+    
     const listUpBtn = document.getElementById(`list-up-btn-${cardId}`);
     const exportBtn = document.getElementById(`export-btn-${cardId}`);
 
@@ -65,7 +68,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const publishInput = document.getElementById(`publish-${cardId}`);
     const priceInput = document.getElementById(`price-${cardId}`);
     const qtyInput = document.getElementById(`qty-${cardId}`);
-
+    console.log("adding listeners?")
     listBtn.addEventListener("click", () => {
         performListAction(
             listBtn,
@@ -105,53 +108,89 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     });
 
-    function performListAction(button, priceInput, qtyInput, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
-        const groupKey = groupSelect.value || "";
-        const publishValue = publishInput.checked ? "True" : "False";
-        const scheduleTime = scheduleInput.value;
-        const price = priceInput.value;
-        const qty = qtyInput.value;
+    priceNextBtn.addEventListener("click", () => {
+        showSpinnerOnButton(priceNextBtn);
 
-        showSpinnerOnButton(button);
-
-        const url = `/list_card/${searchResultId}?publish=${publishValue}`
-                  + `&group_key=${encodeURIComponent(groupKey)}`
-                  + `&price=${encodeURIComponent(price)}`
-                  + `&qty=${encodeURIComponent(qty)}`
-                  + `&schedule=${encodeURIComponent(scheduleTime)}`;
-
+        const url = `/aync_price_card/${searchResultId}`;
         fetch(url)
           .then(res => res.json())
           .then(data => {
-              console.log("List response:", data);
-              if (onSuccess) onSuccess(data);
+              handleNext();
           })
-          .catch(err => console.error("List failed:", err))
-          .finally(() => restoreButton(button));
-    }
+          .catch(err => console.error("Pricing request failed:", err))
+          .finally(() => restoreButton(priceNextBtn));
+    });
 
-    // FIXED: this now runs because it's inside the single DOMContentLoaded
-    document.querySelectorAll(".group-select").forEach(select => {
-        select.addEventListener("change", function () {
-            if (this.value !== "__new__") return;
+    holdNextBtn.addEventListener("click", () => {
+        showSpinnerOnButton(holdNextBtn);
 
-            const title = prompt("Enter a name for the new group:");
-            if (!title || title.trim() === "") {
-                this.value = "";
-                return;
-            }
-
-            const newOption = document.createElement("option");
-            newOption.value = title;
-            newOption.textContent = title;
-
-            const newGroupOption = this.querySelector('option[value="__new__"]');
-            this.insertBefore(newOption, newGroupOption);
-
-            this.value = title;
-        });
+        const url = `/update_csr_status_only/${searchResultId}`;
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: "held" })
+        })
+        .then(res => res.json())
+          .then(data => {
+              handleNext();
+          })
+          .catch(err => console.error("Pricing request failed:", err))
+          .finally(() => restoreButton(priceNextBtn));
     });
 });
+
+
+function performListAction(button, priceInput, qtyInput, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
+    const groupKey = groupSelect.value || "";
+    const publishValue = publishInput.checked ? "True" : "False";
+    const scheduleTime = scheduleInput.value;
+    const price = priceInput.value;
+    const qty = qtyInput.value;
+
+    showSpinnerOnButton(button);
+
+    const url = `/list_card/${searchResultId}?publish=${publishValue}`
+              + `&group_key=${encodeURIComponent(groupKey)}`
+              + `&price=${encodeURIComponent(price)}`
+              + `&qty=${encodeURIComponent(qty)}`
+              + `&schedule=${encodeURIComponent(scheduleTime)}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+          console.log("List response:", data);
+          if (onSuccess) onSuccess(data);
+      })
+      .catch(err => console.error("List failed:", err))
+      .finally(() => restoreButton(button));
+}
+
+function performAsyncPriceAction(button, priceInput, qtyInput, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
+    
+    showSpinnerOnButton(button);
+
+    const url = `/aync_price_card/${searchResultId}`;
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+          console.log("List response:", data);
+          if (onSuccess) onSuccess(data);
+      })
+      .catch(err => console.error("List failed:", err))
+      .finally(() => restoreButton(button));
+
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+          console.log("List response:", data);
+          if (onSuccess) onSuccess(data);
+      })
+      .catch(err => console.error("List failed:", err))
+      .finally(() => restoreButton(button));
+}
 </script>
 
 <div style="margin-top: 20px; margin-bottom: 20px; position: relative;">
@@ -193,6 +232,7 @@ document.addEventListener("DOMContentLoaded", function () {
               data-card-id="{{ card_id }}"
               style="padding: 8px; border-radius: 6px; min-width: 180px;">
         <option value="">No Group (Single Listing)</option>
+        <option value="__new__">➕ New Group…</option>
 
         {% for g in groups %}
           <option value="{{ g.key }}"
@@ -202,7 +242,6 @@ document.addEventListener("DOMContentLoaded", function () {
           {{ g.name }}</option>
         {% endfor %}
 
-        <option value="__new__">➕ New Group…</option>
       </select>
     </div>
 

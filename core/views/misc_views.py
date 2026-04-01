@@ -20,12 +20,14 @@ def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
-    card = Card.objects.filter(id=3693).first()
-    csr = card.active_search_results()
+    card = Card.objects.filter(id=3791).first()
+    print(card.modification_date)
+
+    '''csr = card.active_search_results()
     for listing_group in csr.listing_groups.all():
         listing_group.save()
 
-    '''for csr in csrs:
+    for csr in csrs:
         if not csr.listing_tasks.exists() or not csr.listing_tasks.last()==StatusBase.PENDING:
             csr.overall_status = StatusBase.PRICED
             csr.save()

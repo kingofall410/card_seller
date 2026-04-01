@@ -1,123 +1,168 @@
-<div class="filter-toolbar">
-    <div class="toolbar-side-spacer"></div>
+{% load custom_tags  %}
+<div class="filter-toolbar" id="status-filter-toolbar">
 
-    <div class="filter-container">
-        <div class="badge-toggle toggle-cycle" data-group="id" data-state="none" onclick="cycleFilter(this)">
-            {% include "components/status_badge.html" with task=None %}
-        </div>
-        <div class="badge-toggle toggle-cycle" data-group="pricing" data-state="none" onclick="cycleFilter(this)">
-            {% include "components/status_badge.html" with task=None %}
-        </div>
-        <div class="badge-toggle toggle-cycle" data-group="listing" data-state="none" onclick="cycleFilter(this)">
-            {% include "components/status_badge.html" with task=None %}
-        </div>
+    
+    <div class="dynamic-filter-row">
+        <div id="dynamic-selectors"></div>
+        
+        <div id="dynamic-sort-bar" style="display: flex; gap: 12px; align-items: center; margin-top: 10px; font-size: 12px; color: #666;">
+            <span style="font-weight: bold; margin-right: 5px;">Sort:</span>
+            </div>
+
+        <button class="btn-reset-all" onclick="resetAllFilters()" style="margin-top: 10px;">Reset All</button>
     </div>
-
     <div class="toolbar-side-counter">
         <label class="lock-wrapper">
             <input type="checkbox" id="lock-selection" onchange="toggleLock(this)">
             <span>Lock</span>
         </label>
-        <div id="selection-count" onclick="clearSelection()" title="Click to clear selection">
-            Selected: 0
-        </div>
+        <div id="selection-count">Selected: 0</div>
     </div>
 </div>
-
 <style>
+    /* Use Grid to create 3 equal zones. auto is the middle. */
     .filter-toolbar {
-        padding-top: 30px;
-        margin-bottom: 5px;
-        display: flex;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr; 
         align-items: center;
         width: 100%;
-        min-height: 60px;
+        padding: 20px 0;
+        margin-bottom: 5px;
     }
 
-    .toolbar-side-spacer, .toolbar-side-counter {
-        flex: 1; 
+    .filter-container {
         display: flex;
-        padding: 0 20px;
-        gap: 12px; /* Space between Lock and Counter */
-        align-items: center;
+        gap: 15px;
+        justify-content: center;
     }
-    .toolbar-side-spacer { justify-content: flex-start; }
-    .toolbar-side-counter { justify-content: flex-end; }
 
-    /* Compact Lock Styling for the right side */
+    .toolbar-side-counter {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        padding-right: 20px;
+    }
+
+    .dynamic-filter-row {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        padding-bottom: 20px;
+        gap: 10px;
+    }
+
+    #dynamic-selectors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    /* Styling for the dropdowns */
+    .dynamic-filter-select {
+        padding: 6px 14px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        font-size: 12px;
+        background-color: #fff;
+        cursor: pointer;
+    }
+
+    /* Badge & Toggle Styles */
+    .badge-toggle {
+        cursor: pointer;
+        width: 100px;
+        text-align: center;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        width: 100%;
+        border-radius: 4px;
+        font-size: 12px;
+        padding: 4px 0;
+    }
+
+    /* Lock & Counter Styles */
     .lock-wrapper {
         display: flex;
         align-items: center;
         gap: 6px;
         font-size: 11px;
-        color: #666;
-        cursor: pointer;
-        user-select: none;
         background: #eee;
         padding: 6px 12px;
         border-radius: 20px;
-        border: 1px solid #ddd;
-        transition: all 0.2s;
-    }
-
-    .lock-wrapper:hover { background: #e5e5e5; }
-    .lock-wrapper input { margin: 0; cursor: pointer; }
-    .lock-wrapper input:checked + span { color: #d1242f; font-weight: bold; }
-
-    .filter-container {
-        display: flex;
-        gap: 15px;
-        align-items: center;
-        flex: 0 0 auto;
-    }
-
-    .badge-toggle {
         cursor: pointer;
-        user-select: none;
-        width: 100px; 
-        display: flex;
-        justify-content: center;
-    }
-
-    .filter-container .status-badge {
-        display: inline-block;
-        width: 100%;
-        min-width: 100px;
-        text-align: center;
-        box-sizing: border-box;
-        white-space: nowrap;
-        opacity: 1 !important;
-        transition: all 0.1s ease;
     }
 
     #selection-count {
-        cursor: pointer;
         font-size: 11px;
         padding: 6px 14px;
         border-radius: 20px;
-        font-weight: bold;
-        white-space: nowrap;
-        transition: all 0.2s ease;
         border: 1px solid #ddd;
         background: #f5f5f5;
-        color: #888;
     }
 
     #selection-count.active {
         color: #d1242f;
         background: #fff5f5;
-        border: 1px solid #ffebe9;
+        border-color: #ffebe9;
     }
 
     .hidden-card { display: none !important; }
+</style>
+<style>
+    .status-filter-container {
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
 
-    .card-item.status-stale {
-       border: 2px dashed #ffd54f !important;
-        transition: all 0.3s ease;
+    .filter-title {
+        font-size: 12px;
+        text-transform: uppercase;
+        color: #888;
+        margin-bottom: 10px;
+        letter-spacing: 0.5px;
+    }
+
+    .status-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 8px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background 0.2s;
+        font-size: 13px;
+    }
+
+    .status-item:hover {
+        background-color: #f0f7ff;
+        color: #007bff;
+    }
+
+    .status-count {
+        background: #f1f3f5;
+        color: #495057;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .status-item:hover .status-count {
+        background: #007bff;
+        color: white;
+    }
+
+    .badge-all {
+        background: #e9ecef;
     }
 </style>
-
 <script>
 // --- STORAGE HELPERS ---
 const getPageKey = (suffix) => `page_${window.location.pathname}_${suffix}`;
@@ -131,6 +176,104 @@ const saveFilter = (group, state) => {
 };
 
 // --- CORE FUNCTIONS ---
+// Configuration for which attributes get sort links
+// Define these globally so they are accessible to both buildSortBar and sortCards
+// Map the Display Label to the actual data-attribute name
+const sortConfig = [
+    { label: 'Year', attr: 'year' },
+    { label: 'Brand', attr: 'brand' },
+    { label: 'Subset', attr: 'subset' },
+    { label: 'Name', attr: 'full_name' },
+    { label: 'Team', attr: 'team' },
+    { label: 'Value ($)', attr: 'value' }, // Display vs Attribute
+    { label: 'Last Updated', attr: 'modification_date' } // Display vs Attribute
+];
+let currentSort = { 
+    attr: 'default', // The data attribute name (e.g., 'year', 'value')
+    dir: 'asc'       // The direction ('asc' or 'desc')
+};
+
+function buildSortBar() {
+    const bar = document.getElementById('dynamic-sort-bar');
+    if (!bar) return;
+
+    bar.innerHTML = '<span style="font-weight: bold; margin-right: 5px;">Sort:</span>';
+
+    sortConfig.forEach((cfg, index) => {
+        const link = document.createElement('a');
+        link.href = "#";
+        link.style = "text-decoration: none; font-size: 12px; cursor: pointer; color: " + 
+                     (currentSort.attr === cfg.attr ? "#007bff" : "#666") + ";";
+        
+        let arrow = "↕";
+        if (currentSort.attr === cfg.attr) {
+            arrow = currentSort.dir === 'asc' ? "↑" : "↓";
+        }
+
+        link.innerHTML = `${cfg.label} ${arrow}`;
+        link.onclick = (e) => {
+            e.preventDefault();
+            handleSortClick(cfg.attr); // Pass the raw attribute name 'value'
+        };
+
+        bar.appendChild(link);
+
+        if (index < sortConfig.length - 1) {
+            const sep = document.createElement('span');
+            sep.innerText = " | ";
+            sep.style = "color: #ddd; margin: 0 4px;";
+            bar.appendChild(sep);
+        }
+    });
+}
+
+function handleSortClick(attr) {
+    console.log(attr)
+    if (currentSort.attr === attr) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.attr = attr;
+        currentSort.dir = 'asc';
+    }
+    
+    buildSortBar(); // Redraw UI
+    sortCards();    // Re-order DOM
+}
+
+function sortCards() {
+    const container = document.getElementById('global-card-list');
+    if (!container || currentSort.attr === 'default') return;
+
+    const cards = Array.from(container.querySelectorAll('.card-item:not(.folder)'));
+
+    cards.sort((a, b) => {
+        // This now correctly targets data-value
+        let valA = a.getAttribute(`data-${currentSort.attr}`) || '';
+        let valB = b.getAttribute(`data-${currentSort.attr}`) || '';
+
+        // 1. Numeric Sort for Year or Value
+        if (currentSort.attr === 'year' || currentSort.attr === 'value') {
+            // Clean strings like "$5.00" or "2021" into pure floats
+            valA = parseFloat(valA.toString().replace(/[$,\s]/g, '')) || 0;
+            valB = parseFloat(valB.toString().replace(/[$,\s]/g, '')) || 0;
+        } 
+        // 2. String Sort for everything else
+        else {
+            valA = valA.toLowerCase().trim();
+            valB = valB.toLowerCase().trim();
+        }
+
+        if (valA < valB) return currentSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSort.dir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // Bulk append to minimize reflows
+    const fragment = document.createDocumentFragment();
+    cards.forEach(card => fragment.appendChild(card));
+    container.appendChild(fragment);
+}
+
 function cycleFilter(el) {
     const states = ['none', 'pending', 'success', 'failed'];
     const displayNames = { 'none': 'None', 'pending': 'Pending', 'success': 'Success', 'failed': 'Failed' };
@@ -157,53 +300,133 @@ function toggleLock(checkbox) {
     }
 }
 
-function applyFilters() {
-    const cards = document.querySelectorAll('.card-item:not(.folder)');
-    const filters = document.querySelectorAll('.toggle-cycle');
-    const locked = isLocked();
-
-    cards.forEach(card => {
-        // --- The Sync Point ---
-        // Clicking a filter clears the "stale" state and finally 
-        // applies the visibility logic to the new data.
-        card.classList.remove('status-stale');
-
-        let isVisible = true;
-        filters.forEach(filter => {
-            const group = filter.getAttribute('data-group');
-            const filterState = filter.getAttribute('data-state');
-            if (filterState !== 'none') {
-                const cardStatus = card.getAttribute(`data-${group}-status`);
-                if (cardStatus !== filterState) isVisible = false;
-            }
-        });
-        card.classList.toggle('hidden-card', !isVisible);
+function buildDropdowns() {
+    const container = document.getElementById('dynamic-selectors');
+    if (!container) return;
+    
+    // Define the specific attributes to turn into dropdowns or inputs
+    const attrs = ['year', 'brand', 'subset', 'status', 'team', 'minval', 'maxval']; 
+    
+    // 1. Save current states so we don't overwrite what the user typed
+    const currentSelections = {};
+    container.querySelectorAll('select, input').forEach(el => {
+        currentSelections[el.id] = el.value;
     });
 
-    // Handle checkboxes/sequence (Only if NOT locked)
-    if (!locked) {
-        let sequence = [];
-        const checkboxes = document.querySelectorAll('input[name="selected_cards"]');
-        const isFilterActive = Array.from(filters).some(f => f.getAttribute('data-state') !== 'none');
+    container.innerHTML = ''; 
 
-        if (isFilterActive) {
-            checkboxes.forEach(checkbox => {
-                const cardElement = checkbox.closest('.card-item');
-                const isHidden = cardElement.classList.contains('hidden-card');
-                
-                checkbox.checked = !isHidden;
-                if (checkbox.checked) sequence.push(checkbox.value);
-            });
-            sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
+    attrs.forEach(attr => {
+        const cards = document.querySelectorAll('.card-item');
+        const uniqueValues = new Set();
+        
+        cards.forEach(card => {
+            const val = card.getAttribute(`data-${attr}`);
+            if (val && val !== 'None') uniqueValues.add(val);
+        });
+
+        // --- NUMERIC INPUTS (minval / maxval) ---
+        if (attr === 'minval' || attr === 'maxval') {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.id = `filter-${attr}`;
+            input.placeholder = attr === 'minval' ? 'Min Value' : 'Max Value';
+            input.className = 'dynamic-filter-input';
+            
+            // Inline styling to match your select boxes
+            input.style = "padding: 6px 10px; border-radius: 20px; border: 1px solid #ddd; width: 80px; font-size: 12px;";
+            
+            // Restore previous value if it exists
+            input.value = currentSelections[input.id] || "";
+            
+            input.oninput = applyFilters;
+            container.appendChild(input);
+
         } else {
-            if (document.readyState === 'complete') clearSelection(false); 
+            // --- STANDARD DROPDOWNS ---
+            const select = document.createElement('select');
+            select.id = `filter-${attr}`;
+            select.className = 'dynamic-filter-select';
+            select.onchange = applyFilters;
+            
+            let optionsHTML = `<option value="all">${attr.charAt(0).toUpperCase() + attr.slice(1)}</option>`;
+            
+            if (uniqueValues.size > 0) {
+                Array.from(uniqueValues).sort().forEach(val => {
+                    const isSelected = currentSelections[select.id] === val ? 'selected' : '';
+                    optionsHTML += `<option value="${val}" ${isSelected}>${val}</option>`;
+                });
+            }
+            
+            select.innerHTML = optionsHTML;
+            container.appendChild(select);
         }
-    }
+    });
+}
 
-    if (hotInstance) {
-        filterSpreadsheet();
+function applyFilters() {
+    const cards = document.querySelectorAll('.card-item:not(.folder)');
+    const selects = document.querySelectorAll('.dynamic-filter-select');
+    
+    // Get the numeric bounds
+    const minInput = document.getElementById('filter-minval');
+    const maxInput = document.getElementById('filter-maxval');
+    
+    const minLimit = minInput && minInput.value !== "" ? parseFloat(minInput.value) : -Infinity;
+    const maxLimit = maxInput && maxInput.value !== "" ? parseFloat(maxInput.value) : Infinity;
+
+    cards.forEach(card => {
+        let isVisible = true;
+
+        // 1. Dropdown Filters (Strict Equality)
+        selects.forEach(select => {
+            const attr = select.id.replace('filter-', '');
+            const selectedValue = select.value;
+            const cardValue = card.getAttribute(`data-${attr}`);
+
+            if (selectedValue !== 'all' && cardValue !== selectedValue) {
+                isVisible = false;
+            }
+        });
+
+        // 2. Numeric Range Filter
+        if (isVisible) {
+            const cardPrice = parseFloat(card.getAttribute('data-value')) || 0;
+            if (cardPrice < minLimit || cardPrice > maxLimit) {
+                isVisible = false;
+            }
+        }
+
+        // Apply class to hide/show
+        card.classList.toggle('hidden-card', !isVisible);
+    });
+    const visibleIds = Array.from(document.querySelectorAll('.card-item:not(.hidden-card)'))
+                                    .map(c => c.getAttribute('data-id'));
+
+    // 2. Update the Counters
+    const countDisplayed = document.getElementById('count-displayed');
+    if (countDisplayed) {
+        
+        countDisplayed.innerText = visibleIds.length;
     }
-    updateCountUI();
+    // Sync Spreadsheet if active
+    if (typeof SpreadsheetModule !== 'undefined' && SpreadsheetModule.getInstance()) {
+        
+        SpreadsheetModule.filterByCardIds(visibleIds);
+    }
+}
+
+function resetAllFilters() {
+    // Reset Dropdowns
+    document.querySelectorAll('.dynamic-filter-select').forEach(s => s.value = 'all');
+    
+    // Reset Sort
+    const sortSelect = document.getElementById('card-sort-order');
+    if (sortSelect) sortSelect.value = 'default';
+
+    // Reset Status Badges
+    if (typeof clearSelection === 'function') clearSelection(true);
+    
+    applyFilters();
 }
 
 function restoreFilters() {
@@ -246,6 +469,7 @@ function updateCountUI() {
     }
 }
 
+// Ensure the spreadsheet is refreshed when clearing selection
 function clearSelection(resetBadges = true) {
     if (isLocked()) return;
 
@@ -264,35 +488,79 @@ function clearSelection(resetBadges = true) {
     }
     
     document.querySelectorAll('input[name="selected_cards"]').forEach(cb => cb.checked = false);
+    
+    // Sync Spreadsheet back to full view
+    if (typeof SpreadsheetModule !== 'undefined') {
+        const allCards = document.querySelectorAll('.card-item:not(.folder)');
+        const allIds = Array.from(allCards).map(card => card.getAttribute('data-id'));
+        SpreadsheetModule.filterByCardIds(allIds);
+    }
+
     updateCountUI();
 }
 
 // --- INITIALIZATION & EVENTS ---
 document.addEventListener('DOMContentLoaded', function() {
-    // Restore lock state checkbox
+    // 1. Build Dropdowns FIRST
+    buildDropdowns(); 
+
+    // 2. Restore saved states (Badges & Lock)
     const lockCheckbox = document.getElementById('lock-selection');
     if (lockCheckbox) lockCheckbox.checked = isLocked();
-
     restoreFilters();
     refreshCheckboxState();
-    applyFilters(); 
-});
-
-document.addEventListener('change', function(e) {
-    if (e.target.name === 'selected_cards') {
-        if (isLocked()) {
-            e.target.checked = !e.target.checked; // Revert visually
-            return;
-        }
-
-        let sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
-        if (e.target.checked) {
-            if (!sequence.includes(e.target.value)) sequence.push(e.target.value);
-        } else {
-            sequence = sequence.filter(id => id !== e.target.value);
-        }
-        sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
+    
+    // 3. APPLY filters LAST
+    // Wrap in a tiny timeout to ensure the DOM has settled from buildDropdowns
+    setTimeout(() => {
+        applyFilters();
         updateCountUI();
-    }
+    }, 50); 
 });
+
+let lastChecked = null; // Track the last checkbox interacted with
+
+document.addEventListener('click', function(e) {
+    // Only target the checkboxes
+    if (e.target.name !== 'selected_cards') return;
+
+    const checkboxes = Array.from(document.querySelectorAll('input[name="selected_cards"]:not(.hidden-card)'));
+    
+    if (isLocked()) {
+        e.target.checked = !e.target.checked; 
+        return;
+    }
+
+    // --- SHIFT-CLICK LOGIC ---
+    if (e.shiftKey && lastChecked) {
+        let start = checkboxes.indexOf(e.target);
+        let end = checkboxes.indexOf(lastChecked);
+
+        // Select everything between start and end
+        checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1)
+            .forEach(cb => {
+                cb.checked = lastChecked.checked;
+                updateSequenceStorage(cb.value, cb.checked);
+            });
+    } else {
+        // Normal single click
+        updateSequenceStorage(e.target.value, e.target.checked);
+    }
+
+    lastChecked = e.target;
+    updateCountUI();
+});
+
+/**
+ * Helper to keep sessionStorage in sync without duplicating code
+ */
+function updateSequenceStorage(id, isChecked) {
+    let sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+    if (isChecked) {
+        if (!sequence.includes(id)) sequence.push(id);
+    } else {
+        sequence = sequence.filter(sid => sid !== id);
+    }
+    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
+}
 </script>

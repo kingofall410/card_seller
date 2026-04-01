@@ -1,124 +1,28 @@
+{% load static %}
 <div class="search-container" style="margin: 30px 0; display: flex; gap: 12px; justify-content: center; align-items: center;">
-    <input type="text" 
-           id="ad-hoc-search-input" 
-           placeholder="Search all cards by name, SKU, or eBay ID..." 
-           style="width: 700px; padding: 14px 20px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-size: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+    <input type="text" id="card-search-input" 
+           placeholder="Search cards..." 
+           style="width: 100%; max-width: 700px; padding: 14px 20px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-size: 18px;">
     
-    <button id="ad-hoc-search-btn" 
+    <button id="card-search-btn" 
             style="padding: 14px 28px; border-radius: 30px; border: none; background: #007bff; color: white; cursor: pointer; font-weight: bold; font-size: 18px;">
         Search
     </button>
 </div>
-
-<style>
-    .spinner-icon {
-        width: 35px;
-        height: 35px;
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #007bff;
-        border-radius: 50%;
-        display: inline-block;
-        animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-</style>
+<script src="{% static 'js/search_orchestration.js' %}"></script>
 <script>
-function initAdHocSearch() {
-    const input = document.getElementById('ad-hoc-search-input');
-    const btn = document.getElementById('ad-hoc-search-btn');
-    const cardList = document.querySelector('.card-list');
-    const spinner = document.getElementById('search-spinner');
-
-    if (!btn || !cardList) return;
-
-    let currentPage = 1;
-    let hasNextPage = false;
-    let isLoading = false;
-    let currentQuery = "";
-
-    function performSearch(isNewSearch = true) {
-        if (isLoading) return;
+    // Component logic: Only handles the "Trigger"
+    (function() {
+        const input = document.getElementById('card-search-input');
+        const btn = document.getElementById('card-search-btn');
         
-        if (isNewSearch) {
-            currentQuery = input.value.trim();
-            if (!currentQuery) return;
-            currentPage = 1;
-            cardList.innerHTML = ''; 
-            btn.disabled = true;
-        }
+        const triggerSearch = () => {
+            const query = input.value.trim();
+            // Dispatches a custom event so any parent can listen for it
+            document.dispatchEvent(new CustomEvent('cardSearchTriggered', { detail: { query } }));
+        };
 
-        isLoading = true;
-        if (spinner) spinner.style.display = "block";
-
-        fetch(`/card_search_ajax/?q=${encodeURIComponent(currentQuery)}&page=${currentPage}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            // --- UI UPDATE LOGIC ---
-            if (isNewSearch) {
-                cardList.innerHTML = data.html;
-                // Update Spreadsheet only on new search
-                if (data.table_data) {
-                    updateSpreadsheet(data.table_data, data.col_headers);
-                }
-            } else {
-                cardList.insertAdjacentHTML('beforeend', data.html);
-            }
-
-            hasNextPage = data.has_next;
-            currentPage = data.next_page;
-            
-            isLoading = false;
-            btn.disabled = false;
-
-            if (typeof applyFilters === 'function') {
-                applyFilters();
-            }
-
-            checkIfMoreNeeded();
-        })
-        .catch(err => {
-            console.error("Search error:", err);
-            isLoading = false;
-            btn.disabled = false;
-            if (spinner) spinner.style.display = "none";
-        });
-    }
-
-    function checkIfMoreNeeded() {
-        if (!hasNextPage || isLoading) {
-            if (spinner && !isLoading) spinner.style.display = "none";
-            return;
-        }
-        const rect = cardList.getBoundingClientRect();
-        if (rect.bottom <= window.innerHeight + 200) {
-            performSearch(false);
-        } else {
-            if (spinner) spinner.style.display = "none";
-        }
-    }
-
-    window.addEventListener('scroll', () => {
-        if (isLoading || !hasNextPage || !currentQuery) return;
-        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 600) {
-            performSearch(false);
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.toggle-cycle')) {
-            setTimeout(checkIfMoreNeeded, 100); 
-        }
-    });
-
-    btn.addEventListener('click', () => performSearch(true));
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') performSearch(true); });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAdHocSearch);
-} else {
-    initAdHocSearch();
-}
+        btn.addEventListener('click', triggerSearch);
+        input.addEventListener('keypress', (e) => { if (e.key === 'Enter') triggerSearch(); });
+    })();
 </script>

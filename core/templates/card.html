@@ -5,11 +5,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Card Overview</title>
+  <title>Card Overview | {{ card_id }}</title>
   <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
-
 
   <style>
     body {
@@ -23,8 +22,8 @@
     .overview-wrapper {
       display: flex;
       flex-direction: column;
-      gap: 32px;
-      max-width: 1200px;
+      gap: 20px;
+      max-width: 1300px;
       margin: auto;
     }
 
@@ -32,345 +31,91 @@
       background-color: #fff;
       border-radius: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      padding: 24px;
+      padding: 20px;
       width: 100%;
       box-sizing: border-box;
     }
-    
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
 
-    .uicard-listing-groups {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      width: 100%; /* important */
-    }
-
-
-    /* IMAGE */
-    .portrait-image {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .image-wrapper {
-      position: relative;
-      width: 400px;
-      height: 560px;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      background-color: #fff;
-    }
-
-    .thumbnail {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      border-radius: 8px;
-      transition: opacity 0.3s ease;
-    }
-
-    .thumbnail.hover {
-      opacity: 0;
-      z-index: 2;
-    }
-
-    .image-wrapper:hover .thumbnail.hover {
-      opacity: 1;
-    }
-
-    .image-wrapper:hover .thumbnail.default {
-      opacity: 0;
-    }
-
-    /* TABS */
-    .csr-tabs {
-      padding: 8px;
-      background-color: #fafafa;
-      border-radius: 8px;
-      box-shadow: inset 0 0 0 1px #eee;
-    }
-
-    .csr-tab-buttons {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .csr-tab-btn {
-      padding: 6px 12px;
-      border: 1px solid #ccc;
-      background: #eee;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.85rem;
-      border-bottom: 1px solid #ccc;
-    }
-
-    .csr-tab-btn.active {
-      background: #fafafa;
-      border-bottom: 1px solid #fafafa; /* same as panel background */
-      position: relative;
-      top: 1px; /* pulls it down to overlap the panel border */
-      z-index: 2;
-
-    }
-
-    .csr-tab-content {
-      display: none;
-    }
-
-    .csr-tab-content.active {
-      display: block;
-    }
-
-    .csr-tab-content-wrapper {
-      position: relative;
-      overflow: hidden;
-      transition: height 0.25s ease;
-    }
-
-    /* GRID LAYOUT */
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 400px;
-      grid-template-rows: auto auto auto;
-      align-items: start;
-      column-gap: 20px;
-      row-gap: 0;
-    }
-
-    .info-tabs {
-      grid-column: 1 / span 2;
-      grid-row: 1;
-    }
-
-    .info-left-top {
-      grid-column: 1;
-      grid-row: 2;
-    }
-
-    .info-left-bottom {
-      grid-column: 1;
-      grid-row: 3;
-    }
-
-    .info-right {
-      grid-column: 2;
-      grid-row: 2 / span 2;
-    }
-
-    .info-left-bottom {
-      min-width: 0;
-    }
-
-    .notes-container {
-      min-width: 0;
-    }
-
+    /* Container for all groups */
 .listing-groups-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-start;
-  margin-bottom: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-start;
 }
 
+/* Individual Group Box */
 .listing-group {
-  flex: 1 1 19%;
-  max-width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #ddd;
-  background-color: #fff;
-  border-radius: 6px;
-  padding: 8px;
+    flex: 1 1 200px; /* Base width */
+    max-width: 100%;
+    border: 1px solid #ddd;
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-.listing-header {
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.listing-header-label {
-  margin-right: 8px;
-}
-
-.listing-toggle {
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.search-string {
-  font-size: 1rem;
-  color: #060505ff;
-  margin: 4px 0 12px 0;
-}
-
-/* Collapsed: one row */
-.listing-group.collapsed .image-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-  
-  height: 120px;
-  max-height: 120px;
-  overflow: hidden;
-  transition: height 0.25s ease;
-}
-
-/* Expanded: full height */
-.listing-group.expanded .image-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-
-  height: auto;
-  max-height: none;
-  overflow: visible;
+/* THE FIX: Force the image grid to constrain children */
+.image-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
 }
 
 .listing {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100px; /* Hard constraint */
 }
 
 .listing-thumb {
-  max-width: 100px;
-  max-height: 100px;
-  object-fit: contain;
-  border-radius: 6px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    width: 100px;  /* Force width */
+    height: 100px; /* Force height */
+    object-fit: contain; /* Prevents stretching */
+    border-radius: 4px;
+    background: #f8f9fa;
+    border: 1px solid #eee;
 }
 
 .listing-caption {
-  margin-top: 0px;
-  font-size: 0.85rem;
-  color: #333;
-  text-align: center;
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    text-align: center;
+    word-break: break-all;
 }
 
-.sort-controls {
-  margin: 4px 0 12px 0;
-  font-size: 0.9rem;
-}
-
-.sort-title {
-  margin-right: 8px;
-  color: #333;
-  font-weight: 500;
-}
-
-.sort-link {
-  cursor: pointer;
-  color: #0074d9;
-  margin-right: 12px;
-}
-
-.sort-link:hover {
-  text-decoration: underline;
-}
-
-.sort-link.active {
-  font-weight: bold;
-  text-decoration: underline;
-}
-
-/* Default collapsed width */
-.listing-group {
-  flex: 1 1 19%;
-  transition: flex-basis 0.25s ease;
-}
-
-/* Expanded width — grows sideways */
-.listing-group.expanded {
-  flex: 1 1 100%;   /* or 60%, or 80%, depending on your preference */
-}
-
-</style>
+    /* Global Transitions */
+    .info-grid, .csr-tab-content-wrapper, .thumbnail {
+      transition: all 0.3s ease;
+    }
+  </style>
 </head>
 <body>
-
 
   {% include "header.html" %}
   {% include "nav_buttons.html" with root_id=card_tuple.1 url_name="view_card" up_url="collection" up=card_tuple.0.collection.id next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
 
   <div class="overview-wrapper">
 
-    <!-- LISTING BUTTONS -->
-    <div class="uicard price-block">
+    <div class="uicard">
       {% include "listing_buttons.html" with card=card_tuple.0 card_id=card_tuple.1 search_result=card_tuple.2 %}
     </div>
-    <div class="uicard price-block">
-    <!-- MAIN GRID BLOCK (tabs + description + image) -->
+
+    <div class="uicard">
       {% include "re_search_buttons.html" with card=card_tuple.0 card_id=card_tuple.1 search_result=card_tuple.2 %}
-      {% include "card_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 datasetConfigs=card_tuple.11%}
+      
+      {% include "card_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 datasetConfigs=card_tuple.11 StatusBase=StatusBase%}
     </div>
 
-<!-- Product Listings -->
     <div class="listing-groups-wrapper">
-      
       {% for listing_group in card_tuple.2.listing_groups.all %}
-        
         {% include "product_listings.html" with listing_group=listing_group %}
       {% endfor %}
     </div>
-  
+  </div>
+
 </body>
 </html>
-
-<script>
-function resizeTabWrapper() {
-    const wrapper = document.getElementById("csr-tab-wrapper");
-    const tabs = wrapper.querySelectorAll(".csr-tab-content");
-
-    let maxHeight = 0;
-    tabs.forEach(tab => {
-        tab.style.display = "block";
-        const h = tab.offsetHeight;
-        if (h > maxHeight) maxHeight = h;
-        if (!tab.classList.contains("active")) {
-            tab.style.display = "none";
-        }
-    });
-
-    wrapper.style.height = maxHeight + "px";
-}
-
-resizeTabWrapper();
-
-document.addEventListener("click", (e) => {
-    if (!e.target.classList.contains("csr-tab-btn")) return;
-
-    const tabName = e.target.dataset.tab;
-
-    document.querySelectorAll(".csr-tab-btn").forEach(btn =>
-        btn.classList.remove("active")
-    );
-    e.target.classList.add("active");
-
-    document.querySelectorAll(".csr-tab-content").forEach(div =>
-        div.classList.remove("active")
-    );
-    document.getElementById(tabName).classList.add("active");
-
-    resizeTabWrapper();
-});
-</script>

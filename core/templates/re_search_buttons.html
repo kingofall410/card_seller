@@ -23,8 +23,6 @@ function showSpinnerOnButton(element) {
     const spinner = document.createElement('span');
     spinner.className = 'loading-spinner'; // For easier cleanup
     spinner.style.display = 'inline-block';
-    spinner.style.width = '40px';  // Increased size for the dropzone
-    spinner.style.height = '40px';
     spinner.style.border = '4px solid #ccc';
     spinner.style.borderTop = '4px solid #333';
     spinner.style.borderRadius = '50%';
@@ -53,8 +51,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const imageSearchBtn = document.getElementById(`image-search-btn-${cardId}`);
     const textFilterBtn = document.getElementById(`text-filter-btn-${cardId}`);
     const priceBtn = document.getElementById(`price-btn-${cardId}`);
-    const saveBtn = document.getElementById(`save-btn-${cardId}`);
-    const saveNextBtn = document.getElementById(`save-next-btn-${cardId}`);
+    const priceNextBtn = document.getElementById(`price-next-btn-${cardId}`);
+    
 
     imageSearchBtn.addEventListener('click', () => {
         fetch(`/image_search/${cardId}/`, {
@@ -80,41 +78,6 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch(`/price_only/${searchResultId}/`, { method: 'GET' })
             .then(() => location.reload())
             .finally(() => restoreButton(priceBtn));
-    });
-
-    saveBtn.addEventListener('click', () => {
-        let allFields = collectAllFields(cardId);
-        allFields["notes"] = document.getElementById("notes").value;
-
-        $.ajax({
-            url: "/update_csr_fields/",
-            method: "POST",
-            data: JSON.stringify({ csrId: searchResultId, allFields }),
-            success: () => alert("Changes saved successfully."),
-            error: xhr => alert("Error saving changes.")
-        });
-    });
-
-    saveNextBtn.addEventListener('click', () => {
-        let allFields = collectAllFields(cardId);
-        allFields["notes"] = document.getElementById("notes").value;
-
-        $.ajax({
-            url: "/update_csr_fields/",
-            method: "POST",
-            data: {
-                csrId: searchResultId,
-                ...allFields,
-                csrfmiddlewaretoken: '{{ csrf_token }}'
-            },
-            success: () => {
-                {% if page_obj.has_next %}
-                    submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page={{ page_obj.next_page_number }}");
-                {% else %}
-                    submitCardForm(null, null, "/card/{{page_obj.object_list.0.1}}/?page=1");
-                {% endif %}
-            }
-        });
     });
 
     /* ---------------------------
@@ -162,23 +125,41 @@ document.addEventListener("DOMContentLoaded", function () {
        GROUP SELECT (NEW GROUP)
     ----------------------------*/
     document.querySelectorAll(".group-select").forEach(select => {
-        select.addEventListener("change", function () {
+        select.addEventListener("change", async function () {
             if (this.value !== "__new__") return;
 
             const title = prompt("Enter a name for the new group:");
             if (!title || title.trim() === "") {
-                this.value = "";
+                this.value = ""; // Reset dropdown if cancelled
                 return;
             }
 
-            const newOption = document.createElement("option");
-            newOption.value = title;
-            newOption.textContent = title;
+            const url = `/new_group/${encodeURIComponent(title.trim())}`;
 
-            const newGroupOption = this.querySelector('option[value="__new__"]');
-            this.insertBefore(newOption, newGroupOption);
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
 
-            this.value = title;
+                if (data.success) {
+                    // Create the option using the actual ID from the database
+                    const newOption = document.createElement("option");
+                    newOption.value = data.id; 
+                    newOption.textContent = data.title;
+
+                    // Insert before the "__new__" option
+                    const newGroupOption = this.querySelector('option[value="__new__"]');
+                    this.insertBefore(newOption, newGroupOption);
+
+                    // Set the dropdown to the newly created group
+                    this.value = data.id;
+                } else {
+                    alert("Failed to create group: " + (data.error || "Unknown error"));
+                    this.value = "";
+                }
+            } catch (err) {
+                console.error("Group creation failed:", err);
+                this.value = "";
+            }
         });
     });
 });
@@ -199,39 +180,39 @@ document.addEventListener("DOMContentLoaded", function () {
 
     <!-- TOP BUTTONS -->
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-      <button id="image-search-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="image-search-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
           🖼️ Clear+ID
       </button>
 
-      <button id="text-filter-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="text-filter-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
           🔤 Text Search
       </button>
 
-      <button id="price-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-          💲 Sold Search
+      <button id="price-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💲 Price
       </button>
 
-      <button id="save-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-          💾 Save
+      <button id="price-next-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💲→ Price Next
       </button>
 
-      <button id="save-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
-          💾→ Save & Next
+      <button id="hold-next-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          ✋→ Hold Next
       </button>
     
-      <button id="list-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="list-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🧾 List
       </button>
 
-      <button id="list-next-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="list-next-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🧾→ List/Next
       </button>
 
-      <button id="list-up-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="list-up-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #2ecc70ff; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🧾↑ List/Up
       </button>
 
-      <button id="clear-listed-info-btn-{{ card_id }}" style="padding: 8px 16px; background-color: #cc3e2eff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+      <button id="clear-listed-info-btn-{{ card_id }}" style="min-width:120px; padding: 8px 16px; background-color: #cc3e2eff; color: white; border: none; border-radius: 6px; cursor: pointer;">
         🧾 Clear
       </button>
     </div>

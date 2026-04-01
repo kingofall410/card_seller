@@ -3,612 +3,218 @@
 {% get_collections as collections %}
 <script src="{% static 'js/collection_node.js' %}"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    
+<script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'js/card_spreadsheet.js' %}"></script>
+
 <script>
-let hotInstance = null;
-
+// --- UI Management ---
 function switchTab(tabId, event) {
-    // 1. Remove .active from all tabs and hide them
     document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
         content.style.display = 'none';
+        content.classList.remove('active');
     });
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-    // 2. Remove .active from all buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // 3. Show the selected tab and add .active
     const selectedTab = document.getElementById(tabId);
     if (selectedTab) {
-        selectedTab.classList.add('active');
         selectedTab.style.display = 'block';
+        selectedTab.classList.add('active');
     }
+    if (event) event.currentTarget.classList.add('active');
 
-    // 4. Highlight the button
-    if (event && event.currentTarget) {
-        event.currentTarget.classList.add('active');
-    }
-
-    // 5. Wake up Handsontable
-    if (tabId === 'table-view' && hotInstance) {
-        setTimeout(() => {
-            hotInstance.render();
-        }, 50);
+    // Use Module to refresh
+    if (tabId === 'table-view') {
+        const hot = SpreadsheetModule.getInstance();
+        if (hot) setTimeout(() => hot.render(), 50);
     }
 }
 
 function filterSpreadsheet() {
-    if (!hotInstance) return;
-
-    // 1. Get IDs and force them to Strings
+    console.log("filter spreadsheet")
     const visibleCards = document.querySelectorAll('.card-item:not(.hidden-card):not(.folder)');
-    const visibleIds = Array.from(visibleCards).map(card => Number(card.getAttribute('data-id')));
-    console.log("vis", visibleIds);
-    const filtersPlugin = hotInstance.getPlugin('filters');
-    const colHeaders = hotInstance.getColHeader();
-    // 2. Find ID column
-    const idColIndex = colHeaders.findIndex(header => 
-        header.toLowerCase() === 'card_id'
-    );
-    console.log(idColIndex)
-    if (idColIndex === -1) return;
-
-    // 3. Clear and Re-apply
-    filtersPlugin.clearConditions(idColIndex);
-    
-    if (visibleIds.length > 0) {
-        // We use a custom function to ensure type-insensitive matching
-        filtersPlugin.addCondition(idColIndex, 'by_value', [visibleIds]);
-    } else {
-        filtersPlugin.addCondition(idColIndex, 'by_value', [['__NONE__']]);
-    }
-
-    filtersPlugin.filter();
-    hotInstance.render();
+    const visibleIds = Array.from(visibleCards).map(card => card.getAttribute('data-id'));
+    SpreadsheetModule.filterByCardIds(visibleIds);
 }
-function imageRenderer(instance, td, row, col, prop, value, cellProperties) {
-    // Clear the cell
-    td.innerHTML = '';
 
-    if (value) {
-        const img = document.createElement('img');
-        img.src = value;
-        // Apply some styling so the images don't explode the row height
-        img.style.width = '50px';
-        img.style.height = 'auto';
-        img.style.display = 'block';
-        img.style.margin = '0 auto';
-        
-        td.appendChild(img);
-    } else {
-        td.innerText = 'No Image';
-    }
-
-    return td;
-}
-function launchSequence() {
-    // 1. Target the specific name attribute from your HTML
-    const checkedBoxes = document.querySelectorAll('input[name="selected_cards"]:checked');
-    const uncheckedBoxes = document.querySelectorAll('input[name="selected_cards"]:not(:checked)');
-    console.log(`Found ${checkedBoxes.length} cards selected.`);
-    console.log(`Found ${uncheckedBoxes.length} cards not selected.`);
-    let idQueue;
-    if (checkedBoxes.length > 0) {
-        // 2. Map the IDs from the value attribute
-        idQueue = Array.from(checkedBoxes).map(cb => cb.value);
-    } else {
-        idQueue = Array.from(uncheckedBoxes).map(cb => cb.value);
-    }
-    //console.log(idQueue)
-    // 3. Clear any old session data and save the new sequence
-    sessionStorage.removeItem('card_sequence');
-    sessionStorage.setItem('card_sequence', JSON.stringify(idQueue));
-    if (hotInstance) {
-        hotInstance.deselectCell();
-    }
-}
-// Prevent infinite loops when the server updates the table back
-let isApplyingServerUpdate = false;
-
+// Called by your search result logic
 function updateSpreadsheet(tableData, colHeaders) {
-    const container = document.getElementById('hot-spreadsheet');
-    if (!container) return;
-
-    // Create column objects (needed for proper data-to-field mapping)
-    const columnSettings = colHeaders.map(header => {
-        return { 
-            data: header.toLowerCase().replace(' ', '_'), // Standardize keys (e.g., "Card Name" -> "card_name")
-            readOnly: header.toLowerCase() === 'id' || header.toLowerCase() === 'image'
-        };
-    });
-
-    if (!hotInstance) {
-        hotInstance = new Handsontable(container, {
-            data: tableData,
-            colHeaders: colHeaders,
-            columns: columnSettings,
-            rowHeaders: true,
-            height: '70vh',
-            stretchH: 'all',
-            licenseKey: 'non-commercial-and-evaluation',
-            filters: true,
-            dropdownMenu: true,
-            
-            // --- THE EDIT HOOK ---
-            afterChange: function(changes, source) {
-                console.log("afterchange")
-                // Ignore changes triggered by the server or initial load
-                if (source === 'loadData' || isApplyingServerUpdate) return;
-
-                changes.forEach(([visualRow, prop, oldValue, newValue]) => {
-                    if (oldValue === newValue) return;
-
-                    // Package the change for your quickEdit function
-                    const updatedFields = {};
-                    updatedFields[prop] = newValue;
-
-                    quickEdit(this, visualRow, updatedFields);
-                });
-            }
-        });
-    } else {
-        hotInstance.loadData(tableData);
-    }
+    console.log("update spreadsheet")
+    SpreadsheetModule.init('hot-spreadsheet', tableData, colHeaders);
     filterSpreadsheet();
 }
-function quickEdit(hot, visualRow, updatedFields) {
-    // 1. Resolve the ID (Assuming 'id' is a column property)
-    const csrId = hot.getDataAtRowProp(visualRow, 'id');
-    
-    if (!csrId) {
-        console.error("Could not find ID for row:", visualRow);
-        return;
+
+function launchSequence() {
+    const checked = document.querySelectorAll('input[name="selected_cards"]:checked');
+    let ids = Array.from(checked).map(cb => cb.value);
+
+    // Use .length for JavaScript arrays
+    if (ids.length === 0) {
+        // Select cards that are NOT hidden and NOT folders
+        const visibleCards = document.querySelectorAll('.card-item:not(.hidden-card):not(.folder)');
+        ids = Array.from(visibleCards).map(card => card.getAttribute('data-id'));
     }
-
-    // Visual feedback: Dim the row to show it's saving
-    const physicalRow = hot.toPhysicalRow(visualRow);
     
-    $.ajax({
-        url: "/update_csr_fields/",
-        method: "POST",
-        contentType: "application/json",
-        data: JSON.stringify({
-            csrId: csrId,
-            allFields: updatedFields
-        }),
-        success: response => {
-    console.log("--- AJAX Success Start ---");
-    const serverData = response.search_result;
-    console.log("Server Data Received:", serverData);
-    console.log("Target Visual Row (from function arg):", visualRow);
-
-    // 1. Validate Row Index
-    const vRow = parseInt(visualRow, 10);
-    console.log("Parsed vRow:", vRow, "| Type:", typeof vRow);
+    sessionStorage.setItem('card_sequence', JSON.stringify(ids));
     
-    if (isNaN(vRow) || vRow < 0) {
-        console.error("CRITICAL: vRow is invalid! This will cause the 'unsigned number' error.");
-        return;
-    }
-
-    hot.batch(() => {
-        isApplyingServerUpdate = true;
-
-        Object.entries(serverData).forEach(([field, value]) => {
-            // 2. Validate Column Mapping
-            const colIndex = hot.propToCol(field);
-            console.log(`Checking field: "${field}" | Value: ${value} | Found Col Index:`, colIndex);
-
-            if (colIndex !== null && colIndex !== undefined && colIndex >= 0) {
-                try {
-                    console.log(`Executing: hot.setDataAtRowProp(${vRow}, "${field}", ${value})`);
-                    hot.setDataAtRowProp(vRow, field, value, 'serverUpdate');
-                } catch (e) {
-                    console.error(`Crashed during setDataAtRowProp for field "${field}":`, e.message);
-                }
-            } else {
-                console.warn(`SKIPPING: Field "${field}" does not exist in table columns. Mapping it would crash.`);
-            }
-        });
-
-        isApplyingServerUpdate = false;
-    });
-    
-    console.log("--- AJAX Success End ---");
-    if (typeof syncCardView === 'function') syncCardView(csrId, serverData);
-},
-        error: xhr => {
-            console.error("Save failed:", xhr.responseText);
-            // Optional: Revert the cell value on error
-            hot.render(); 
-        }
-    });
+    const hot = SpreadsheetModule.getInstance();
+    if (hot) hot.deselectCell();
 }
+
+// Logic to keep Card View in sync with Spreadsheet edits
 function syncCardView(id, updatedFields) {
     const card = document.querySelector(`.card-item[data-id="${id}"]`);
     if (!card) return;
 
-    // Update text fields (Title, Price, etc.)
     Object.entries(updatedFields).forEach(([field, value]) => {
-        const element = card.querySelector(`.card-${field}`);
-        if (element) {
-            element.textContent = value;
-        }
+        const el = card.querySelector(`.card-${field}`);
+        if (el) el.textContent = value;
     });
 
-    // Special Case: Update Status color if it changed
     if (updatedFields.status) {
         card.className = card.className.replace(/status-\w+/, `status-${updatedFields.status.toLowerCase()}`);
     }
 }
 </script>
 <style>
-  
-.card-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px; /* Increased gap for better breathing room */
-  padding: 15px;
-  align-items: flex-start; /* Keeps tops aligned even if meta text varies */
-}
-
-.card-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* This centers the text and image horizontally */
-    width: 160px;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    background-color: #f9f9f9;
-    position: relative;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    text-align: center; /* Ensures text aligns to center */
-}
-
-.card-main-link {
-    text-decoration: none;
-    color: inherit;
-    display: block; /* Makes the link behave like a container */
-    width: 100%;
-}
-
-.card-main-link:hover .card-meta {
-    color: #007bff; /* Optional: highlight text on hover so users know it's a link */
-}
-
-/* Ensure actions stay on top and clickable */
-.card-actions {
-    position: relative;
-    z-index: 5; 
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 5px;
-}
-.card-count {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  margin-bottom: 4px;
-}
-
-.image-wrapper {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 3 / 4;
-    overflow: hidden;
-    margin: 8px 0;
-    border-radius: 4px;
-    background-color: #eee; /* Shows a grey box if images fail to load */
-}
-
-.thumbnail {
-    position: absolute; /* Stack them on top of each other */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: opacity 0.3s ease;
-}
-/* The default image is always visible unless hovered */
-.thumbnail.default {
-    opacity: 1;
-    z-index: 1;
-}
-
-/* The hover image sits on top but is invisible until hovered */
-.thumbnail.hover {
-    opacity: 0;
-    z-index: 2;
-}
-
-/* Switch opacities on hover */
-.image-wrapper:hover .thumbnail.hover {
-    opacity: 1;
-}
-
-.image-wrapper:hover .thumbnail.default {
-    opacity: 0;
-}
-
-.tooltip-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.tooltip-wrapper::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 125%; /* above the button */
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-  font-size: 0.75em;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-  z-index: 10;
-}
-
-.tooltip-wrapper:hover::after {
-  opacity: 1;
-}
-.add-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 144px;
-  height: 274px;
-  padding: 8px;
-  border: 3px dashed #aaa;
-  border-radius: 6px;
-}
-
-.card-sort-controls {
-    margin-top: 6px;
-}
-
-.add-button {
-  width: 100%;
-  padding: 6px 0;
-  font-size: 0.9em;
-  background-color: #e0e0e0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: center;
-}
-
-.add-button:hover {
-  background-color: #d0d0d0;
-}
-
-.move-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 9999;
-  background-color: #fff;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  width: 200px; /* Adjust as needed */
-  padding: 4px 0;
-  display: none;
-  font-family: sans-serif;
-}
-
-.move-dropdown ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.move-dropdown li {
-  text-align: left;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.move-dropdown li:hover {
-  background-color: #f0f0f0;
-}
-
-.dropdown-wrapper {
-  position: relative; /* This anchors the dropdown */
-  display: inline-block; /* Optional, keeps it tight */
-}
-
-.card-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-}
-
-.card-meta {
-  width: 100%;
-  font-size: 16px;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #444;
-}
-
-.card-item.status-unexecuted {
-  background-color: #fff1f0; /* soft red */
-  border-color: #ffa39e
-}
-
-.card-item.status-failed {
-  background-color: #fff1f0; /* soft red */
-  border-color: #ffa39e
-}
-
-.card-item.status-pending {
-  background-color: #fffbe6; /* soft yellow */
-  border-color: #ffe58f;
-}
-
-.card-item.status-listed {
-  background-color: #e6f7ff; /* soft blue */
-  border-color: #91d5ff;
-}
-
-.image-button {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-.collection-status-group {
-    display: flex;
-    gap: 1rem;
-    margin-top: 0.5rem;
-}
-
-.status-option {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-.status-badge {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #fff;
-}
-.move-dropdown-container {
-    position: relative;
-    display: inline-block;
-}
-
-.move-menu {
-    display: none;
-    position: absolute;
-    bottom: 100%; 
-    left: 0;
-    background-color: #ffffff;
-    min-width: 180px; /* Slightly wider for scrollbar clearance */
-    max-height: 200px; /* ⬅️ Limits the height */
-    overflow-y: auto;  /* ⬅️ Adds the scrollbar when needed */
-    box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-    z-index: 1001;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-    text-align: left;
-    
-    /* ⬅️ Optional: smooth scrolling for mobile/trackpads */
-    scroll-behavior: smooth; 
-}
-
-/* Optional: Make the scrollbar look a bit cleaner */
-.move-menu::-webkit-scrollbar {
-    width: 8px;
-}
-
-.move-menu::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
-}
-
-.move-menu::-webkit-scrollbar-thumb:hover {
-    background: #aaa;
-}
-
-.move-menu a {
-    color: #333;
-    padding: 8px 12px;
-    text-decoration: none;
-    display: block;
-    font-size: 13px;
-}
-
-.move-menu a:hover {
-    background-color: #f1f1f1;
-}
-
-.menu-header {
-    padding: 8px 12px;
-    margin: 0;
-    font-weight: bold;
-    font-size: 11px;
-    color: #888;
-    border-bottom: 1px solid #eee;
-}
-/* Map to your existing status colors */
-
-.status-listed          { background: #00aaff; color: #000;}
-.status-identified      { background: #ff6666; }
-.status-pending         { background: #ffcc0020; color: #000; }
-.status-failed          { background: #ff333320; color: #000;}
-.status-success         { background: #33cc3320; color: #000;}
-.status-none            { background: #aaa; }
-.status-link {
-    text-decoration: none; /* Remove underline */
-    display: inline-block;
-    cursor: pointer;
-    transition: transform 0.1s ease;
-}
-
-.card-status-footer {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 5px;
-    margin-top: auto;
-}
-
-.status-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    border-right: 1px solid #f0f0f0;
-}
-
-.status-column:last-child {
-    border-right: none;
-}
-
-.column-label {
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    color: #999;
-    margin-bottom: 4px;
-    font-weight: bold;
-}
-
-/* Adjust your existing badge CSS to be slightly smaller for the row */
-.status-badge {
-    font-size: 0.75rem !important;
-    padding: 2px 8px !important;
-    white-space: nowrap;
-}
-
-    .tab-btn {
-        background: none; border: none; padding: 10px 20px; cursor: pointer;
-        font-size: 16px; font-weight: bold; color: #666;
+    /* --- Layout & Global --- */
+    .card-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 15px;
+        align-items: flex-start;
     }
-    .tab-btn.active { color: #007bff; border-bottom: 3px solid #007bff; }
-    .tab-content.active { display: block !important; }
+
+    /* --- Card Component --- */
+    .card-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 160px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        position: relative;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+
+    .card-main-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        width: 100%;
+    }
+
+    .card-meta {
+        width: 100%;
+        font-size: 16px;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #444;
+    }
+
+    /* --- Images --- */
+    .image-wrapper {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 3 / 4;
+        overflow: hidden;
+        margin: 8px 0;
+        border-radius: 4px;
+        background-color: #eee;
+    }
+
+    .thumbnail {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: opacity 0.3s ease;
+    }
+
+    .thumbnail.hover { opacity: 0; z-index: 2; }
+    .thumbnail.default { opacity: 1; z-index: 1; }
+    .image-wrapper:hover .thumbnail.hover { opacity: 1; }
+    .image-wrapper:hover .thumbnail.default { opacity: 0; }
+
+    /* --- Status Badges & States --- */
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+    }
+
+    /* Card Backgrounds based on status */
+    .card-item.status-unexecuted, .card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+    .card-item.status-pending { background-color: #fffbe6; border-color: #ffe58f; }
+    .card-item.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
+    .card-item.status-priced { background-color: #007b1b22; border-color: #007b1be6; }
+    .card-item.status-held { background-color: #ffcc6ddf; border-color: #d78c01df; }
+    .card-item.status-auto_priced { background-color: #007b1b22; border-color: #007b1be6; }
+    .card-item.status-listed { background-color: #e6f7ff; border-color: #91d5ff; }
+    .card-item.status-staged { background-color: #e6f7ff; border-color: #91d5ff; }
+
+    /* Badge Colors */
+    .status-listed { background: #00aaff; color: #000; }
+    .status-identified { background: #ff6666; }
+    .status-pending { background: #ffcc0020; color: #000; }
+    .status-failed { background: #ff333320; color: #000; }
+    .status-success { background: #33cc3320; color: #000; }
+
+    /* --- Tabs --- */
+    .tab-btn {
+        background: none;
+        border: none;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        color: #666;
+    }
+
+    .tab-btn.active {
+        color: #007bff;
+        border-bottom: 3px solid #007bff;
+    }
+
+    /* --- Dropdowns & Menus --- */
+    .move-menu {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background-color: #ffffff;
+        min-width: 180px;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+        z-index: 1001;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .move-menu a {
+        color: #333;
+        padding: 8px 12px;
+        text-decoration: none;
+        display: block;
+        font-size: 13px;
+    }
+
+    .move-menu a:hover { background-color: #f1f1f1; }
 </style>
+{% include "header.html" %}
 <div id="collection-0" class="collection">
 <div class="collection-node">
   <div class="collection-header">
@@ -640,23 +246,8 @@ function syncCardView(id, updatedFields) {
 
   </div>
   
+    {% block content %}
     {% include "components/card_search.html" %}
-    <div class="tabs-header" style="margin-bottom: 20px; border-bottom: 2px solid #ddd; display: flex; gap: 20px;">
-        <button class="tab-btn active" onclick="switchTab('card-view', event)">Card View</button>
-        <button class="tab-btn" onclick="switchTab('table-view', event)">Spreadsheet View</button>
-    </div>
-
-    <div id="card-view" class="tab-content active">
-        <div class="container">      
-            {% include "components/status_filter.html" %}          
-        </div>
-        <div class="card-list"></div>
-        <div id="search-spinner" style="display: none; width: 100%; text-align: center; padding: 30px 0;">
-            <div class="spinner-icon"></div>
-        </div>
-    </div>
-
-    <div id="table-view" class="tab-content" style="display: none;">
-        <div id="hot-spreadsheet" style="width: 100%; height: 70vh;"></div>
-    </div>
+    {% include "tabbed_collection_view.html" with StatusBase=StatusBase %}
+{% endblock %}
 

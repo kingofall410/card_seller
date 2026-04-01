@@ -37,7 +37,7 @@
 <table id="fields-{{ card_id }}" style="font-size: 14px; border-collapse: collapse; width: 100%; border: 1px solid #ccc;">
 
 <tbody>
-  {% with card_counter=card_id title=search_result|get_attribute:"display_title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
+  {% with card_counter=card_id title=search_result|get_attribute:"title_to_be" price=search_result|get_attribute:"list_price" ebay_listing_id=search_result|get_attribute:"ebay_listing_id" %}
     <th colspan=2>
       <input type="text"
                 id="field_title_to_be-{{ card_counter }}"

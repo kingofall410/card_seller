@@ -10,6 +10,7 @@ from core.models.CardSearchResult import CardSearchResult
 from django.conf import settings as app_settings
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+from django.utils.timezone import now
 import traceback
 class CollectionStatus(models.TextChoices):
     
@@ -120,18 +121,22 @@ class Card(models.Model):
     cropped_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_crop", null=True)
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
-    notes = models.TextField(blank=True)
-    
+    notes = models.TextField(blank=True)    
     value = models.FloatField(default=True)
+    modification_date = models.DateTimeField(auto_now=True)
+
+    def update_mod_date(self):
+        self.modification_date = now() 
+        self.save(update_fields=["modification_date"])
 
     def save(self, *args, **kwargs):
         print("Card save")
         try:
             info = getattr(self, 'listed_card_info', None)
 
-            if info and info.list_price > 0.0:
+            if info and float(info.list_price) > 0.0:
                 print("if")
-                self.value = self.listed_card_info.list_price
+                self.value = info.list_price
             else:
                 print("else")
                 self.value = self.active_search_results().ebay_msrp

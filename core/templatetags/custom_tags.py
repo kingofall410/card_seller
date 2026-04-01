@@ -93,6 +93,9 @@ def get_calculated():
 def get_status_icon(ca):
     return Collection.objects.order_by('-id')
 
+@register.filter(name='split')
+def split(value, arg):
+    return value.split(arg)
 
 @register.simple_tag
 def get_overrideables():

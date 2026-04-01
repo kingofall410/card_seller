@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from services.models.models import Settings
 from core.models.CardSearchResult import CardSearchResult
+from core.models.Status import StatusBase
 from services import export as export_handler
 from django.shortcuts import render, redirect, get_object_or_404
 from core.apps import CoreConfig
@@ -44,11 +45,12 @@ def list_card(request, csr_id):
     listed_info.list_price = price
     listed_info.list_qty = qty
     listed_info.save()
-    #if publish_dt:
-    #scheduled for the future
+    
     core_config = apps.get_app_config("core")
     core_config.queue.schedule_listing_task(name=f"list csr {csr_id}", card=csr.parent_card, csr=csr, when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
-
+    csr.overall_status = StatusBase.STAGED
+    csr.save()
+    
     success = True
     #else:
     #    success, _, _ = export_handler.export_to_ebay(csr_id, publish=publish, group_key=group_key)

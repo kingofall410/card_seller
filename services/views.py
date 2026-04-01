@@ -12,20 +12,32 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from django.apps import apps
 from django.views.decorators.http import require_POST
+from django.db.models import F, ExpressionWrapper, DateTimeField
+from django.db.models.functions import Now, Abs
+from django.utils import timezone
 
 def task_monitor_data(request):
-    # Fetch latest 100 tasks or filter by PENDING
-    tasks = Task.objects.all().order_by('-created_at')[:40]
+    # 1. Get the current time
+    now = timezone.now()
+
+    # 2. Query tasks ordered by proximity to "now"
+    # We annotate each row with the time difference from now, then sort by that delta
+    tasks = Task.objects.annotate(
+        time_diff=(F('scheduled_for') - now)
+    ).order_by('time_diff')[:200]
+
     data = []
     for t in tasks:
         data.append({
             "id": t.id,
             "name": t.name,
             "status": t.status,
-            "scheduled": t.scheduled_for.strftime("%Y-%m-%d %H:%M:%S"),
+            # If scheduled_for is null, handle gracefully
+            "scheduled": t.scheduled_for.strftime("%Y-%m-%d %H:%M:%S") if t.scheduled_for else "",
             "error": t.error_str or "",
             "type": t.__class__.__name__
         })
+
     return JsonResponse({"data": data})
 
 # views.py

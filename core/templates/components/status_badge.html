@@ -1,3 +1,24 @@
+<style>
+
+
+.status-listed          { background: #00aaff; color: #000;}
+.status-identified      { background: #ff6666; }
+.status-pending         { background: #ffcc0020; color: #000; }
+.status-failed          { background: #ff333320; color: #000;}
+.status-success         { background: #33cc3320; color: #000;}
+.status-none            { background: #96969620; color: #000;}
+
+.status-badge {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    opacity: 1 !important;
+    transition: all 0.1s ease;
+}
+
+
+</style>
 {% if task %}
     <a href="{% url 'calendar' %}" 
        class="status-link"

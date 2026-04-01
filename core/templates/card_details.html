@@ -1,5 +1,4 @@
 {% load static %}
-{% load custom_tags %}
 
 <div class="info-grid" id="main-info-grid">
     
@@ -9,15 +8,42 @@
             <button class="csr-tab-btn" data-tab="csr-listing">Listing Details</button>
             <button class="csr-tab-btn" data-tab="csr-charts">Charts</button>
         </div>
-        <div class="info-metadata">
-            <span>Card: <b>{{ search_result.parent_card.id }}</b></span>
-            <span>CSR: <b>{{ search_result.id }}</b></span>
-            <span>ListedInfo: <b>{{search_result.parent_card.listed_card_info.id}}</b></span>
+    </div>
+
+    <div class="static-info-panel">
+        <div class="panel-item">
+            <span class="label">Collection ID:</span> <b>{{ search_result.parent_card.collection.id }}</b>
+        </div>
+        <div class="panel-item">
+            <span class="label">Card ID:</span> <b>{{ card_id }}</b>
+        </div>
+        <div class="panel-item">
+            <span class="label">CSR ID:</span> <b>{{ search_result.id }}</b>
+        </div>
+
+        <div class="panel-item">
+            <span class="label">Status:</span>
+            
+            <select id="csr-status-dropdown" 
+                    onchange="updateCSRStatus('{{ search_result.id }}', this.value)"
+                    style="padding: 4px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-weight: bold; cursor: pointer; 
+                        background-color: {{ meta.color }}; transition: background-color 0.3s;">
+                
+                {% for value, label in StatusBase.choices %}
+                    {# Optional: Filter to only show Card-related statuses #}
+                    <option value="{{ value }}" {% if search_result.overall_status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="panel-item">
+            <span class="label">Last Modified:</span> <b id="display-mod-date">{{ search_result.parent_card.modification_date|date:"Y-m-d H:i" }}</b>
         </div>
     </div>
-    
+
     <div class="info-left-top">    
         <div class="csr-tab-content-wrapper" id="csr-tab-wrapper">
+            
             <div class="csr-tab-content active" id="csr-search">
                 {% include "search_results.html" with card_id=card_id search_result=search_result %}
                 {% include "description_panel.html" with card=search_result.parent_card %}
@@ -32,12 +58,13 @@
                     {% include "price_over_time2.html" with datasetConfigs=datasetConfigs %}
                 </div>
             </div>
-        </div>
-    </div>
 
-    <div class="info-left-bottom">
-        <div class="placeholder-box">
-            <p class="text-muted">Task Queue Status: Active</p>
+        </div>
+
+        <div class="info-left-bottom">
+            <div class="placeholder-box" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 12px;">
+                
+            </div>
         </div>
     </div>
 
@@ -45,12 +72,12 @@
         <div class="portrait-image">
             <div class="image-wrapper">
                 <img src="{{ search_result.parent_card.cropped_image.url }}"
-                    alt="{{ card_id }}"
+                    alt="Front"
                     onerror="this.onerror=null; this.src='{% static 'images/missing_card.png' %}';"
                     class="thumbnail default">
 
                 <img src="{{ search_result.parent_card.cropped_reverse.url }}"
-                    alt="{{ card_id }} hover"
+                    alt="Back"
                     onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
                     class="thumbnail hover">
             </div>
@@ -59,31 +86,33 @@
 </div>
 
 <style>
-    /* 1. Grid Setup */
+    /* GRID ARCHITECTURE */
     .info-grid {
         display: grid;
-        grid-template-columns: 1fr 380px; /* Adjust 380px to match your card image width */
-        grid-template-rows: auto 1fr;
-        gap: 15px;
-        position: relative; /* Crucial for absolute positioning of the chart */
-        min-height: 600px;
+        grid-template-columns: 1fr 400px;
+        grid-template-rows: auto auto 1fr;
+        gap: 12px;
+        position: relative;
+        min-height: 580px;
     }
 
-    /* 2. Header & Tabs */
+    /* ROW 1: TABS */
     .info-tabs {
-        grid-column: 1 / -1; /* Tabs always span full width */
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 2px solid #ddd;
-        padding-bottom: 10px;
+        grid-column: 1 / span 2;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
     }
+
+    .csr-tab-buttons { display: flex; gap: 5px; }
 
     .csr-tab-btn {
-        padding: 8px 16px;
-        cursor: pointer;
-        border: 1px solid #ccc;
+        padding: 6px 14px;
+        border: 1px solid #ddd;
         background: #f8f9fa;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
     }
 
     .csr-tab-btn.active {
@@ -92,80 +121,140 @@
         border-color: #0d6efd;
     }
 
-    /* 3. Content Visibility */
-    .csr-tab-content {
-        display: none;
+    /* ROW 2: STATIC PANEL */
+    .static-info-panel {
+        grid-column: 1;
+        display: flex;
+        gap: 25px;
+        background: #f1f3f5;
+        padding: 10px 18px;
+        border-radius: 6px;
+        border: 4px solid #0d6efd;
+        align-items: center;
     }
 
-    .csr-tab-content.active {
-        display: block;
-    }
+    .static-info-panel .panel-item { font-size: 12px; color: #495057; }
+    .static-info-panel .label { color: #868e96; font-weight: 700; text-transform: uppercase; font-size: 10px; margin-right: 5px; }
 
-    /* 4. THE WIDE CHART OVERLAY */
+    /* ROW 3: CONTENT & IMAGE */
+    .info-left-top { grid-column: 1; }
+    .info-right { grid-column: 2; position: relative; }
+
+    /* IMAGE HOVER EFFECT */
+    .image-wrapper { 
+        position: sticky; 
+        top: 10px; 
+        width: 400px; 
+        height: 560px; 
+        border-radius: 8px; 
+        overflow: hidden; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+    }
+    .thumbnail { position: absolute; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.3s; }
+    .thumbnail.hover { opacity: 0; z-index: 2; }
+    .image-wrapper:hover .thumbnail.hover { opacity: 1; }
+
+    /* TAB CONTENT */
+    .csr-tab-content { display: none; }
+    .csr-tab-content.active { display: block; }
+    .csr-tab-content-wrapper { position: relative; transition: height 0.3s ease; }
+
+    /* WIDE CHART MODE */
     .csr-tab-content.wide-overlay.active {
         position: absolute;
-        top: 60px; /* Below the tabs */
+        top: 105px; /* Sits below tabs + panel */
         left: 0;
-        width: 100%; /* Spans across the image */
-        z-index: 100;
+        width: 100%;
+        z-index: 1000;
         background: white;
-        padding: 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        padding: 15px;
+        border: 1px solid #ddd;
         border-radius: 8px;
-        min-height: 500px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
     }
 
-    /* Hide image column when charts are wide to prevent clipping issues */
+    /* Interaction when charts are active */
     .info-grid.charts-active #card-image-column {
-        opacity: 0.1; /* Keeps layout stable but pushes image to background */
+        opacity: 0.15;
         pointer-events: none;
-    }
-
-    /* 5. Image Wrapper Styling */
-    .image-wrapper {
-        position: sticky;
-        top: 20px;
-    }
-
-    .thumbnail {
-        max-width: 100%;
-        height: auto;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
 </style>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    const tabButtons = document.querySelectorAll('.csr-tab-btn');
-    const tabContents = document.querySelectorAll('.csr-tab-content');
-    const gridContainer = document.getElementById('main-info-grid');
+(function() {
+    function resizeTabWrapper() {
+        const wrapper = document.getElementById("csr-tab-wrapper");
+        const activeTab = wrapper.querySelector(".csr-tab-content.active");
+        
+        if (activeTab && !activeTab.classList.contains('wide-overlay')) {
+            wrapper.style.height = activeTab.offsetHeight + "px";
+        } else if (activeTab && activeTab.classList.contains('wide-overlay')) {
+            wrapper.style.height = "550px"; // Default height for charts
+        }
+    }
 
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const target = this.getAttribute('data-tab');
+    document.addEventListener("click", (e) => {
+        if (!e.target.classList.contains("csr-tab-btn")) return;
 
-            // 1. Toggle Button State
-            tabButtons.forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
+        const tabId = e.target.dataset.tab;
+        const grid = document.getElementById('main-info-grid');
 
-            // 2. Toggle Content Visibility
-            tabContents.forEach(content => {
-                content.classList.remove('active');
-                if (content.id === target) {
-                    content.classList.add('active');
-                }
-            });
+        // Toggle Buttons
+        document.querySelectorAll(".csr-tab-btn").forEach(btn => btn.classList.remove("active"));
+        e.target.classList.add("active");
 
-            // 3. Handle Grid "Wide Mode"
-            if (target === 'csr-charts') {
-                gridContainer.classList.add('charts-active');
-                // Trigger a resize event so Chart.js knows to fill the new width
-                window.dispatchEvent(new Event('resize'));
-            } else {
-                gridContainer.classList.remove('charts-active');
-            }
-        });
+        // Toggle Content
+        document.querySelectorAll(".csr-tab-content").forEach(div => div.classList.remove("active"));
+        const targetDiv = document.getElementById(tabId);
+        targetDiv.classList.add("active");
+
+        // Handle Wide Mode (Charts)
+        if (tabId === 'csr-charts') {
+            grid.classList.add('charts-active');
+            window.dispatchEvent(new Event('resize')); 
+        } else {
+            grid.classList.remove('charts-active');
+        }
+
+        // Adjust wrapper height
+        setTimeout(resizeTabWrapper, 10);
     });
-});
+
+    // Initial load height
+    window.addEventListener('load', resizeTabWrapper);
+})();
+
+function updateCSRStatus(csrId, newStatus) {
+    const spinner = document.getElementById('status-spinner');
+    const modDateDisplay = document.getElementById('display-mod-date');
+    
+    if (spinner) spinner.style.display = 'inline';
+
+    fetch(`/update_csr_status_only/${csrId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the modification date text if the server sends it back
+            if (data.new_mod_date && modDateDisplay) {
+                modDateDisplay.innerText = data.new_mod_date;
+            }
+            console.log("Status updated to:", newStatus);
+        } else {
+            alert("Error updating status: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        alert("Failed to reach server.");
+    })
+    .finally(() => {
+        if (spinner) spinner.style.display = 'none';
+    });
+}
 </script>

@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
+from core.models.Group import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Status import StatusBase
 from core.models.CardSearchResult import CardSearchResult
@@ -17,6 +18,7 @@ from django.db import connection, transaction, IntegrityError
 from django.db.models import Q
 from django.template.loader import render_to_string
 from core.views import collection_views
+from django.utils.timezone import now
 
 
 # Card-related views
@@ -82,7 +84,7 @@ def view_card(request, card_id):
             
     #print(card_tuples)
     
-    return render(request, "card.html", {"card_tuple": card_tuple, "collection_id": first_card.collection.id, "settings": Settings.get_default(), "filtered":first_card.collection.cards.count()-len(card_list), "card_ids":json.dumps(card_ids)})
+    return render(request, "card.html", {"card_tuple": card_tuple, "collection_id": first_card.collection.id, "settings": Settings.get_default(), "filtered":first_card.collection.cards.count()-len(card_list), "card_ids":json.dumps(card_ids), "StatusBase":StatusBase})
 
 
 @csrf_exempt
@@ -143,6 +145,7 @@ def card_search_ajax(request):
     else:
         cards_list = Card.objects.none()
 
+    total_count = cards_list.count()
     paginator = Paginator(cards_list, 40) # 40 cards per "chunk"
     page_obj = paginator.get_page(page_number)
 
@@ -155,13 +158,14 @@ def card_search_ajax(request):
     if request.GET.get('page') == '1':
         table_data = collection_views.spreadsheet_rows_from_search_result(cards_list, columns)
 
-    
+    print(table_data)
     return JsonResponse({
         'html': html,
         'table_data': table_data,
         'col_headers': columns,
         'has_next': page_obj.has_next(),
-        'next_page': page_obj.next_page_number() if page_obj.has_next() else None # Check this!
+        'next_page': page_obj.next_page_number() if page_obj.has_next() else None, # Check this!,
+        'total_count': total_count
     })
 
 def get_card_item(request, card_id):
@@ -301,6 +305,82 @@ def retokenize(request, csr_id):
     csr.retokenize()
 
     return JsonResponse({"success": True, "error": ""})
+
+@csrf_exempt
+def aync_price_card(request, csr_id):  
+
+    if not csr_id or csr_id == 'undefined':
+        return JsonResponse({'error': 'CSR ID is required'}, status=400)
+    csr = CardSearchResult.objects.get(id=csr_id)
+    card = csr.parent_card
+
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=csr, card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2}, on_success_status=StatusBase.PRICED)
+
+    return JsonResponse({"success": True, "error": ""})
+
+@csrf_exempt
+def new_group(request, name):  
+    clean_name = name.strip()
+    
+    if not clean_name:
+        return JsonResponse({'success': False, 'error': 'Name is empty'}, status=400)
+    
+    # Use the classmethod we defined earlier
+    # Ensure ProductGroup.create(name) handles the DB save properly
+    group = ProductGroup.create(clean_name)
+
+    return JsonResponse({
+        'success': True,
+        'id': group.id,
+        'group_key': group.group_key,
+        'title': group.group_title
+    })
+    
+
+@csrf_exempt
+def refresh_listing_groups(request, csr_id):  
+    settings = Settings.get_default()
+    
+    if card_id:
+        first_card = Card.objects.get(id=card_id)
+    
+    card_ids = []
+    if request.method == "POST":
+        try:
+            card_ids = json.loads(request.POST.get('card_ids', '[]'))
+        except json.JSONDecodeError:
+            pass
+
+    if len(card_ids) <= 0:
+        card_list = list(first_card.collection.cards.order_by('id'))
+    else:
+        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+    
+    #print(card_list)
+    if not first_card:
+        first_card = card_list[0] if card_list else None
+
+@csrf_exempt
+def update_csr_status_only(request, csr_id):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            new_status = data.get('status')
+            
+            # Fetch and update
+            obj = CardSearchResult.objects.get(id=csr_id)
+            obj.overall_status = new_status
+            obj.save(update_fields=['overall_status'])
+            obj.parent_card.update_mod_date()
+            
+            return JsonResponse({
+                'success': True, 
+                'new_mod_date': obj.parent_card.modification_date.strftime("%Y-%m-%d %H:%M")
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 @csrf_exempt
 def price_only(request, csr_id):

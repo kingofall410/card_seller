@@ -25,10 +25,10 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
             csr = card.parse_and_tokenize_search_results(listing_matches, all_fields=all_fields, csr=csr, id_listings=True)
 
         csr.filter_terms = all_fields["filter_terms"] if "filter_terms" in all_fields else ""
-        search_string = csr.build_title(shorter=True) + " " + csr.filter_terms
+        '''search_string = csr.build_title(shorter=True) + " " + csr.filter_terms
         backup_search_string = csr.build_title(shortest=True) + " " + csr.filter_terms
         csr.set_ovr_attribute("sold_search_string", search_string, False)
-        csr.set_ovr_attribute("text_search_string", search_string, False)
+        csr.set_ovr_attribute("text_search_string", search_string, False)'''
         
         csr.save()
 
@@ -45,7 +45,7 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
 
 def text_refinement(csr, keyword_string = "", all_fields = {}, settings=None, site="ebay", retry_limit=5):
     print("text refine", keyword_string)
-    settings = settings or Settings.get_default()
+    '''settings = settings or Settings.get_default()
     
     filter_terms = csr.display_value("filter_terms") or ""
     filter_terms = "" if filter_terms == "-" else filter_terms
@@ -78,7 +78,7 @@ def text_refinement(csr, keyword_string = "", all_fields = {}, settings=None, si
     csr.update_listings(matches_map)
     #csr.set_ovr_attribute("sold_search_string", search_string, False)
     #csr.set_ovr_attribute("text_search_string", search_string, False)
-    csr.save()
+    csr.save()'''
         
 
 def retokenize(card):
@@ -90,29 +90,31 @@ def price_only_card(card_id, settings_id, ss=None):
     price_only(csr_id, settings_id, ss)
     return True
 
+def refresh_listing_groups(listing_groups, csr):
+    keyword_strings = []
+    id_string = csr.build_search_string()
+    for listing_group in listing_groups:
+        keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
+        
+    nr_pages = 1
+
+    #matches map is keyword_string --> (listing variable, [listings])
+    matches_map = ebay.scrape_with_profile(keyword_strings, limit=50, max_pages=nr_pages)
+    return matches_map
+
+
 def price_only(csr_id, settings_id, ss=None):
     csr = CardSearchResult.objects.get(id=csr_id)
     settings = Settings.objects.get(id=settings_id)
 
-    manual_filter_terms = csr.display_value("filter_terms") or ""
-    manual_filter_terms = "" if manual_filter_terms == "-" else manual_filter_terms
     
-    id_string = csr.build_search_string()
-    #id_string = csr.build_title(shorter=True)
-    wide_id_string = csr.build_title(shortest=True)
-    
-    keyword_strings = []
     csr.reset_listing_groups()
     csr.save()
-    listing_groups = csr.listing_groups.filter(is_sold=True)
-    for listing_group in listing_groups:
-        keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
-    
-    nr_pages = int(settings.price_listings/50)+1 
 
-    #matches map is keyword_string --> (listing variable, [listings])
-    matches_map = ebay.scrape_with_profile(keyword_strings, limit=settings.price_listings, max_pages=nr_pages)
+    listing_groups = csr.listing_groups.filter(is_sold=True)
+    matches_map = refresh_listing_groups(listing_groups, csr)   
     
     csr.update_listings(matches_map)
+    csr.overall_status = StatusBase.PRICED
     csr.save()
     

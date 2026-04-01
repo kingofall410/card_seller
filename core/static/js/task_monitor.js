@@ -36,21 +36,28 @@ window.StatelessTaskMonitor = (function() {
         };
 
         const processDiff = (oldData, newData) => {
-            // If no baseline, skip to avoid mass-reloading everything on first load
             if (!oldData || oldData.length === 0) return;
 
             const oldMap = Object.fromEntries(oldData.map(t => [t.name, t.status]));
             
             newData.forEach(task => {
                 const prevStatus = oldMap[task.name];
-                
-                if (prevStatus !== undefined && prevStatus !== task.status) {
-                    const idMatch = task.name.match(/(\d+)$/);
-                    if (idMatch) {
-                        const cardId = idMatch[0];
-                        console.log(`[Delta] Change on ${window.location.pathname} for Card ${cardId}: ${prevStatus} -> ${task.status}`);
-                        callbacks.forEach(cb => cb(cardId, task.status));
+                const idMatch = task.name.match(/(\d+)$/);
+                if (!idMatch) return; // Skip if we can't find a Card ID
+
+                const cardId = idMatch[0];
+
+                // Case 1: The task is known, but the status changed
+                if (prevStatus !== undefined) {
+                    if (prevStatus !== task.status) {
+                        console.log(`[Update] Card ${cardId}: ${prevStatus} -> ${task.status}`);
+                        callbacks.forEach(cb => cb(cardId, task.status, false));
                     }
+                } 
+                // Case 2: prevStatus is undefined (The "Else") -> It's a new task
+                else {
+                    console.log(`[New] Card ${cardId} detected in monitor stream.`);
+                    callbacks.forEach(cb => cb(cardId, task.status, true));
                 }
             });
         };

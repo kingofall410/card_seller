@@ -1,0 +1,401 @@
+{% load static %}
+{% load tz %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Calendar</title>
+
+    <style>
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #ddd; /* Border effect */
+            border: 1px solid #ddd;
+        }
+
+        .day-header {
+            font-weight: bold;
+            text-align: center;
+            padding: 8px 0;
+            background: #eee;
+            border-radius: 4px;
+        }
+
+       .day-cell {
+            background: #fff;
+            min-height: 120px;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .day-number {
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+            color: #666;
+        }
+
+        .task-item {
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            background: #fff;
+            border-left: 4px solid #888;
+        }
+
+        .task-item img {
+            height: 20px;
+            width: 20px;
+            object-fit: contain;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        /* Status colors */
+        .status-listed        { border-left-color: #33cc33; background: #33cc3320 }
+        .status-success        { border-left-color: #33cc33; background: #33cc3320 }
+        .status-pending       { border-left-color: #ffcc00; background: #ffcc0020 }
+        .status-failed        { border-left-color: #ff3333; background: #ff333320 }
+
+        .today {
+            background-color: #fff9db;
+        }
+
+        .calendar-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-top: 20px;
+        }
+
+        .day-vertical {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12px;
+            background: #fafafa;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .day-vertical-header {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .day-vertical.today {
+            border: 4px solid #ff3300ff;
+        }
+
+        /* default visibility */
+        #month-view { display: block; }
+        #week-view { display: none; }
+        #day-view { display: none; }
+
+        .csr-title {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+
+<body>
+
+{% include "header.html" %}
+
+<h1>Task Calendar</h1>
+
+<!-- Month Navigation ALWAYS visible -->
+<div style="display:flex; justify-content:space-between; margin: 20px 0;">
+    <a href="?month={{ prev_month.year }}-{{ prev_month.month }}">← Previous</a>
+    <h2>{{ current_month|date:"F Y" }}</h2>
+    <a href="?month={{ next_month.year }}-{{ next_month.month }}">Next →</a>
+</div>
+
+<!-- Toggle + Views -->
+<div id="calendar-wrapper">
+
+    <!-- Radio toggle -->
+    <div style="margin: 20px 0;">
+        <label>
+            <input type="radio" name="calview" value="month" checked>
+            Month
+        </label>
+        <label style="margin-left:20px;">
+            <input type="radio" name="calview" value="week">
+            Week
+        </label>
+        <label style="margin-left:20px;">
+            <input type="radio" name="calview" value="day">
+            Day
+        </label>
+    </div>
+
+    <div id="month-view">
+        <div class="calendar" id="calendar-grid">
+
+            {% for day in weekday_headers %}
+                <div class="day-header">{{ day }}</div>
+            {% endfor %}
+
+            {% for _ in blanks %}
+                <div class="day-blank"></div>
+            {% endfor %}
+
+            {% for day in day_objects %}
+                <div class="day-cell {% if day.date == today %}today{% endif %}" 
+                    data-date="{{ day.date|date:'Y-m-d' }}">
+                    
+                    <div class="day-number">{{ day.date.day }}</div>
+
+                    <div class="task-list-wrapper">
+                        {% for task in day.tasks %}
+                            {% include "components/task_simple.html" with task=task show_images=False show_price=False %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <!-- WEEK VIEW -->
+    <div id="week-view">
+        <div class="calendar" style="grid-template-columns: repeat(7, 1fr);">
+
+            {% for day in week_objects %}
+                <div class="day-cell {% if day.date == today %}today{% endif %}">
+                    <div class="day-number">{{ day.date|date:"DD M j" }}</div>
+
+                    {% for task in day.tasks %}
+                        {% include "components/task_simple.html" with task=task show_images=True %}
+                    {% empty %}
+                        <div class="no-tasks">No tasks</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <!-- DAY VIEW -->
+    <div id="day-view">
+        <div class="calendar-vertical">
+
+            {% for day in day_objects %}
+                <div class="day-vertical {% if day.date == today %}today{% endif %}">
+                    <div class="day-vertical-header">
+                        {{ day.date|date:"l, F j" }}
+                    </div>
+
+                    {% for task in day.tasks %}
+                        {% include "components/task_detail.html" with task=task %}
+                    {% empty %}
+                        <div class="no-tasks">No tasks</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+        </div>
+    </div>
+
+</div>
+<!-- DATETIME RESET MODAL -->
+<div id="resetModal" 
+     style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.45); backdrop-filter:blur(2px);
+            align-items:center; justify-content:center;">
+
+    <div style="background:white; padding:20px; border-radius:8px; width:300px;
+                box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+
+        <h3 style="margin-top:0;">Reset Task</h3>
+
+        <label>New datetime:</label>
+        <input id="resetDatetime" type="datetime-local" 
+               style="width:100%; margin-top:6px; margin-bottom:12px;">
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button onclick="closeResetModal()"
+                    style="padding:6px 10px;">Cancel</button>
+
+            <button id="resetConfirmBtn"
+                    style="padding:6px 10px; background:#0078d4; color:white; border:none;">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const radios = document.querySelectorAll('input[name="calview"]');
+    const month = document.getElementById('month-view');
+    const week = document.getElementById('week-view');
+    const day = document.getElementById('day-view');
+
+    function show(view) {
+        month.style.display = (view === 'month') ? 'block' : 'none';
+        week.style.display  = (view === 'week')  ? 'block' : 'none';
+        day.style.display   = (view === 'day')   ? 'block' : 'none';
+    }
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', () => show(radio.value));
+    });
+
+    // Default to Month view
+    show('month');
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const radios = document.querySelectorAll('input[name="calview"]');
+    const month = document.getElementById('month-view');
+    const week = document.getElementById('week-view');
+    const day = document.getElementById('day-view');
+
+    function show(view) {
+        month.style.display = (view === 'month') ? 'block' : 'none';
+        week.style.display  = (view === 'week')  ? 'block' : 'none';
+        day.style.display   = (view === 'day')   ? 'block' : 'none';
+
+        // Auto-scroll to today when switching views
+        scrollToToday(view);
+    }
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', () => show(radio.value));
+    });
+
+    // Scroll helper
+    function scrollToToday(view) {
+        const container = {
+            month: month,
+            week: week,
+            day: day
+        }[view];
+
+        if (!container) return;
+
+        const todayEl = container.querySelector('.today');
+        if (todayEl) {
+            todayEl.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+    }
+
+    // Default to Month view + auto-scroll
+    show('month');
+});
+
+function resetTask(taskId) {
+    const newDatetime = prompt("Enter new datetime (YYYY-MM-DD HH:MM):");
+
+    if (!newDatetime) {
+        return; // user cancelled
+    }
+
+    fetch(`/task_reset/${taskId}/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ new_datetime: newDatetime })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Server error");
+        }
+        return response.json();
+    })
+    .then(data => {
+        alert("Task reset successfully");
+        location.reload();
+    })
+    .catch(err => {
+        alert("Failed to reset task");
+        console.error(err);
+    });
+}
+let currentTaskId = null;
+
+function openResetModal(taskId, event) {
+    // Prevent the click from triggering the parent <a> link
+    event.stopPropagation();
+    event.preventDefault();
+    currentTaskId = taskId;
+
+    // Generate current datetime in local timezone, formatted for datetime-local input
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16); // "YYYY-MM-DDTHH:MM"
+
+    document.getElementById("resetDatetime").value = local;
+    document.getElementById("resetModal").style.display = "flex";
+}
+
+function closeResetModal() {
+    document.getElementById("resetModal").style.display = "none";
+}
+
+document.getElementById("resetConfirmBtn").onclick = function () {
+    const newDatetime = document.getElementById("resetDatetime").value;
+
+    if (!newDatetime) {
+        alert("Please select a datetime");
+        return;
+    }
+
+    fetch(`/services/task_reset/${currentTaskId}/`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({ new_datetime: newDatetime })
+    })
+    .then(r => {
+        if (!r.ok) throw new Error("Server error");
+        return r.json();
+    })
+    .then(() => {
+        closeResetModal();
+        location.reload();
+    })
+    .catch(err => {
+        alert("Failed to reset task");
+        console.error(err);
+    });
+};
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.startsWith(name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+
+</script>
+
+</body>
+</html>
