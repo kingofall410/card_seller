@@ -14,9 +14,36 @@
             --status-success: #2ecc71;
             --status-pending: #f1c40f;
             --status-error: #e74c3c;
+            --text-main: #333;
         }
 
-        body { font-family: -apple-system, sans-serif; background: #f4f7f6; padding: 20px; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #f4f7f6; 
+            padding: 20px; 
+            color: var(--text-main); 
+        }
+
+        /* VIEW CONTROLS */
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .view-switch { display: flex; gap: 5px; background: #eee; padding: 4px; border-radius: 6px; }
+        .view-btn { 
+            padding: 6px 15px; border: none; background: transparent; cursor: pointer; 
+            border-radius: 4px; font-weight: 600; font-size: 13px; transition: 0.2s;
+        }
+        .view-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: #007bff; }
+
+        .nav-links a { text-decoration: none; color: #666; font-weight: bold; padding: 0 10px; }
 
         /* CALENDAR GRID */
         .calendar {
@@ -31,154 +58,191 @@
 
         .day-header {
             background: #f8f9fa;
-            padding: 10px;
+            padding: 12px;
             text-align: center;
             font-weight: bold;
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #666;
-        }
-
-        .day-cell {
-            background: #fff;
-            min-height: 140px;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            transition: background 0.3s ease;
-        }
-
-        .day-cell.today { background-color: var(--today-bg); }
-
-        .day-number {
-            font-size: 12px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: #999;
-        }
-
-        /* TASK LIST SCROLLING */
-        .task-list-wrapper {
-            flex-grow: 1;
-            overflow-y: auto;
-            max-height: 160px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        /* SIMPLE TASK COMPONENT */
-        .task-item {
             font-size: 11px;
-            padding: 4px 8px;
+            text-transform: uppercase;
+            color: #888;
+        }
+
+        .day-cell { background: #fff; padding: 10px; display: flex; flex-direction: column; }
+        .day-cell.today { background-color: var(--today-bg); }
+        .day-number { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #bbb; }
+
+        /* TASK ITEM STYLING */
+        .task-list-wrapper { display: flex; flex-direction: column; gap: 6px; }
+        .task-item {
             border-radius: 4px;
-            background: #f1f3f5;
-            border-left: 3px solid #ccc;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.05);
+            border-left-width: 4px !important;
+            transition: all 0.2s;
         }
 
-        /* STATUS COLORS */
-        .task-item.status-completed { border-left-color: var(--status-success); background: #e8f5e9; }
-        .task-item.status-started { border-left-color: var(--status-pending); background: #fffde7; }
-        .task-item.status-failed { border-left-color: var(--status-error); background: #ffebee; }
+        /* Status colors */
+        .status-listed { background-color: #00aaff !important; color: #000 !important; border-left: 4px solid #0088cc !important; }
+        .status-identified { background-color: #ff6666 !important; color: #fff !important; border-left: 4px solid #cc4444 !important; }
+        .status-pending { background-color: #ffcc0020 !important; color: #000 !important; border-left: 4px solid #ffcc00 !important; }
+        .status-failed { background-color: #ff333320 !important; color: #000 !important; border-left: 4px solid #ff3333 !important; }
+        .status-success, .status-completed { background-color: #33cc3320 !important; color: #000 !important; border-left: 4px solid #33cc33 !important; }
+        .status-none { background-color: #96969620 !important; color: #000 !important; border-left: 4px solid #969696 !important; }
 
-        /* Real-time update pulse */
+        /* VIEW TOGGLES */
+        .calendar.month-view .day-cell { min-height: 140px; }
+        .calendar.month-view .detail-1 { display: none !important; }
+        .calendar.week-view .day-cell { min-height: 300px; height: auto; }
+        .calendar.week-view .day-cell:not(.is-current-week) { display: none; }
+        .calendar.week-view .day-header:not(.is-current-week-header) { display: none; }
+        .calendar.week-view .detail-0 { display: none !important; }
+
+        #list-view-container { display: none; background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .list-row { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; gap: 15px; }
+        .list-row .date-label { font-size: 11px; font-weight: bold; color: #999; width: 80px; }
+
         @keyframes status-pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.03); background-color: #d1ecf1; }
-            100% { transform: scale(1); }
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
         }
-
-        .is-updating {
-            animation: status-pulse 0.6s ease-in-out;
-            z-index: 10;
-        }
-        .task-list-wrapper::-webkit-scrollbar { width: 3px; }
-        .task-list-wrapper::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+        .is-updating { animation: status-pulse 0.6s ease-in-out; }
     </style>
 </head>
 <body>
-<script src="{% static 'js/task_monitor.js' %}"></script>
+
 {% include "header.html" %}
-    <div id="month-view">
-        <div class="calendar" id="calendar-grid">
-            
-            {% for day in weekday_headers %}
-                <div class="day-header">{{ day }}</div>
-            {% endfor %}
 
-            {% for _ in blanks %}
-                <div class="day-blank" style="background: #fdfdfd;"></div>
-            {% endfor %}
-
-            {% for day in day_objects %}
-                <div class="day-cell {% if day.date == today %}today{% endif %}" 
-                     data-date="{{ day.date|date:'Y-m-d' }}">
-                    
-                    <div class="day-number">{{ day.date.day }}</div>
-
-                    <div class="task-list-wrapper">
-                        {% for task in day.tasks %}
-                            <div id="task-{{ task.id }}" 
-                                 class="task-item status-{{ task.status|lower }}" 
-                                 data-card-id="{{ task.card_id }}"
-                                 title="Last updated: {{ task.modified_at }}">
-                                <span>{{ task.name|truncatechars:15 }}</span>
-                                <strong>{{ task.status|upper }}</strong>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endfor %}
-
-        </div>
+<div class="controls-bar">
+    <div class="nav-links">
+        <a href="?month={{ prev_month }}">&laquo; Prev</a>
+        <span style="font-size: 1.2em; font-weight: bold;">{{ current_month|date:"F Y" }}</span>
+        <a href="?month={{ next_month }}">Next &raquo;</a>
     </div>
 
-    <script>
+    <div class="view-switch">
+        <button id="btn-month" class="view-btn active" onclick="switchView('month')">Month</button>
+        <button id="btn-week" class="view-btn" onclick="switchView('week')">Week</button>
+        <button id="btn-list" class="view-btn" onclick="switchView('list')">List</button>
+    </div>
+</div>
+
+<div class="calendar month-view" id="calendar-grid">
+    {% for day_name in weekday_headers %}
+        <div class="day-header">{{ day_name }}</div>
+    {% endfor %}
+
+    {% for day in day_objects %}
+        <div class="day-cell {% if day.is_today %}today{% endif %} {% if day.in_current_week %}is-current-week{% endif %}" 
+             data-date="{{ day.date|date:'Y-m-d' }}"
+             data-col="{% cycle '0' '1' '2' '3' '4' '5' '6' %}">
+            <div class="day-number">{{ day.date.day }}</div>
+            <div class="task-list-wrapper">
+                {% for task in day.tasks %}
+                    <div id="task-{{ task.id }}" data-task-type="{{ task.task_type }}">
+                        <div class="detail-0">{% include "components/task.html" with task=task detail_level=0 %}</div>
+                        <div class="detail-1">{% include "components/task.html" with task=task detail_level=1 %}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<div id="list-view-container">
+    <div id="dynamic-task-list"></div>
+</div>
+
+<script src="{% static 'js/task_monitor.js' %}"></script>
+<script>
+    /**
+     * VIEW SWITCHING LOGIC
+     */
+    function buildListView() {
+        const listTarget = document.getElementById('dynamic-task-list');
+        listTarget.innerHTML = '';
+        
+        const dayCells = Array.from(document.querySelectorAll('.day-cell'));
+        dayCells.forEach(cell => {
+            const taskContainers = cell.querySelectorAll('[id^="task-"]');
+            if (taskContainers.length > 0) {
+                const dateStr = cell.getAttribute('data-date');
+                taskContainers.forEach(container => {
+                    const detail1 = container.querySelector('.detail-1');
+                    const row = document.createElement('div');
+                    row.className = 'list-row';
+                    row.innerHTML = `
+                        <div class="date-label">${dateStr}</div>
+                        <div class="list-task-content">
+                            ${detail1.innerHTML}
+                        </div>`;
+                    listTarget.appendChild(row);
+                });
+            }
+        });
+    }
+
+    function switchView(viewType) {
+        const grid = document.getElementById('calendar-grid');
+        const listContainer = document.getElementById('list-view-container');
+        const buttons = document.querySelectorAll('.view-btn');
+        
+        buttons.forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${viewType}`).classList.add('active');
+
+        if (viewType === 'list') {
+            grid.style.display = 'none';
+            listContainer.style.display = 'block';
+            buildListView();
+        } else {
+            grid.style.display = 'grid';
+            listContainer.style.display = 'none';
+            grid.classList.remove('month-view', 'week-view');
+            grid.classList.add(`${viewType}-view`);
+
+            if (viewType === 'week') {
+                const visibleDays = document.querySelectorAll('.day-cell.is-current-week');
+                const activeCols = new Set();
+                visibleDays.forEach(d => activeCols.add(d.getAttribute('data-col')));
+                document.querySelectorAll('.day-header').forEach((h, idx) => {
+                    h.classList.toggle('is-current-week-header', activeCols.has(idx.toString()));
+                });
+            }
+        }
+    }
+
+    /**
+     * TASK MONITOR INTEGRATION
+     */
     document.addEventListener('DOMContentLoaded', () => {
         const monitor = window.StatelessTaskMonitor.getInstance();
-
-        // Note the 3rd argument 'isNew' coming from our updated processDiff
-        monitor.onUpdate((cardId, newStatus, isNew) => {
-            const targetClass = `status-${newStatus.toLowerCase()}`;
+        monitor.onUpdate((taskId, taskData, isNew) => {
+            const newStatus = taskData.status.toLowerCase();
+            const targetClass = `status-${newStatus}`;
             
-            // 1. Try to find existing instances (Month, Week, Day views)
-            const taskElements = document.querySelectorAll(`[data-card-id="${cardId}"]`);
+            // Update Status in all views
+            const containers = document.querySelectorAll(`[id="task-${taskId}"]`);
+            containers.forEach(container => {
+                const item = container.querySelector('.task-item');
+                if (item) {
+                    item.className = item.className.split(' ').filter(c => !c.startsWith('status-')).join(' ');
+                    item.classList.add(targetClass, 'is-updating');
+                    setTimeout(() => item.classList.remove('is-updating'), 1000);
+                }
+            });
 
-            if (taskElements.length > 0) {
-                // --- UPDATE EXISTING ---
-                taskElements.forEach(el => {
-                    if (el.classList.contains(targetClass)) return;
-
-                    console.log(`[UI Sync] Updating Card ${cardId} to ${newStatus}`);
-
-                    // Update classes (Regex maintains other classes like 'task-item')
-                    el.className = el.className.replace(/status-\w+/g, '');
-                    el.classList.add(targetClass);
-
-                    // Update text label
-                    const label = el.querySelector('strong');
-                    if (label) label.innerText = newStatus.toUpperCase();
-
-                    // Trigger pulse
-                    el.classList.add('is-updating');
-                    setTimeout(() => el.classList.remove('is-updating'), 1000);
-                });
-            } 
-            else if (isNew) {
-                // --- HANDLE NEW TASK ---
-                console.log(`[UI Sync] New task discovered for Card ${cardId}. Needs placement.`);
-                
-                // Optional: You could call a function to fetch the HTML for this task
-                // and inject it into the correct [data-date] cell.
-                // For now, most devs trigger a subtle notification or a soft refresh
-                // if the task is critical.
+            // Handle New Tasks
+            if (isNew && taskData.html) {
+                const taskDate = taskData.scheduled.split(' ')[0]; 
+                const calendarWrapper = document.querySelector(`.day-cell[data-date="${taskDate}"] .task-list-wrapper`);
+                if (calendarWrapper) {
+                    const wrapper = document.createElement('div');
+                    wrapper.id = `task-${taskId}`;
+                    wrapper.setAttribute('data-task-type', taskData.type || 'listingtask');
+                    wrapper.innerHTML = taskData.html;
+                    calendarWrapper.appendChild(wrapper);
+                }
             }
         });
     });
-    </script>
+</script>
 </body>
 </html>

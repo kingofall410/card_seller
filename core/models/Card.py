@@ -89,7 +89,7 @@ class Collection(models.Model):
         return self._status_counts
 
     def save(self, *args, **kwargs):
-        self.value = sum(c.value for c in self.cards.all())
+        self.value = sum(c.value for c in self.cards.all()) if self.pk else 0
         super().save(*args, **kwargs)
 
     @property
@@ -133,13 +133,13 @@ class Card(models.Model):
         print("Card save")
         try:
             info = getattr(self, 'listed_card_info', None)
-
+            asr = self.active_search_results()
             if info and float(info.list_price) > 0.0:
                 print("if")
                 self.value = info.list_price
-            else:
-                print("else")
-                self.value = self.active_search_results().ebay_msrp
+            elif asr:
+                print("else", asr.ebay_msrp)
+                self.value = asr.ebay_msrp
             self.collection.update_value()
             super().save(*args, **kwargs)            
         except Exception as e:

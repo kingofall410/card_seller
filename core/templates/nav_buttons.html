@@ -60,7 +60,25 @@
 }
 </style>
 <script>
+
+function syncNewTabSession() {
+    const bridgeData = localStorage.getItem('session_bridge');
+    
+    if (bridgeData) {
+        // 1. Import into this tab's SessionStorage
+        const data = JSON.parse(bridgeData);
+        sessionStorage.setItem('card_sequence', bridgeData);
+        
+        // 2. Clean up the bridge immediately 
+        // This prevents OTHER new tabs from accidentally grabbing old data
+        localStorage.removeItem('session_bridge');
+        
+        console.log("Session successfully relayed to new tab.");
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
+    syncNewTabSession()
     const rawSeq = sessionStorage.getItem('card_sequence');
     const infoSpan = document.getElementById('sequence-info');
 
@@ -107,19 +125,20 @@ function checkDisable(id) {
     }
 }
 
-function handleNext() { navigate('next'); }
-function handlePrev() { navigate('prev'); }
+function handleNext() { if (!navigate('next')) navigate('up'); }
+function handlePrev() { navigate('prev'); navigate('up'); }
 function handleUp() { navigate('up'); }
 
 function navigate(id) {
     const el = document.getElementById(id);
-    if (el.classList.contains('disabled')) return;
+    if (el.classList.contains('disabled')) return false;
     
     const url = el.dataset.url;
     if (url) {
         console.log("Navigating to:", url);
         window.location.href = url;
     }
+    return true;
 }
 
 // Add Keyboard Support (Optional but recommended for power users)

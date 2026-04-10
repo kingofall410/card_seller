@@ -6,6 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="{% static 'js/card_spreadsheet.js' %}"></script>
+<script src="{% static 'js/card_monitor.js' %}"></script>
 
 <script>
 // --- UI Management ---
@@ -37,6 +38,51 @@ function filterSpreadsheet() {
     SpreadsheetModule.filterByCardIds(visibleIds);
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    const cardMon = window.CardMonitor.getInstance();
+
+    // Define what happens when a card is updated
+    cardMon.onUpdate((data) => {
+        // 1. Update the Grid/Cards (Partial HTML replacement)
+        // We create a temporary element to parse the returned HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = data.html;
+        
+        const updatedCards = temp.querySelectorAll('[data-id]');
+        console.log("here", updatedCards)
+        updatedCards.forEach(newCard => {
+            const cardId = newCard.getAttribute('data-id');
+            const existingCard = document.querySelector(`.card-item[data-id="${cardId}"]`);
+            console.log(cardId, existingCard)
+            if (existingCard) {
+                // Replace the inner content or the whole element
+                existingCard.outerHTML = newCard.outerHTML;
+                
+                // Add a brief highlight effect
+                const refreshedEl = document.querySelector(`.card-item[data-id="${cardId}"]`);
+                refreshedEl.style.transition = 'background 0.5s';
+                refreshedEl.style.backgroundColor = '#e8f5e9';
+                setTimeout(() => refreshedEl.style.backgroundColor = '', 1000);
+            }
+        });
+
+        // 2. Update the Spreadsheet/Table if data exists
+        if (window.updateSpreadsheetData && data.table_data) {
+            //window.updateSpreadsheetData(data.table_data);
+        }
+    });
+
+    // Start the monitor whenever a search is performed
+    // searchFunction is your existing logic that calls the AJAX for the first time
+    window.performSearch = function(query) {
+        // ... your existing AJAX call to clear and fill the initial page ...
+        
+        // Then tell the monitor to keep those cards updated
+        cardMon.setQuery(query);
+        cardMon.start(query);
+    };
+});
+
 // Called by your search result logic
 function updateSpreadsheet(tableData, colHeaders) {
     console.log("update spreadsheet")
@@ -56,6 +102,8 @@ function launchSequence() {
     }
     
     sessionStorage.setItem('card_sequence', JSON.stringify(ids));
+    // 2. Place it in a "Bridge" key in LocalStorage
+    localStorage.setItem('session_bridge', JSON.stringify(ids));
     
     const hot = SpreadsheetModule.getInstance();
     if (hot) hot.deselectCell();
@@ -219,30 +267,11 @@ function syncCardView(id, updatedFields) {
 <div class="collection-node">
   <div class="collection-header">
     
-    <div class="collection-title-0">
-    <h2 id="collection-title-0">
-        Ad Hoc(<span id="card-count-0">{{ cards.count }};</span>)
-
-    </h2>
-    <div class="collection-status-group" id="status-group-0">
-      {% get_choices as status_choices %}
-    {% for value, label in status_choices %}
-      <label class="status-option">
-        <input 
-            type="radio"
-            name="status-0"
-            value="{{ value }}"
-            {% if collection.status == value %}checked{% endif %}
-            onchange="saveCollectionField(0, 'status', this.value)"
-        >
-        {{ label }}
-      </label>
-
-    {% endfor %}
-    </div>
     <button onclick="submitCardForm(0, null, '/crop_review/0/')">✂</button>
     <button onclick="submitCollection('/identify_collection/0/')">🔍</button>
     <button onclick="submitCollection('/price_collection/0/')">💲</button>
+    <button onclick="submitCollection('/bulk_hold/0/')">✋</button>
+    
 
   </div>
   

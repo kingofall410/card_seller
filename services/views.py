@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from services.models.task import Task, ListingTask
+from services.models.task import Task, ListingTask, PricingTask, IDTask
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 import calendar, json
@@ -12,29 +12,43 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from django.apps import apps
 from django.views.decorators.http import require_POST
-from django.db.models import F, ExpressionWrapper, DateTimeField
-from django.db.models.functions import Now, Abs
+from django.db.models import F, ExpressionWrapper, DateTimeField, DurationField
+from django.db.models.functions import Now, Abs, Extract
 from django.utils import timezone
+from django.template.loader import render_to_string
 
 def task_monitor_data(request):
-    # 1. Get the current time
     now = timezone.now()
+    
+    # Get range from JS; default to 'now' if missing to avoid heavy queries
+    start_str = request.GET.get('start_date')
+    end_str = request.GET.get('end_date')
 
-    # 2. Query tasks ordered by proximity to "now"
-    # We annotate each row with the time difference from now, then sort by that delta
-    tasks = Task.objects.annotate(
-        time_diff=(F('scheduled_for') - now)
-    ).order_by('time_diff')[:200]
+    queryset = Task.objects.all() # Or StatusBase.objects.all()
+
+    if start_str and end_str:
+        # Using __date lookup if your strings are YYYY-MM-DD
+        # or range if they include times
+        queryset = queryset.filter(
+            scheduled_for__date__gte=start_str,
+            scheduled_for__date__lte=end_str
+        )
+
+    # Sort by closest to "now" so the monitor sees imminent changes first
+    tasks = queryset.annotate(
+        time_diff_seconds=Abs(Extract(F('scheduled_for') - now, 'epoch'))
+    ).order_by('time_diff_seconds')[:200]
 
     data = []
     for t in tasks:
+        # Using getattr to handle fields that might vary across subclasses
         data.append({
             "id": t.id,
-            "name": t.name,
-            "status": t.status,
-            # If scheduled_for is null, handle gracefully
+            "name": getattr(t, 'name', 'Unknown'),
+            "status": getattr(t, 'status', ''),
             "scheduled": t.scheduled_for.strftime("%Y-%m-%d %H:%M:%S") if t.scheduled_for else "",
-            "error": t.error_str or "",
+            "html": render_to_string("components/task.html", {"task": t, "detail_level": 0}),
+            "error": getattr(t, 'error_str', ""),
             "type": t.__class__.__name__
         })
 
@@ -89,70 +103,65 @@ def reset_queue(request):
         messages.info(request, "Queue has been reset to pending status.")
     return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
 
-
 def task_calendar(request):
-    # Determine month
     month_param = request.GET.get("month")
-    today = date.today()  # <-- ensure today always exists
+    today = date.today()
 
     if month_param:
-        year, month = map(int, month_param.split("-"))
-        current = date(year, month, 1)
+        try:
+            year, month = map(int, month_param.split("-"))
+            current = date(year, month, 1)
+        except ValueError:
+            current = date(today.year, today.month, 1)
     else:
         current = date(today.year, today.month, 1)
 
-    # Calendar helpers
-    cal = calendar.Calendar(firstweekday=6)  # Sunday start
+    # 1. Calendar Setup (Sunday Start)
+    cal = calendar.Calendar(firstweekday=6)
+    # itermonthdates gives us the full grid (including padding days from prev/next month)
     month_days = list(cal.itermonthdates(current.year, current.month))
 
-    # Group tasks by date
-    tasks = ListingTask.objects.order_by('scheduled_for')
+    # 2. Optimized Task Fetching
+    # Filter by the range of dates visible on the calendar to avoid loading the whole DB
+    start_range = month_days[0]
+    end_range = month_days[-1]
+    
+    listingtasks = ListingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('scheduled_for')
+    pricingtasks = []#PricingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('scheduled_for')
+
     day_map = {}
+    for task in (list(listingtasks)+list(pricingtasks)):
+        d = task.scheduled_for.date()
+        day_map.setdefault(d, []).append(task)
 
-    days = [d for d in month_days if d.month == current.month]
-
-    for task in tasks:
-        day = task.scheduled_for.date()
-        day_map.setdefault(day, []).append(task)
-
-    # Build day_objects
-    day_objects = [
-        SimpleNamespace(date=d, tasks=day_map.get(d, []))
-        for d in days
-    ]
-
-    # First day index for blanks
-    first_day_index = (current.weekday() + 1) % 7
-
-    # WEEK VIEW: compute week containing today
-    week_start = today - timedelta(days=today.weekday())  # Monday start
+    # 3. Determine Current Week (for the "Week View" toggle)
+    # Since your calendar is Sunday start, find the most recent Sunday
+    days_since_sun = (today.weekday() + 1) % 7 
+    week_start = today - timedelta(days=days_since_sun)
     week_end = week_start + timedelta(days=6)
 
-    week_objects = [
-        day for day in day_objects
-        if week_start <= day.date <= week_end
-    ]
+    # 4. Build Unified Day Objects
+    day_objects = []
+    for d in month_days:
+        day_objects.append(SimpleNamespace(
+            date=d,
+            tasks=day_map.get(d, []),
+            is_today=(d == today),
+            in_current_month=(d.month == current.month),
+            in_current_week=(week_start <= d <= week_end)
+        ))
 
     context = {
         "day_objects": day_objects,
-        "week_objects": week_objects,   # <-- ADDED
         "current_month": current,
-        "days": [d for d in month_days if d.month == current.month],
         "weekday_headers": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-        "blanks": range(first_day_index),
-        "tasks_by_day": {
-            "day_map": day_map
-        },
-
-        # Navigation
-        "prev_month": (current.replace(day=1) - timedelta(days=1)).replace(day=1),
-        "next_month": (current.replace(day=28) + timedelta(days=4)).replace(day=1),
-
         "today": today,
+        # Navigation
+        "prev_month": (current.replace(day=1) - timedelta(days=1)).strftime("%Y-%m"),
+        "next_month": (current.replace(day=28) + timedelta(days=5)).replace(day=1).strftime("%Y-%m"),
     }
 
     return render(request, "services/task_calendar.html", context)
-
 
 def tasks_list(request):
 

@@ -165,6 +165,8 @@ def spreadsheet_rows_from_search_result(cards, field_names):
                     row[field] = card.id
             row["front"] = card.cropped_image.url() if card.cropped_image else ""
             row["reverse"] = card.cropped_reverse.url() if card.cropped_reverse else ""
+            row["collection_id"] = card.collection_id
+            row["status"] = asr.overall_status
             #row["card_id"] = card.id
             rows.append(row)
     return rows
@@ -181,6 +183,9 @@ def new_collection(request):
 
 def view_collection(request, collection_id):
     
+    if collection_id == 0:
+        return view_ad_hoc_collection(request)
+
     collection = Collection.objects.prefetch_related(
         'cards__search_results',
         'cards__listed_card_info',

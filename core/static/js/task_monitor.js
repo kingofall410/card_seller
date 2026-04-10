@@ -17,17 +17,25 @@ window.StatelessTaskMonitor = (function() {
 
         const performFetch = async () => {
             try {
-                const res = await fetch('/services/task_monitor_data/');
+                // 1. Find all day cells on the current page
+                const dayCells = document.querySelectorAll('.day-cell[data-date]');
+                if (dayCells.length === 0) return;
+
+                // 2. Grab the first and last dates from the grid
+                const dates = Array.from(dayCells).map(el => el.dataset.date).sort();
+                const startDate = dates[0];
+                const endDate = dates[dates.length - 1];
+                console.log(endDate)
+                // 3. Append them as query parameters
+                const url = `/services/task_monitor_data/?start_date=${startDate}&end_date=${endDate}`;
+                
+                const res = await fetch(url);
                 if (!res.ok) return;
                 
                 const result = await res.json();
-                const newData = result.data;
-
-                // 1. Process the difference
-                processDiff(previousData, newData);
-
-                // 2. Update memory and sessionStorage
-                previousData = JSON.parse(JSON.stringify(newData)); 
+                processDiff(previousData, result.data);
+                
+                previousData = JSON.parse(JSON.stringify(result.data)); 
                 sessionStorage.setItem(STORAGE_KEY, JSON.stringify(previousData));
 
             } catch (err) {
@@ -36,28 +44,27 @@ window.StatelessTaskMonitor = (function() {
         };
 
         const processDiff = (oldData, newData) => {
-            if (!oldData || oldData.length === 0) return;
+            if (!oldData || oldData.length === 0) {
+                // First run: just establish the baseline
+                return; 
+            }
 
-            const oldMap = Object.fromEntries(oldData.map(t => [t.name, t.status]));
-            
+            const oldMap = Object.fromEntries(oldData.map(t => [t.id, t.status]));
+            console.log(oldData, newData)
             newData.forEach(task => {
-                const prevStatus = oldMap[task.name];
-                const idMatch = task.name.match(/(\d+)$/);
-                if (!idMatch) return; // Skip if we can't find a Card ID
+                const prevStatus = oldMap[task.id];
+                
+                // Use the ID directly since our Django view now provides it
+                const taskId = task.id;
 
-                const cardId = idMatch[0];
-
-                // Case 1: The task is known, but the status changed
                 if (prevStatus !== undefined) {
+                    // Case 1: Status Change
                     if (prevStatus !== task.status) {
-                        console.log(`[Update] Card ${cardId}: ${prevStatus} -> ${task.status}`);
-                        callbacks.forEach(cb => cb(cardId, task.status, false));
+                        callbacks.forEach(cb => cb(taskId, task, false));
                     }
-                } 
-                // Case 2: prevStatus is undefined (The "Else") -> It's a new task
-                else {
-                    console.log(`[New] Card ${cardId} detected in monitor stream.`);
-                    callbacks.forEach(cb => cb(cardId, task.status, true));
+                } else {
+                    // Case 2: Brand New Task (or moved into range)
+                    callbacks.forEach(cb => cb(taskId, task, true));
                 }
             });
         };

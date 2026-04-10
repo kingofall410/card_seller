@@ -5,10 +5,14 @@ from core.models.Group import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Cropping import CropParams, CroppedImage
 
-admin.site.register(Card)
+@admin.register(Card)
+class CardAdmin(admin.ModelAdmin):
+    list_display = ['id', 'modification_date']
+
+
 @admin.register(CardSearchResult)
 class CardSearchResultAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status']
+    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status', 'ebay_msrp']
     def get_form(self, request, obj=None, **kwargs):
         model_fields = [f.name for f in self.model._meta.many_to_many]
         print("Model fields:", model_fields)
@@ -22,7 +26,7 @@ class CardSearchResultAdmin(admin.ModelAdmin):
 admin.site.register(ProductListing)
 admin.site.register(ListingTitle)
 admin.site.register(CropParams)
-admin.site.register(CroppedImage)
+admin.site.register(CroppedImage) 
 admin.site.register(Collection)
 admin.site.register(ListingGroup)
 admin.site.register(ListedInfo)

@@ -1,243 +1,259 @@
-{% load custom_tags  %}
+{% load custom_tags %}
 <div class="filter-toolbar" id="status-filter-toolbar">
-
-    
     <div class="dynamic-filter-row">
         <div id="dynamic-selectors"></div>
         
+        <div class="operator-filter-group" style="display: flex; gap: 12px; margin-top: 10px; align-items: center; background: #f9f9f9; padding: 8px 15px; border-radius: 20px; border: 1px solid #eee;">
+            
+            <div style="display: flex; gap: 8px; font-size: 12px; color: #444;">
+                <label style="cursor: pointer;"><input type="checkbox" id="op-lt" onchange="applyFilters()"> <</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="op-eq" onchange="applyFilters()"> =</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="op-neq" onchange="applyFilters()">!=</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="op-gt" onchange="applyFilters()"> ></label>
+            </div>
+        </div>
+
+        <div id="active-filter-badges" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; justify-content: center;"></div>
+        
         <div id="dynamic-sort-bar" style="display: flex; gap: 12px; align-items: center; margin-top: 10px; font-size: 12px; color: #666;">
             <span style="font-weight: bold; margin-right: 5px;">Sort:</span>
-            </div>
+        </div>
 
         <button class="btn-reset-all" onclick="resetAllFilters()" style="margin-top: 10px;">Reset All</button>
     </div>
-    <div class="toolbar-side-counter">
-        <label class="lock-wrapper">
-            <input type="checkbox" id="lock-selection" onchange="toggleLock(this)">
-            <span>Lock</span>
-        </label>
-        <div id="selection-count">Selected: 0</div>
-    </div>
 </div>
+
 <style>
-    /* Use Grid to create 3 equal zones. auto is the middle. */
-    .filter-toolbar {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr; 
-        align-items: center;
-        width: 100%;
-        padding: 20px 0;
-        margin-bottom: 5px;
-    }
-
-    .filter-container {
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-    }
-
-    .toolbar-side-counter {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 12px;
-        padding-right: 20px;
-    }
-
-    .dynamic-filter-row {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 100%;
-        padding-bottom: 20px;
-        gap: 10px;
-    }
-
-    #dynamic-selectors {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-    }
-
-    /* Styling for the dropdowns */
-    .dynamic-filter-select {
-        padding: 6px 14px;
-        border-radius: 20px;
-        border: 1px solid #ddd;
-        font-size: 12px;
-        background-color: #fff;
-        cursor: pointer;
-    }
-
-    /* Badge & Toggle Styles */
-    .badge-toggle {
-        cursor: pointer;
-        width: 100px;
-        text-align: center;
-    }
-    
-    .status-badge {
-        display: inline-block;
-        width: 100%;
-        border-radius: 4px;
-        font-size: 12px;
-        padding: 4px 0;
-    }
-
-    /* Lock & Counter Styles */
-    .lock-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        background: #eee;
-        padding: 6px 12px;
-        border-radius: 20px;
-        cursor: pointer;
-    }
-
-    #selection-count {
-        font-size: 11px;
-        padding: 6px 14px;
-        border-radius: 20px;
-        border: 1px solid #ddd;
-        background: #f5f5f5;
-    }
-
-    #selection-count.active {
-        color: #d1242f;
-        background: #fff5f5;
-        border-color: #ffebe9;
-    }
-
-    .hidden-card { display: none !important; }
+.filter-toolbar { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 20px 0; gap: 15px; }
+.dynamic-filter-row { display: flex; flex-direction: column; align-items: center; width: 100%; gap: 12px; }
+#dynamic-selectors { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.dynamic-filter-select { padding: 6px 14px; border-radius: 20px; border: 1px solid #ddd; font-size: 12px; background-color: #fff; cursor: pointer; transition: border-color 0.2s; }
+.dynamic-filter-select:hover { border-color: #007bff; }
+.active-badge { background-color: #007bff; color: white; padding: 5px 12px; border-radius: 15px; font-size: 11px; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.active-badge strong { text-transform: uppercase; opacity: 0.9; font-size: 10px; }
+.active-badge span { background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 10px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 4px; }
+.active-badge span:hover { background: rgba(255, 255, 255, 0.4); }
+.btn-reset-all { background: none; border: 1px solid #ff4d4d; color: #ff4d4d; padding: 4px 12px; border-radius: 15px; font-size: 11px; cursor: pointer; transition: all 0.2s; }
+.btn-reset-all:hover { background: #ff4d4d; color: white; }
+.hidden-card { display: none !important; }
 </style>
-<style>
-    .status-filter-container {
-        padding: 10px;
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-    }
 
-    .filter-title {
-        font-size: 12px;
-        text-transform: uppercase;
-        color: #888;
-        margin-bottom: 10px;
-        letter-spacing: 0.5px;
-    }
-
-    .status-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 6px 8px;
-        cursor: pointer;
-        border-radius: 4px;
-        transition: background 0.2s;
-        font-size: 13px;
-    }
-
-    .status-item:hover {
-        background-color: #f0f7ff;
-        color: #007bff;
-    }
-
-    .status-count {
-        background: #f1f3f5;
-        color: #495057;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: bold;
-    }
-
-    .status-item:hover .status-count {
-        background: #007bff;
-        color: white;
-    }
-
-    .badge-all {
-        background: #e9ecef;
-    }
-</style>
 <script>
 // --- STORAGE HELPERS ---
 const getPageKey = (suffix) => `page_${window.location.pathname}_${suffix}`;
-const getSavedFilters = () => JSON.parse(sessionStorage.getItem(getPageKey('active_filters')) || "{}");
-const isLocked = () => sessionStorage.getItem(getPageKey('locked')) === 'true';
 
-const saveFilter = (group, state) => {
-    const filters = getSavedFilters();
-    filters[group] = state;
-    sessionStorage.setItem(getPageKey('active_filters'), JSON.stringify(filters));
+const getSavedState = () => {
+    const saved = sessionStorage.getItem(getPageKey('active_filters'));
+    return saved ? JSON.parse(saved) : { 
+        activeFilters: {}, 
+        targetVal: '', 
+        ops: { lt: false, eq: false, neq:false, gt: false } 
+    };
 };
 
-// --- CORE FUNCTIONS ---
-// Configuration for which attributes get sort links
-// Define these globally so they are accessible to both buildSortBar and sortCards
-// Map the Display Label to the actual data-attribute name
+const persistFilters = () => {
+    const filterState = {
+        activeFilters: window.activeFilters,
+        ops: {
+            lt: document.getElementById('op-lt').checked,
+            eq: document.getElementById('op-eq').checked,
+            neq: document.getElementById('op-neq').checked,
+            gt: document.getElementById('op-gt').checked
+        }
+    };
+    sessionStorage.setItem(getPageKey('active_filters'), JSON.stringify(filterState));
+};
+
+const isLocked = () => sessionStorage.getItem(getPageKey('locked')) === 'true';
+
+// --- GLOBAL STATE ---
+const savedState = getSavedState();
+window.activeFilters = savedState.activeFilters || {}; 
+let currentSort = { attr: 'default', dir: 'asc' };
+
 const sortConfig = [
+    { label: 'ID', attr: 'id' },
     { label: 'Year', attr: 'year' },
-    { label: 'Brand', attr: 'brand' },
-    { label: 'Subset', attr: 'subset' },
     { label: 'Name', attr: 'full_name' },
     { label: 'Team', attr: 'team' },
-    { label: 'Value ($)', attr: 'value' }, // Display vs Attribute
-    { label: 'Last Updated', attr: 'modification_date' } // Display vs Attribute
+    { label: 'Value ($)', attr: 'value' },
+    { label: 'Last Updated', attr: 'modification_date' }
 ];
-let currentSort = { 
-    attr: 'default', // The data attribute name (e.g., 'year', 'value')
-    dir: 'asc'       // The direction ('asc' or 'desc')
+
+// --- UI BUILDERS ---
+
+window.buildDropdowns = function() {
+    const container = document.getElementById('dynamic-selectors');
+    if (!container) return;
+    
+    const attrs = ['year', 'brand', 'subset', 'team', 'status', 'collection', 'value']; 
+    container.innerHTML = ''; 
+
+    attrs.forEach(attr => {
+        const uniqueValues = new Set();
+        document.querySelectorAll('.card-item:not(.folder)').forEach(card => {
+            const val = card.getAttribute(`data-${attr}`);
+            if (val && val !== 'None') uniqueValues.add(val);
+        });
+
+        const select = document.createElement('select');
+        select.className = 'dynamic-filter-select';
+        
+        let optionsHTML = `<option value="label" disabled selected>${attr.toUpperCase()}</option>`;
+        optionsHTML += `<option value="all">-- Reset ${attr} --</option>`;
+        Array.from(uniqueValues).sort().forEach(val => {
+            optionsHTML += `<option value="${val}">${val}</option>`;
+        });
+        select.innerHTML = optionsHTML;
+
+        select.onchange = () => {
+            if (select.value === 'all') {
+                window.activeFilters[attr] = []; 
+            } else if (select.value !== 'label') {
+                if (!window.activeFilters[attr]) window.activeFilters[attr] = [];
+                
+                // Get current checkbox state at the TIME OF SELECTION
+                const opLT = document.getElementById('op-lt').checked;
+                const opEQ = document.getElementById('op-eq').checked;
+                const opNEQ = document.getElementById('op-neq').checked;
+                const opGT = document.getElementById('op-gt').checked;
+                
+                // Default to "=" if nothing is checked
+                let op = "=";
+                if (opLT) op = "<";
+                if (opGT) op = ">";
+                if (opLT && opEQ) op = "<=";
+                if (opGT && opEQ) op = ">=";
+                if (opNEQ) op = "!=";
+
+                // Check for duplicates
+                const exists = window.activeFilters[attr].some(f => f.val === select.value && f.op === op);
+                if (!exists) {
+                    window.activeFilters[attr].push({ val: select.value, op: op });
+                }
+            }
+            select.value = 'label'; 
+            applyFilters(); 
+        };
+        container.appendChild(select);
+    });
 };
 
 function buildSortBar() {
     const bar = document.getElementById('dynamic-sort-bar');
     if (!bar) return;
-
     bar.innerHTML = '<span style="font-weight: bold; margin-right: 5px;">Sort:</span>';
-
     sortConfig.forEach((cfg, index) => {
         const link = document.createElement('a');
         link.href = "#";
-        link.style = "text-decoration: none; font-size: 12px; cursor: pointer; color: " + 
-                     (currentSort.attr === cfg.attr ? "#007bff" : "#666") + ";";
-        
-        let arrow = "↕";
-        if (currentSort.attr === cfg.attr) {
-            arrow = currentSort.dir === 'asc' ? "↑" : "↓";
-        }
-
+        link.style = `text-decoration: none; font-size: 12px; cursor: pointer; color: ${currentSort.attr === cfg.attr ? "#007bff" : "#666"};`;
+        let arrow = (currentSort.attr === cfg.attr) ? (currentSort.dir === 'asc' ? "↑" : "↓") : "↕";
         link.innerHTML = `${cfg.label} ${arrow}`;
-        link.onclick = (e) => {
-            e.preventDefault();
-            handleSortClick(cfg.attr); // Pass the raw attribute name 'value'
-        };
-
+        link.onclick = (e) => { e.preventDefault(); handleSortClick(cfg.attr); };
         bar.appendChild(link);
-
         if (index < sortConfig.length - 1) {
             const sep = document.createElement('span');
-            sep.innerText = " | ";
-            sep.style = "color: #ddd; margin: 0 4px;";
+            sep.innerText = " | "; sep.style = "color: #ddd; margin: 0 4px;";
             bar.appendChild(sep);
         }
     });
 }
 
-function handleSortClick(attr) {
-    console.log(attr)
-    if (currentSort.attr === attr) {
-        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSort.attr = attr;
-        currentSort.dir = 'asc';
+// --- CORE LOGIC ---
+
+function applyFilters() {
+    const cards = document.querySelectorAll('.card-item:not(.folder)');
+    const badgeContainer = document.getElementById('active-filter-badges');
+    if (badgeContainer) badgeContainer.innerHTML = '';
+
+    persistFilters();
+
+    // 1. Build Badges (Showing the operator)
+    Object.keys(window.activeFilters).forEach(attr => {
+        const filters = window.activeFilters[attr];
+        if (Array.isArray(filters) && filters.length > 0) {
+            createBadge(attr, filters);
+        }
+    });
+
+    // 2. Filter Cards
+    cards.forEach(card => {
+        let isVisible = true;
+        
+        for (const [attr, filters] of Object.entries(window.activeFilters)) {
+            if (!Array.isArray(filters) || filters.length === 0) continue;
+            
+            const cardRaw = (card.getAttribute(`data-${attr}`) || '').toLowerCase().trim();
+            const cardNum = parseFloat(cardRaw.replace(/[$,\s]/g, ''));
+
+            // OR logic within a category: Card must match AT LEAST ONE filter in this attribute
+            let categoryMatch = false;
+            filters.forEach(f => {
+                const targetRaw = f.val.toLowerCase().trim();
+                const targetNum = parseFloat(targetRaw.replace(/[$,\s]/g, ''));
+                
+                // Use numeric comparison if both are numbers, otherwise alphabetical
+                const a = !isNaN(cardNum) && !isNaN(targetNum) ? cardNum : cardRaw;
+                const b = !isNaN(cardNum) && !isNaN(targetNum) ? targetNum : targetRaw;
+
+                if (f.op === "=" && a == b) categoryMatch = true;
+                else if (f.op === "<" && a < b) categoryMatch = true;
+                else if (f.op === ">" && a > b) categoryMatch = true;
+                else if (f.op === "<=" && a <= b) categoryMatch = true;
+                else if (f.op === ">=" && a >= b) categoryMatch = true;
+                else if (f.op === "!=" && a != b) categoryMatch = true;
+            });
+
+            if (!categoryMatch) { isVisible = false; break; }
+        }
+        
+        card.classList.toggle('hidden-card', !isVisible);
+    });
+
+    // Sync Spreadsheet
+    if (typeof SpreadsheetModule !== 'undefined' && SpreadsheetModule.filterByCardIds) {
+        const visibleIds = Array.from(document.querySelectorAll('.card-item:not(.folder):not(.hidden-card)'))
+                                .map(c => c.getAttribute('data-id'));
+        SpreadsheetModule.filterByCardIds(visibleIds);
     }
+    updateCountUI();
+}
+
+function createBadge(attr, filters) {
+    const container = document.getElementById('active-filter-badges');
+    const badgeGroup = document.createElement('div');
+    badgeGroup.className = 'active-badge';
+    badgeGroup.innerHTML = `<strong>${attr.toUpperCase()}: </strong>`;
     
-    buildSortBar(); // Redraw UI
-    sortCards();    // Re-order DOM
+    filters.forEach(f => {
+        const item = document.createElement('span');
+        // Display as "Brand: > Topps"
+        item.innerHTML = `${f.op} ${f.val} <small>&times;</small>`;
+        item.onclick = () => {
+            window.activeFilters[attr] = window.activeFilters[attr].filter(x => !(x.val === f.val && x.op === f.op));
+            applyFilters();
+        };
+        badgeGroup.appendChild(item);
+    });
+    container.appendChild(badgeGroup);
+}
+
+function resetAllFilters() {
+    window.activeFilters = {}; 
+    document.getElementById('filter-target-val').value = '';
+    document.getElementById('op-lt').checked = false;
+    document.getElementById('op-eq').checked = false;
+    document.getElementById('op-neq').checked = false;
+    document.getElementById('op-gt').checked = false;
+    document.querySelectorAll('.dynamic-filter-select').forEach(s => { if(s.tagName === 'SELECT') s.value = 'label'; });
+    applyFilters();
+}
+
+function handleSortClick(attr) {
+    if (currentSort.attr === attr) { currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc'; }
+    else { currentSort.attr = attr; currentSort.dir = 'asc'; }
+    buildSortBar();
+    sortCards();
 }
 
 function sortCards() {
@@ -245,322 +261,87 @@ function sortCards() {
     if (!container || currentSort.attr === 'default') return;
 
     const cards = Array.from(container.querySelectorAll('.card-item:not(.folder)'));
-
+    
+    // 1. Perform the Sort
     cards.sort((a, b) => {
-        // This now correctly targets data-value
         let valA = a.getAttribute(`data-${currentSort.attr}`) || '';
         let valB = b.getAttribute(`data-${currentSort.attr}`) || '';
-
-        // 1. Numeric Sort for Year or Value
-        if (currentSort.attr === 'year' || currentSort.attr === 'value') {
-            // Clean strings like "$5.00" or "2021" into pure floats
+        
+        if (['year', 'value'].includes(currentSort.attr)) {
             valA = parseFloat(valA.toString().replace(/[$,\s]/g, '')) || 0;
             valB = parseFloat(valB.toString().replace(/[$,\s]/g, '')) || 0;
-        } 
-        // 2. String Sort for everything else
-        else {
-            valA = valA.toLowerCase().trim();
+        } else {
+            valA = valA.toLowerCase().trim(); 
             valB = valB.toLowerCase().trim();
         }
-
+        
         if (valA < valB) return currentSort.dir === 'asc' ? -1 : 1;
         if (valA > valB) return currentSort.dir === 'asc' ? 1 : -1;
         return 0;
     });
 
-    // Bulk append to minimize reflows
-    const fragment = document.createDocumentFragment();
-    cards.forEach(card => fragment.appendChild(card));
-    container.appendChild(fragment);
+    // 2. Re-append to DOM in new order
+    cards.forEach(card => container.appendChild(card));
+
+    // 3. Sync the new order to the session storage sequence
+    syncSequenceToDOMOrder();
 }
 
-function cycleFilter(el) {
-    const states = ['none', 'pending', 'success', 'failed'];
-    const displayNames = { 'none': 'None', 'pending': 'Pending', 'success': 'Success', 'failed': 'Failed' };
+function syncSequenceToDOMOrder() {
+    // Get all IDs of visible (non-filtered) cards in their current DOM order
+    const visibleCardIds = Array.from(document.querySelectorAll('.card-item:not(.folder):not(.hidden-card)'))
+                                .map(card => card.getAttribute('data-id'));
+
+    // Update the sequence storage so it matches the new order
+    // This ensures that "Next/Prev" buttons in the card detail view follow the sorted list
+    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(visibleCardIds));
     
-    let currentState = el.getAttribute('data-state') || 'none';
-    let nextState = states[(states.indexOf(currentState) + 1) % states.length];
-    
-    el.setAttribute('data-state', nextState);
-    saveFilter(el.getAttribute('data-group'), nextState);
-    
-    const badge = el.querySelector('.status-badge');
-    if (badge) {
-        badge.className = `status-badge status-${nextState}`;
-        badge.innerText = displayNames[nextState];
-    }
-    applyFilters();
-}
-
-function toggleLock(checkbox) {
-    sessionStorage.setItem(getPageKey('locked'), checkbox.checked);
-    // When unlocking, sync the sequence to the current visual filter immediately
-    if (!checkbox.checked) {
-        applyFilters();
-    }
-}
-
-function buildDropdowns() {
-    const container = document.getElementById('dynamic-selectors');
-    if (!container) return;
-    
-    // Define the specific attributes to turn into dropdowns or inputs
-    const attrs = ['year', 'brand', 'subset', 'status', 'team', 'minval', 'maxval']; 
-    
-    // 1. Save current states so we don't overwrite what the user typed
-    const currentSelections = {};
-    container.querySelectorAll('select, input').forEach(el => {
-        currentSelections[el.id] = el.value;
-    });
-
-    container.innerHTML = ''; 
-
-    attrs.forEach(attr => {
-        const cards = document.querySelectorAll('.card-item');
-        const uniqueValues = new Set();
-        
-        cards.forEach(card => {
-            const val = card.getAttribute(`data-${attr}`);
-            if (val && val !== 'None') uniqueValues.add(val);
-        });
-
-        // --- NUMERIC INPUTS (minval / maxval) ---
-        if (attr === 'minval' || attr === 'maxval') {
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.id = `filter-${attr}`;
-            input.placeholder = attr === 'minval' ? 'Min Value' : 'Max Value';
-            input.className = 'dynamic-filter-input';
-            
-            // Inline styling to match your select boxes
-            input.style = "padding: 6px 10px; border-radius: 20px; border: 1px solid #ddd; width: 80px; font-size: 12px;";
-            
-            // Restore previous value if it exists
-            input.value = currentSelections[input.id] || "";
-            
-            input.oninput = applyFilters;
-            container.appendChild(input);
-
-        } else {
-            // --- STANDARD DROPDOWNS ---
-            const select = document.createElement('select');
-            select.id = `filter-${attr}`;
-            select.className = 'dynamic-filter-select';
-            select.onchange = applyFilters;
-            
-            let optionsHTML = `<option value="all">${attr.charAt(0).toUpperCase() + attr.slice(1)}</option>`;
-            
-            if (uniqueValues.size > 0) {
-                Array.from(uniqueValues).sort().forEach(val => {
-                    const isSelected = currentSelections[select.id] === val ? 'selected' : '';
-                    optionsHTML += `<option value="${val}" ${isSelected}>${val}</option>`;
-                });
-            }
-            
-            select.innerHTML = optionsHTML;
-            container.appendChild(select);
-        }
-    });
-}
-
-function applyFilters() {
-    const cards = document.querySelectorAll('.card-item:not(.folder)');
-    const selects = document.querySelectorAll('.dynamic-filter-select');
-    
-    // Get the numeric bounds
-    const minInput = document.getElementById('filter-minval');
-    const maxInput = document.getElementById('filter-maxval');
-    
-    const minLimit = minInput && minInput.value !== "" ? parseFloat(minInput.value) : -Infinity;
-    const maxLimit = maxInput && maxInput.value !== "" ? parseFloat(maxInput.value) : Infinity;
-
-    cards.forEach(card => {
-        let isVisible = true;
-
-        // 1. Dropdown Filters (Strict Equality)
-        selects.forEach(select => {
-            const attr = select.id.replace('filter-', '');
-            const selectedValue = select.value;
-            const cardValue = card.getAttribute(`data-${attr}`);
-
-            if (selectedValue !== 'all' && cardValue !== selectedValue) {
-                isVisible = false;
-            }
-        });
-
-        // 2. Numeric Range Filter
-        if (isVisible) {
-            const cardPrice = parseFloat(card.getAttribute('data-value')) || 0;
-            if (cardPrice < minLimit || cardPrice > maxLimit) {
-                isVisible = false;
-            }
-        }
-
-        // Apply class to hide/show
-        card.classList.toggle('hidden-card', !isVisible);
-    });
-    const visibleIds = Array.from(document.querySelectorAll('.card-item:not(.hidden-card)'))
-                                    .map(c => c.getAttribute('data-id'));
-
-    // 2. Update the Counters
-    const countDisplayed = document.getElementById('count-displayed');
-    if (countDisplayed) {
-        
-        countDisplayed.innerText = visibleIds.length;
-    }
-    // Sync Spreadsheet if active
-    if (typeof SpreadsheetModule !== 'undefined' && SpreadsheetModule.getInstance()) {
-        
-        SpreadsheetModule.filterByCardIds(visibleIds);
-    }
-}
-
-function resetAllFilters() {
-    // Reset Dropdowns
-    document.querySelectorAll('.dynamic-filter-select').forEach(s => s.value = 'all');
-    
-    // Reset Sort
-    const sortSelect = document.getElementById('card-sort-order');
-    if (sortSelect) sortSelect.value = 'default';
-
-    // Reset Status Badges
-    if (typeof clearSelection === 'function') clearSelection(true);
-    
-    applyFilters();
-}
-
-function restoreFilters() {
-    const savedFilters = getSavedFilters();
-    const displayNames = { 'none': 'None', 'pending': 'Pending', 'success': 'Success', 'failed': 'Failed' };
-    
-    document.querySelectorAll('.toggle-cycle').forEach(f => {
-        const group = f.getAttribute('data-group');
-        const state = savedFilters[group] || 'none';
-        
-        f.setAttribute('data-state', state);
-        const badge = f.querySelector('.status-badge');
-        if (badge) {
-            badge.className = `status-badge status-${state}`;
-            badge.innerText = displayNames[state];
-        }
-    });
-}
-
-function refreshCheckboxState() {
-    const savedSequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
-    document.querySelectorAll('input[name="selected_cards"]').forEach(checkbox => {
-        checkbox.checked = savedSequence.includes(checkbox.value);
-    });
+    console.log("Session sequence updated to match sort order:", visibleCardIds.length, "items.");
 }
 
 function updateCountUI() {
-    const sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
-    const counter = document.getElementById('selection-count');
-    if (counter) {
-        if (sequence.length > 0) {
-            counter.innerText = `Selected: ${sequence.length} (Clear)`;
-            counter.classList.add('active');
-            counter.style.pointerEvents = isLocked() ? "none" : "auto";
-        } else {
-            counter.innerText = `Selected: 0`;
-            counter.classList.remove('active');
-            counter.style.pointerEvents = "none"; 
-        }
-    }
+    const countDisp = document.getElementById('count-displayed');
+    if (countDisp) countDisp.innerText = document.querySelectorAll('.card-item:not(.folder):not(.hidden-card)').length;
 }
 
-// Ensure the spreadsheet is refreshed when clearing selection
-function clearSelection(resetBadges = true) {
-    if (isLocked()) return;
-
-    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify([]));
-    if (resetBadges) {
-        sessionStorage.setItem(getPageKey('active_filters'), JSON.stringify({}));
-        document.querySelectorAll('.toggle-cycle').forEach(f => {
-            f.setAttribute('data-state', 'none');
-            const badge = f.querySelector('.status-badge');
-            if (badge) {
-                badge.className = "status-badge status-none";
-                badge.innerText = "None";
-            }
-        });
-        document.querySelectorAll('.card-item').forEach(c => c.classList.remove('hidden-card'));
-    }
-    
-    document.querySelectorAll('input[name="selected_cards"]').forEach(cb => cb.checked = false);
-    
-    // Sync Spreadsheet back to full view
-    if (typeof SpreadsheetModule !== 'undefined') {
-        const allCards = document.querySelectorAll('.card-item:not(.folder)');
-        const allIds = Array.from(allCards).map(card => card.getAttribute('data-id'));
-        SpreadsheetModule.filterByCardIds(allIds);
-    }
-
-    updateCountUI();
+function refreshCheckboxState() {
+    const seq = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+    document.querySelectorAll('input[name="selected_cards"]').forEach(cb => cb.checked = seq.includes(cb.value));
 }
 
-// --- INITIALIZATION & EVENTS ---
+function updateSequenceStorage(id, isChecked) {
+    let seq = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
+    isChecked ? (!seq.includes(id) && seq.push(id)) : (seq = seq.filter(sid => sid !== id));
+    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(seq));
+}
+
+// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Build Dropdowns FIRST
     buildDropdowns(); 
+    buildSortBar();
 
-    // 2. Restore saved states (Badges & Lock)
+    // Restore Numeric UI
+    if (savedState.targetVal) document.getElementById('filter-target-val').value = savedState.targetVal;
+    if (savedState.ops) {
+        document.getElementById('op-lt').checked = !!savedState.ops.lt;
+        document.getElementById('op-eq').checked = !!savedState.ops.eq;
+        document.getElementById('op-neq').checked = !!savedState.ops.neq;
+        document.getElementById('op-gt').checked = !!savedState.ops.gt;
+    }
+
     const lockCheckbox = document.getElementById('lock-selection');
     if (lockCheckbox) lockCheckbox.checked = isLocked();
-    restoreFilters();
-    refreshCheckboxState();
     
-    // 3. APPLY filters LAST
-    // Wrap in a tiny timeout to ensure the DOM has settled from buildDropdowns
     setTimeout(() => {
         applyFilters();
-        updateCountUI();
+        refreshCheckboxState();
     }, 50); 
 });
 
-let lastChecked = null; // Track the last checkbox interacted with
-
 document.addEventListener('click', function(e) {
-    // Only target the checkboxes
     if (e.target.name !== 'selected_cards') return;
-
-    const checkboxes = Array.from(document.querySelectorAll('input[name="selected_cards"]:not(.hidden-card)'));
-    
-    if (isLocked()) {
-        e.target.checked = !e.target.checked; 
-        return;
-    }
-
-    // --- SHIFT-CLICK LOGIC ---
-    if (e.shiftKey && lastChecked) {
-        let start = checkboxes.indexOf(e.target);
-        let end = checkboxes.indexOf(lastChecked);
-
-        // Select everything between start and end
-        checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1)
-            .forEach(cb => {
-                cb.checked = lastChecked.checked;
-                updateSequenceStorage(cb.value, cb.checked);
-            });
-    } else {
-        // Normal single click
-        updateSequenceStorage(e.target.value, e.target.checked);
-    }
-
-    lastChecked = e.target;
+    if (isLocked()) { e.preventDefault(); return; }
+    updateSequenceStorage(e.target.value, e.target.checked);
     updateCountUI();
 });
-
-/**
- * Helper to keep sessionStorage in sync without duplicating code
- */
-function updateSequenceStorage(id, isChecked) {
-    let sequence = JSON.parse(sessionStorage.getItem(getPageKey('card_sequence')) || "[]");
-    if (isChecked) {
-        if (!sequence.includes(id)) sequence.push(id);
-    } else {
-        sequence = sequence.filter(sid => sid !== id);
-    }
-    sessionStorage.setItem(getPageKey('card_sequence'), JSON.stringify(sequence));
-}
 </script>

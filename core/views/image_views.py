@@ -10,6 +10,7 @@ from services.models.models import Settings
 from core.models.Card import Card, Collection 
 from django.views.decorators.csrf import csrf_exempt
 from django.apps import apps
+from core.models.Status import StatusBase
 
 #this stuff needs to move!!!!
 def upload(collection, timestamp_folder, filename, file):
@@ -31,7 +32,7 @@ def perform_id(card_id, is_slab=False):
 def perform_upload(uploaded_files, collection=None, is_slab=False):
     
     if not collection:
-        collection = Collection.objects.get(is_default=True)
+        collection = Collection.objects.create()
 
     if len(uploaded_files) > 0:
         timestamp_folder = now().strftime("%Y%m%d_%H%M%S/")  # e.g., '20250701_125342'
@@ -61,19 +62,20 @@ def perform_upload(uploaded_files, collection=None, is_slab=False):
 @csrf_exempt
 def upload_image(request, collection_id=None):
     if request.method == 'GET':
-        if collection_id:
+        if collection_id and collection_id > 0:
             collection = Collection.objects.get(id=collection_id)
         else:
             collection = Collection.objects.create()
         return render(request, "upload_image.html", {"collection_id":collection.id})
     
     if request.method == 'POST':
-        uploaded_files = sorted(    request.FILES.getlist('images'), key=lambda r: r.name)
+        uploaded_files = sorted(request.FILES.getlist('images'), key=lambda r: r.name)
         collection_id = request.POST.get('collection_id')
         is_slab = (request.POST.get('slab') == 'true') or (request.POST.get('slab') == 'True')
         
-        if collection_id == "__Add__":
+        if collection_id == "0":
             collection = Collection.objects.create()
+            collection.save()
             collection_id = collection.id
         else:
             collection = Collection.objects.get(id=collection_id)           

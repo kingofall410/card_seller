@@ -241,15 +241,26 @@
   <a href="{% url 'test_view' %}" class="navbar-link">
      🧪 TEST
   </a>
-
+  <button name="card" class="add-button"
+              onclick='triggerFileUpload("cardFileInput_0")'
+              title="Add Card">➕ Card</button>
 
   <a href="{% url 'settings' %}" class="navbar-link" style="margin-left: auto;">
      ⚙️ SETTINGS
   </a>
 
-</nav>
-
+  <!-- Hidden inputs for click uploads -->
+  <input type="file"
+        id="cardFileInput_0"
+        style="display:none;"
+        accept="image/*"
+        onchange="uploadImage(0, this.files)"
+        multiple>
+  </nav>
 <script>
+function triggerFileUpload(elementId) {
+  document.getElementById(elementId).click();
+}
 document.addEventListener("DOMContentLoaded", function() {
   const dropdowns = document.querySelectorAll(".dropdown");
 
@@ -275,4 +286,27 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   });
 });
+
+function uploadImage(collectionId, files) {
+  if (!files || files.length === 0) return;
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("images", files[i]); // Django expects 'images' as a list
+  }
+  formData.append("collection_id", collectionId);
+
+  fetch("/upload_image/", {
+    method: "POST",
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload(); // or dynamically insert new cards
+    } else {
+      alert("Upload failed: " + data.message);
+    }
+  });
+}
 </script>

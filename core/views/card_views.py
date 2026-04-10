@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
 from core.models.Group import ProductGroup
+from core.models.ListingGroup import ListingGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Status import StatusBase
 from core.models.CardSearchResult import CardSearchResult
@@ -19,7 +20,11 @@ from django.db.models import Q
 from django.template.loader import render_to_string
 from core.views import collection_views
 from django.utils.timezone import now
-
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.db.models import F, Value, CharField
+from django.db.models.functions import Concat
+from django.conf import settings
 
 # Card-related views
 @csrf_exempt
@@ -129,45 +134,94 @@ def next_card(request, card_id):
         next_card_id = card_id + delta
         return redirect("crop_review", card_id=next_card_id)
 
+import traceback
+@csrf_exempt
+def get_spreadsheet_data(request):
+    if request.method == 'POST':
+        try:
+            card_ids = request.POST.getlist('card_ids[]') 
+            print(card_ids)
+            # Use your MEDIA_URL (usually '/media/') to prefix the file path
+            #media_prefix = settings.MEDIA_URL 
+
+            records = CardSearchResult.objects.filter(parent_card_id__in=card_ids).annotate(
+                # Path: parent_card -> cropped_image object -> img field
+                front_url=F('parent_card__cropped_image__img'),
+                reverse_url=F('parent_card__cropped_reverse__img'),
+            ).values(*CardSearchResult.listing_fields, 'front_url', 'reverse_url')
+            print(records)
+            return JsonResponse(list(records), safe=False)
+        except Exception as e:
+            traceback.print_exc()
+            return JsonResponse({'error': str(e)}, status=400)
+
 def card_search_ajax(request):
-    query = request.GET.get('q', '')
-    page_number = request.GET.get('page', 1)
-    
-    if query:
-        cards_list = Card.objects.filter(
-            Q(search_results__full_name__icontains=query) |
-            Q(search_results__year__icontains=query) |
-            Q(search_results__brand__icontains=query) |
-            Q(search_results__team__icontains=query) |
-            Q(search_results__city__icontains=query) |
-            Q(search_results__subset__icontains=query)
-        ).distinct().order_by('-id') # Ordering is required for consistent pagination
-    else:
-        cards_list = Card.objects.none()
+    query = request.GET.get('q', '').strip()
+    since_date_str = request.GET.get('since')
+    is_update = request.GET.get('updates_only') is not None
 
+    # 1. Combined Query: Search Text AND Modification Date >= Since Date
+    # We start with the text filters
+    filters = Q(
+        Q(search_results__full_name__icontains=query) |
+        Q(search_results__year__icontains=query) |
+        Q(search_results__brand__icontains=query) |
+        Q(search_results__team__icontains=query) |
+        Q(search_results__city__icontains=query) |
+        Q(search_results__subset__icontains=query)
+    )
+
+    # 2. Add the hard 'since' constraint if provided
+    if since_date_str:
+        target_date = parse_datetime(since_date_str)
+        if target_date:
+            if timezone.is_naive(target_date):
+                target_date = timezone.make_aware(target_date)
+            
+            # Use gte (>=) for both initial search and updates per your requirement
+            filters &= Q(modification_date__gte=target_date)
+
+    # Execute the single query
+    cards_list = Card.objects.filter(filters).distinct().order_by('-modification_date', '-id')
     total_count = cards_list.count()
-    paginator = Paginator(cards_list, 40) # 40 cards per "chunk"
-    page_obj = paginator.get_page(page_number)
 
-    html = render_to_string('components/search_results_partial.html', {'cards': page_obj}, request=request)
-    
-    # If it's the FIRST page of a new search, also send the table data
-    # Get the actual labels/headers
-    columns = CardSearchResult.listing_fields 
-    table_data = []
-    if request.GET.get('page') == '1':
-        table_data = collection_views.spreadsheet_rows_from_search_result(cards_list, columns)
+    # 3. UI Logic (Pagination vs Patching)
+    if is_update:
+        # Patching: Send modified cards
+        cards_to_render = cards_list
+        has_next = False
+        next_page = None
+    else:
+        # Standard Search Pagination
+        paginator = Paginator(cards_list, 10)
+        page_num = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_num)
+        cards_to_render = page_obj
+        has_next = page_obj.has_next()
+        next_page = page_obj.next_page_number() if has_next else None
 
-    print(table_data)
+    # 4. Generate HTML Partial
+    html = render_to_string('components/search_results_partial.html', {
+        'cards': cards_to_render,
+        'is_refresh': is_update
+    }, request=request)
+
+    # 5. Spreadsheet Data
+    columns = CardSearchResult.listing_fields  
+    table_data = [] 
+    #if request.GET.get('page') == '1' or is_update: 
+        #table_data = collection_views.spreadsheet_rows_from_search_result(cards_to_render, columns) 
+
     return JsonResponse({
         'html': html,
         'table_data': table_data,
         'col_headers': columns,
-        'has_next': page_obj.has_next(),
-        'next_page': page_obj.next_page_number() if page_obj.has_next() else None, # Check this!,
-        'total_count': total_count
+        'has_next': has_next,
+        'next_page': next_page,
+        'total_count': total_count,
+        'server_time': timezone.now().isoformat()
     })
-
+    
 def get_card_item(request, card_id):
     card = get_object_or_404(Card, id=card_id)
         
@@ -278,6 +332,30 @@ def update_li_fields(request):
 
     return JsonResponse({"success": True})
 
+def async_lg_monitor(request):
+    since_str = request.GET.get('since')
+    group_ids = request.GET.getlist('ids[]')
+    
+    if not since_str or not group_ids:
+        return JsonResponse({'html': '', 'server_time': timezone.now().isoformat()})
+
+    since_date = parse_datetime(since_str)
+    
+    # We only return groups that were actually modified after the refresh was clicked
+    updated_groups = ListingGroup.objects.filter(id__in=group_ids, modification_date__gt=since_date)
+
+    html_output = ""
+    for group in updated_groups:
+        html_output += render_to_string('product_listings.html', {
+            'listing_group': group
+        }, request=request)
+
+    return JsonResponse({
+        'html': html_output,
+        'server_time': timezone.now().isoformat()
+    })
+
+#this method is fudged
 def render_single_card(request, card_id):
     """
     Returns the HTML partial for a single card to be swapped into the grid.
@@ -307,7 +385,7 @@ def retokenize(request, csr_id):
     return JsonResponse({"success": True, "error": ""})
 
 @csrf_exempt
-def aync_price_card(request, csr_id):  
+def async_price_card(request, csr_id):  
 
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
@@ -318,6 +396,22 @@ def aync_price_card(request, csr_id):
     core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=csr, card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2}, on_success_status=StatusBase.PRICED)
 
     return JsonResponse({"success": True, "error": ""})
+
+
+@csrf_exempt
+def async_price_search(request, lg_id):  
+
+    if not lg_id or lg_id == 'undefined':
+        return JsonResponse({'error': 'LG ID is required'}, status=400)
+    listing_group = ListingGroup.objects.get(id=lg_id)
+    csr = listing_group.search_result
+    card = csr.parent_card
+    listing_group.save()
+    #core_config = apps.get_app_config("core")
+    #core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=csr, card=card, callback=lookup.refresh_listing_groups, params={"lg_ids":[lg_id]}, on_success_status=StatusBase.PRICED)
+
+    return JsonResponse({"success": True, "error": ""})
+
 
 @csrf_exempt
 def new_group(request, name):  
@@ -338,28 +432,35 @@ def new_group(request, name):
     })
     
 
-@csrf_exempt
-def refresh_listing_groups(request, csr_id):  
-    settings = Settings.get_default()
-    
-    if card_id:
-        first_card = Card.objects.get(id=card_id)
-    
-    card_ids = []
-    if request.method == "POST":
-        try:
-            card_ids = json.loads(request.POST.get('card_ids', '[]'))
-        except json.JSONDecodeError:
-            pass
 
-    if len(card_ids) <= 0:
-        card_list = list(first_card.collection.cards.order_by('id'))
-    else:
-        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
-    
-    #print(card_list)
-    if not first_card:
-        first_card = card_list[0] if card_list else None
+@csrf_exempt
+def bulk_hold(request, collection_id):  
+
+    collection = Collection.objects.filter(id=collection_id).first()
+    print("cid", collection_id)
+    try:
+        card_ids = request.POST.getlist('card_ids[]')
+        if len(card_ids):
+            print("lenny", len(card_ids))
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        else:
+            print("no cards", len(card_ids))
+            card_list = list(collection.cards.order_by('id'))
+    except json.JSONDecodeError:
+        card_list = list(collection.cards.order_by('id'))
+    print(card_list)
+
+    for card in card_list:
+        perform_status_update(card.active_search_results().id, StatusBase.HELD)
+
+    return JsonResponse({"success": True, "error": ""})
+
+def perform_status_update(csr_id, new_status):
+    # Fetch and update
+    obj = CardSearchResult.objects.get(id=csr_id)
+    obj.overall_status = new_status
+    obj.save(update_fields=['overall_status'])
+    obj.parent_card.update_mod_date()
 
 @csrf_exempt
 def update_csr_status_only(request, csr_id):
@@ -368,15 +469,11 @@ def update_csr_status_only(request, csr_id):
             data = json.loads(request.body)
             new_status = data.get('status')
             
-            # Fetch and update
-            obj = CardSearchResult.objects.get(id=csr_id)
-            obj.overall_status = new_status
-            obj.save(update_fields=['overall_status'])
-            obj.parent_card.update_mod_date()
+            perform_status_update(csr_id, new_status)            
             
             return JsonResponse({
                 'success': True, 
-                'new_mod_date': obj.parent_card.modification_date.strftime("%Y-%m-%d %H:%M")
+                'new_mod_date': ""
             })
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)})

@@ -20,10 +20,27 @@ def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
-    card = Card.objects.filter(id=3791).first()
-    print(card.modification_date)
 
-    '''csr = card.active_search_results()
+    # Use prefetch_related to grab all nested data in 2-3 queries instead of hundreds
+    cards = Card.objects.filter(id=2803).delete()
+
+    '''for card in cards:
+        # Assuming active_search_results() returns a queryset or object
+        # This loop now uses the data already in memory
+        for listing_group in card.active_search_results().listing_groups.all():
+            listing_group.save()
+
+
+            
+    collections = Collection.objects.filter(id__in=[155])
+    for collection in collections:
+        for card in collection.cards.all():
+            csr = card.active_search_results()
+            if csr:
+                lci = ListedInfo.create_from_csr(csr)
+            else:
+                lci = ListedInfo.create_from_card(card)  
+    csr = card.active_search_results()
     for listing_group in csr.listing_groups.all():
         listing_group.save()
 

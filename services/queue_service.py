@@ -26,19 +26,19 @@ class MemoryTask:
 
     def run(self):
         try:
-            print(f"[RUNNING] {self.name} (ID: {self.db_id})")
+            print(f"[RUNNING] {self.db_id}. {self.name} (ID: {self.db_id})")
             retVal = self.callback(**self.params)
             
             # If it returns None, "", 0, or False, it's a failure.
             # Only an explicit True (or truthy value) allows the chain to continue.
             if not retVal:
-                print(f"[LOGIC FAIL] {self.name} returned {retVal}. Stopping chain.")
+                print(f"[LOGIC FAIL] {self.db_id}. {self.name} returned {retVal}. Stopping chain.")
                 return False
             
-            print(f"[SUCCESS] {self.name} completed.")
+            print(f"[SUCCESS] {self.db_id}. {self.name} completed.")
             return True
         except Exception:
-            print(f"[CRASH] {self.name} raised an exception:")
+            print(f"[CRASH] {self.db_id}. {self.name} raised an exception:")
             traceback.print_exc()
             return False
 
@@ -162,7 +162,7 @@ class Queue:
                 
                 finally:
                     db_task.save(update_fields=["status", "error_str"])
-                    if csr:
+                    if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
                         console.log("onsuccess", db_task.on_success_status)
                         csr.overall_status = db_task.on_success_status
                         csr.save(update_fields=["overall_status"])

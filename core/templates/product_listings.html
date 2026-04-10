@@ -1,14 +1,17 @@
 {% load custom_tags %}
-<div class="listing-group one-liner" data-listing-group data-group-id="{{ listing_group.id }}">
+{% load static %}
+<script src="{% static 'js/lg_monitor.js' %}"></script>
+
+<div class="listing-group one-liner" data-listing-group id="lg-{{ listing_group.id }}" data-group-id="{{ listing_group.id }}">
   <div class="listing-header-container" style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
-    
     <div style="display: flex; justify-content: space-between; align-items: baseline;">
       <span class="listing-header-label" style="font-weight: bold; font-size: 1.1rem;">
-        {{ listing_group.label }} ({{ listing_group.listings.count }}) - ${{ listing_group.recent_avg_price|floatformat:0}}
+        {{ listing_group.label }} ({{ listing_group.listings.count }}) - ${{ listing_group.recent_avg_price|floatformat:0 }} ---- - ${{ listing_group.modified_avg|floatformat:0 }}
       </span>
       <div class="search-string" style="font-size: 0.8rem; color: #777; font-family: monospace;">
         {{ listing_group.id_string }} {{ listing_group.filter_terms }}
       </div>
+      <button class="refresh-lg-btn" title="Refresh Price Search">💲</button>
     </div>
 
     <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;">
@@ -16,7 +19,6 @@
       <span style="color: #0d6efd;"><b>${{ listing_group.avg_price|floatformat:0 }}</b></span>
       <span style="color: #dc3545;"><b>${{ listing_group.min_price|floatformat:0 }}</b></span>
       <span style="color: #827a7bff;"><b>{{ listing_group.price_spread|floatformat:2 }}%</b></span>
-      
       <small class="text-muted" style="margin-left: auto; background: #f8f9fa; padding: 2px 6px; border-radius: 4px; border: 1px solid #eee;">
         Spread: {{ listing_group.price_spread }}%
       </small>
@@ -30,18 +32,16 @@
     <span class="sort-link" data-sort="title" data-dir="asc">Title ↑</span>
   </div>
 
-  <div class="image-grid scroll-row">
+  <div class="image-grid scroll-row" id="grid-{{ listing_group.id }}">
     {% for listing in listing_group.listings.all %}
       <div class="listing" 
            data-id="{{ listing.id }}" 
            data-price="{{ listing.ebay_price|default:0 }}" 
            data-date="{{ listing.pretty_display_date|date:'c' }}" 
            data-title="{{ listing.title }}">
-        
         <a href="{{ listing.img_url }}" target="_blank">
-          <img src="{{ listing.thumb_url }}" class="listing-thumb" alt="" title="{{ listing.title }} &#10; Price: ${{ listing.ebay_price }} &#10; Date: {{ listing.pretty_display_date }}">
+          <img src="{{ listing.thumb_url }}" class="listing-thumb" alt="" title="{{ listing.title }}">
         </a>
-
         <div class="listing-caption" style="font-weight: bold; color: #222;">${{ listing.ebay_price }}</div>
         <div class="listing-caption" style="font-size: 0.7rem; color: #666;">{{ listing.pretty_display_date|date:'M d, Y' }}</div>
       </div>
@@ -50,110 +50,96 @@
 </div>
 
 <style>
-  .listing-header {
-      background: #fdfdfd;
-      padding: 10px 15px;
-      border-radius: 6px 6px 0 0;
-      border-bottom: 1px solid #ddd;
-  }
-
-  .price-summary span {
-      display: inline-flex;
-      align-items: center;
-      font-weight: 500;
-  }
-
-  .price-summary strong {
-      margin-right: 4px;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      opacity: 0.7;
-  }
-  /* CSS to enforce the "One Liner" behavior */
-  .listing-group.one-liner .image-grid {
-    display: flex;
-    flex-wrap: nowrap; /* Prevents wrapping to a second line */
-    overflow-x: auto;  /* Allows horizontal scrolling if many cards exist */
-    gap: 10px;
-    padding-bottom: 10px;
-  }
-  
-  .listing-group.one-liner .listing {
-    flex: 0 0 auto; /* Keeps items from shrinking */
-    width: 100px;   /* Adjust based on your preferred thumb size */
-  }
-
-  .listing-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 5px;
-  }
-
-  .sort-link { cursor: pointer; margin-right: 10px; font-size: 0.85em; }
-  .sort-link.active { font-weight: bold; text-decoration: underline; }
+  .listing-group.one-liner .image-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding-bottom: 10px; }
+  .listing-group.one-liner .listing { flex: 0 0 auto; width: 100px; }
+  .sort-link { cursor: pointer; margin-right: 10px; font-size: 0.85em; color: #0d6efd; }
+  .sort-link.active { font-weight: bold; text-decoration: underline; color: #212529; }
+  .refresh-lg-btn { background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 0.8rem; color: #666; transition: all 0.2s; }
+  .refresh-lg-btn:hover { background-color: #f0f0f0; border-color: #bbb; color: #333; }
+  .refresh-lg-btn.loading { animation: spin 1s linear infinite; pointer-events: none; opacity: 0.6; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  const groups = document.querySelectorAll("[data-listing-group]");
+(function() {
+    const gid = "{{ listing_group.id }}";
+    const groupEl = document.getElementById(`lg-${gid}`);
+    const gridEl = document.getElementById(`grid-${gid}`);
+    const listingNodes = Array.from(gridEl.querySelectorAll(".listing"));
+    const sortBtns = groupEl.querySelectorAll(".sort-link");
+    const refreshBtn = groupEl.querySelector(".refresh-lg-btn");
 
-  groups.forEach(group => {
-    const grid = group.querySelector(".image-grid");
-    const listings = Array.from(grid.querySelectorAll(".listing"));
-    const sortLinks = group.querySelectorAll(".sort-link");
-    const groupId = group.dataset.groupId;
-
-    // Cache sort values for performance
-    listings.forEach(l => {
+    // 1. Data Prep: Cache values for fast sorting
+    listingNodes.forEach(l => {
         l._sortDate = new Date(l.dataset.date).getTime() || 0;
         l._sortTitle = (l.dataset.title || "").toLowerCase();
         l._sortPrice = parseFloat(l.dataset.price) || 0;
     });
 
-    // Event Listeners (Hover/Click)
-    listings.forEach(listing => {
-      const listingId = listing.dataset.id;
-      
-      const dispatch = (name) => {
-        window.dispatchEvent(new CustomEvent(name, {
-          detail: { group_id: groupId, listing_id: listingId }
-        }));
-      };
-
-      listing.addEventListener("mouseenter", () => dispatch("highlightListing"));
-      listing.addEventListener("mouseleave", () => dispatch("unhighlightListing"));
-      listing.addEventListener("click", () => dispatch("clickListing"));
-    });
-
-    // Sorting logic
+    // 2. Sorting Engine
     function applySort(mode, dir) {
-      listings.sort((a, b) => {
-        let result = 0;
-        if (mode === "price") result = a._sortPrice - b._sortPrice;
-        else if (mode === "date") result = a._sortDate - b._sortDate;
-        else if (mode === "title") result = a._sortTitle.localeCompare(b._sortTitle);
-        return dir === "asc" ? result : -result;
-      });
-      listings.forEach(l => grid.appendChild(l));
+        listingNodes.sort((a, b) => {
+            let res = 0;
+            if (mode === "price") res = a._sortPrice - b._sortPrice;
+            else if (mode === "date") res = a._sortDate - b._sortDate;
+            else if (mode === "title") res = a._sortTitle.localeCompare(b._sortTitle);
+            return dir === "asc" ? res : -res;
+        });
+        listingNodes.forEach(l => gridEl.appendChild(l));
     }
 
-    // Default sort: Date Descending
+    // 3. Initial Sort Execution
     applySort("date", "desc");
 
-    // Sort handlers
-    sortLinks.forEach(link => {
-      link.addEventListener("click", () => {
-        const mode = link.dataset.sort;
-        const newDir = link.dataset.dir === "desc" ? "asc" : "desc";
-        link.dataset.dir = newDir;
-        link.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ${newDir === "desc" ? "↓" : "↑"}`;
-        
-        sortLinks.forEach(l => l.classList.remove("active"));
-        link.classList.add("active");
-        applySort(mode, newDir);
-      });
+    // 4. Interaction Events (Dispatched to window)
+    listingNodes.forEach(listing => {
+        const lid = listing.dataset.id;
+        ["mouseenter", "mouseleave", "click"].forEach(evtType => {
+            listing.addEventListener(evtType, () => {
+                const action = evtType === "mouseenter" ? "highlightListing" : 
+                               evtType === "mouseleave" ? "unhighlightListing" : "clickListing";
+                window.dispatchEvent(new CustomEvent(action, { detail: { group_id: gid, listing_id: lid } }));
+            });
+        });
     });
-  });
-});
+
+    // 5. Sort Controls
+    sortBtns.forEach(link => {
+        link.addEventListener("click", () => {
+            const mode = link.dataset.sort;
+            const newDir = link.dataset.dir === "desc" ? "asc" : "desc";
+            link.dataset.dir = newDir;
+            link.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ${newDir === "desc" ? "↓" : "↑"}`;
+            sortBtns.forEach(l => l.classList.remove("active"));
+            link.classList.add("active");
+            applySort(mode, newDir);
+        });
+    });
+
+    // 6. Refresh + Monitor Logic
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", async function(e) {
+            e.preventDefault();
+            refreshBtn.classList.add('loading');
+            
+            // Start the standalone Monitor for this group
+            if (window.LGMonitor) {
+                LGMonitor.getInstance().watchGroup(gid);
+            }
+
+            try {
+                const response = await fetch(`/async_price_search/${gid}`);
+                if (response.ok) {
+                    refreshBtn.textContent = "⌛"; // Indicate waiting for background task
+                } else {
+                    refreshBtn.classList.remove('loading');
+                    refreshBtn.textContent = "❌";
+                }
+            } catch (err) {
+                console.error(`Refresh error for ${gid}:`, err);
+                refreshBtn.classList.remove('loading');
+            }
+        });
+    }
+})();
 </script>

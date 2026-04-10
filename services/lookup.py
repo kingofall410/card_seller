@@ -1,6 +1,7 @@
 from services import ebay, psa
 from services.models.models import Settings
 from core.models.Card import Card
+from core.models.ListingGroup import ListingGroup
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 
@@ -90,8 +91,15 @@ def price_only_card(card_id, settings_id, ss=None):
     price_only(csr_id, settings_id, ss)
     return True
 
-def refresh_listing_groups(listing_groups, csr):
+def refresh_listing_groups(listing_groups=None, lg_ids=None):
     keyword_strings = []
+    
+    #IDs take precedence over objects passed in
+    if lg_ids:
+        listing_groups = ListingGroup.objects.filter(id__in=lg_ids)
+        
+    csr = listing_groups[0].search_result
+
     id_string = csr.build_search_string()
     for listing_group in listing_groups:
         keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
@@ -100,6 +108,8 @@ def refresh_listing_groups(listing_groups, csr):
 
     #matches map is keyword_string --> (listing variable, [listings])
     matches_map = ebay.scrape_with_profile(keyword_strings, limit=50, max_pages=nr_pages)
+    csr.update_listings(matches_map)
+        
     return matches_map
 
 
@@ -112,9 +122,11 @@ def price_only(csr_id, settings_id, ss=None):
     csr.save()
 
     listing_groups = csr.listing_groups.filter(is_sold=True)
-    matches_map = refresh_listing_groups(listing_groups, csr)   
-    
+    matches_map = refresh_listing_groups(listing_groups=listing_groups)   
+    psa_count = sum(group[0].listings.count() for group in matches_map.values() if 'PSA' in group[0].label)
+    print(psa_count)
     csr.update_listings(matches_map)
+    
     csr.overall_status = StatusBase.PRICED
     csr.save()
     

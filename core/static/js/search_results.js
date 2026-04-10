@@ -215,17 +215,27 @@ function handleSelect(selector, event, ui) {
 
 
 // Enable/disable field on checkbox toggle
-function handleOverrideToggle(fieldName, cardId, csrId) {
+function handleOverrideToggle(fieldName, cardId, csrId, isCheckboxDirect) {
+  console.log("handle override", isCheckboxDirect)
   const checkbox = document.getElementById(`${fieldName}_is_manual-${cardId}`);
   const input = document.getElementById(`field_${fieldName}-${cardId}`);
 
-  if (checkbox.checked) {
-    input.removeAttribute("disabled");
+  if (isCheckboxDirect) {
+    if (checkbox.checked) {
+      input.removeAttribute("readonly");
+    } else {
+      input.setAttribute("readonly", "readonly");
+      const defaultValue = input.getAttribute("data-default");
+    }
+    handleEnterPress(fieldName, cardId, csrId)
   } else {
-    input.setAttribute("disabled", "disabled");
-    const defaultValue = input.getAttribute("data-default");
+    //only want to handle this to turn ON the field
+    if (!checkbox.checked) {
+      input.removeAttribute("readonly");
+      checkbox.checked = true;
+      //don't need the enter press because the click puts us in
+    }
   }
-  handleEnterPress(fieldName, cardId, csrId)
 }
 
 function rebuildTitle(fieldName, cardId) {

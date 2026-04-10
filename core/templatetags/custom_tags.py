@@ -12,6 +12,10 @@ from django.core.serializers.json import DjangoJSONEncoder
 register = template.Library()
 
 @register.filter
+def model_name(obj):
+    return obj._meta.model_name
+    
+@register.filter
 def get_attribute(obj, attr):
     retval = getattr(obj, attr, None)
     return retval or ""

@@ -1,0 +1,88 @@
+{% load custom_tags %}
+<a href="/card/{{ task.listingtask.card.id }}/" 
+   style="text-decoration:none; color:inherit;" 
+   id="task-{{ task.id }}">
+    <div class="task-item status-{{ task.status|slugify }} detail-level-{{ detail_level }}" 
+         data-card-id="{{ task.card_id }}"
+         data-task-type="{{ task|model_name }}"
+         {# TOOLTIP LOGIC START #}
+         title="{% if task.status|slugify == 'failed' %}{{ task.error_str }}{% else %}{{ task.listingtask.csr.display_title_to_be }}{% endif %}">
+         {# TOOLTIP LOGIC END #}
+        
+        <table style="width:100%; border-collapse:collapse;">
+            
+            {% if detail_level == 0 %}
+            <tr>
+                <td style="vertical-align:middle; padding: 2px 0;">
+                    <div style="display:flex; align-items:center; gap:4px; font-size: 10px;">
+                        <span>{{ task.status_icon }}</span>
+                        <small>{% if task.listingtask.group_key %}📂{% else %}📄{% endif %}</small>
+                        <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">
+                            {{ task.listingtask.csr.display_full_name|default:task.name }}
+                        </b>
+                    </div>
+                </td>
+            </tr>
+
+            {% else %}
+            <tr>
+                <td colspan="{% if detail_level == 2 %}3{% else %}2{% endif %}" style="padding-bottom: 4px;">
+                    <div class="csr-title" style="font-size: 11px; line-height: 1.2; display: flex; align-items: center; gap: 4px;">
+                        {% if task.listingtask.group_key %}
+                            <span title="Group Listing">📂</span>
+                            <b>Group: {{ task.listingtask.group_key }}</b>
+                        {% else %}
+                            <span title="Single Listing">📄</span>
+                            <b>{{ task.listingtask.csr.display_full_name|truncatechars:25 }}</b>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+
+            <tr>
+                <td style="width:45px; vertical-align:top; padding-right:8px;">
+                    <img src="{% if task.listingtask.card.cropped_image %}{{ task.listingtask.card.cropped_image.url }}{% else %}{{ task.img }}{% endif %}"
+                         style="height:45px; width:45px; object-fit: cover; border-radius: 4px; background: #eee; border: 1px solid rgba(0,0,0,0.1);">
+                </td>
+
+                <td style="vertical-align:top;">
+                    <div style="display:flex; flex-direction:column; gap:1px; font-size: 10px; color: #555;">
+                        <div style="color: #000; font-weight: bold;">
+                            {{ task.listingtask.scheduled_for|time:"g:i A" }}
+                        </div>
+                        <div>ID: {{ task.listingtask.card.id }}-{{ task.listingtask.csr.id }}</div>
+                        <div style="color: #2d7a12; font-weight: bold;">
+                            ${{ task.listingtask.card.listed_card_info.list_price }}
+                        </div>
+                    </div>
+                </td>
+                
+                <td style="vertical-align:top; text-align:right;">
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+                        <div class="status-icon-big" style="font-size: 14px;">{{ task.status_icon }}</div>
+                        {% if detail_level == 2 and task.error_str %}
+                            <div style="color:#d9534f; font-size:9px; max-width: 70px; word-wrap: break-word; font-style: italic; line-height: 1;">
+                                {{ task.error_str|truncatechars:35 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+
+            {% if detail_level == 2 %}
+            <tr>
+                <td colspan="3" style="padding-top: 6px;">
+                    <button type="button"
+                            class="reset-btn"
+                            onclick="event.preventDefault(); openResetModal('{{ task.id }}', event)"
+                            style="width:100%; padding:3px; font-size:9px; cursor:pointer; background:#fff; border:1px solid #ddd; border-radius:3px;">
+                        Reset
+                    </button>
+                </td>
+            </tr>
+            {% endif %}
+
+        </table>
+    </div>
+</a>

@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", function () {
     priceNextBtn.addEventListener("click", () => {
         showSpinnerOnButton(priceNextBtn);
 
-        const url = `/aync_price_card/${searchResultId}`;
+        const url = `/async_price_card/${searchResultId}`;
         fetch(url)
           .then(res => res.json())
           .then(data => {
@@ -171,7 +171,7 @@ function performAsyncPriceAction(button, priceInput, qtyInput, searchResultId, g
     
     showSpinnerOnButton(button);
 
-    const url = `/aync_price_card/${searchResultId}`;
+    const url = `/async_price_card/${searchResultId}`;
     fetch(url)
       .then(res => res.json())
       .then(data => {

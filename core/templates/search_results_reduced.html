@@ -96,6 +96,7 @@
                 value="{{ resolved_value }}"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
+                onclick="handleOverrideToggle('{{ field_name }}', {{ card_counter }}, {{search_result.id }})"
                 oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})"
                 {% comment %} onkeydown="if (event.key === 'Enter') handleEnterPress('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})" {% endcomment %} 
                 onblur="handleEnterPress('{{ field_name }}', {{ card_counter }}, {{ search_result.id }})"

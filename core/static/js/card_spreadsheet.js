@@ -27,7 +27,7 @@ const SpreadsheetModule = (function() {
             if (!container) return;
 
             const columnSettings = colHeaders.map(header => {
-                const isImage = header.toLowerCase() === 'image';
+                const isImage = header.toLowerCase() === 'front' || header.toLowerCase() === 'reverse';
                 const isId = header.toLowerCase() === 'id';
                 return {
                     data: header.toLowerCase().replace(/\s+/g, '_'),
@@ -77,7 +77,7 @@ const SpreadsheetModule = (function() {
                 data: JSON.stringify({ csrId: csrId, allFields: updatedFields }),
                 success: response => {
                     const serverData = response.search_result;
-                    this.applyUpdate(visualRow, serverData);
+                    //this.applyUpdate(visualRow, serverData);
                     // Trigger external UI sync if available
                     if (window.syncCardView) window.syncCardView(csrId, serverData);
                 }
@@ -85,6 +85,7 @@ const SpreadsheetModule = (function() {
         },
 
         applyUpdate: function(visualRow, serverData) {
+            console.log(visualRow, serverData)
             hotInstance.batch(() => {
                 isApplyingServerUpdate = true;
                 Object.entries(serverData).forEach(([field, value]) => {

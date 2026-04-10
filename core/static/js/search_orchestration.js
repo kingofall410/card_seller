@@ -3,7 +3,8 @@ const AppOrchestrator = {
         currentPage: 1,
         hasNextPage: false,
         isLoading: false,
-        currentQuery: ""
+        currentQuery: "",
+        timeframe: "30" // Default days
     },
 
     init() {
@@ -22,42 +23,73 @@ const AppOrchestrator = {
             }
         });
 
-        // 3. LOAD FROM CACHE ON PAGE LOAD
         this.loadFromCache();
+        this.setupCardMonitor();
+    },
+
+    getSinceDate(days) {
+        const d = new Date();
+        d.setDate(d.getDate() - parseInt(days));
+        return d.toISOString().split('T')[0]; 
+    },
+
+    updateTimeframe(days) {
+        this.state.timeframe = days;
+        sessionStorage.setItem('last_search_timeframe', days);
+        this.performSearch(true);
+    },
+
+    setupCardMonitor() {
+        const cardMon = CardMonitor.getInstance();
+        cardMon.onUpdate((data) => {
+            const temp = document.createElement('div');
+            temp.innerHTML = data.html;
+            temp.querySelectorAll('[data-card-id]').forEach(newCard => {
+                const cardId = newCard.getAttribute('data-card-id');
+                const existingCard = document.querySelector(`[data-card-id="${cardId}"]`);
+                if (existingCard) {
+                    existingCard.outerHTML = newCard.outerHTML;
+                    const el = document.querySelector(`[data-card-id="${cardId}"]`);
+                    el.classList.add('is-updating');
+                    setTimeout(() => el.classList.remove('is-updating'), 1000);
+                }
+            });
+
+            if (data.table_data && data.table_data.length > 0 && typeof updateSpreadsheet === 'function') {
+                //updateSpreadsheet(data.table_data, data.col_headers, true);
+            }
+        });
     },
 
     loadFromCache() {
         const cachedHTML = sessionStorage.getItem('last_search_html');
         const cachedQuery = sessionStorage.getItem('last_search_query');
-        const cachedPage = sessionStorage.getItem('last_search_page');
-        const cachedNext = sessionStorage.getItem('last_search_hasNext');
+        const cachedTableData = sessionStorage.getItem('last_search_table_data');
+        const cachedHeaders = sessionStorage.getItem('last_search_col_headers');
+        const cachedTimeframe = sessionStorage.getItem('last_search_timeframe');
+
+        if (cachedTimeframe) {
+            this.state.timeframe = cachedTimeframe;
+            const radio = document.querySelector(`input[name="search-timeframe"][value="${cachedTimeframe}"]`);
+            if (radio) radio.checked = true;
+        }
 
         if (cachedHTML && cachedQuery) {
+            this.state.currentQuery = cachedQuery;
             const cardList = document.getElementById('global-card-list');
-            if (cardList) {
-                cardList.innerHTML = cachedHTML;
-                
-                // Update displayed count based on cached items, if they're filtered it'll get overwritten
-                const countDisplayed = document.getElementById('count-displayed');
-                if (countDisplayed) {
-                    
-                    countDisplayed.innerText = cardList.querySelectorAll('.card-item:not(.folder)').length;
-                }
-            }
+            if (cardList) cardList.innerHTML = cachedHTML;
             
-            // Restore total count from session storage
-            const countTotal = document.getElementById('count-total');
-            const cachedTotal = sessionStorage.getItem('last_search_total');
-            if (countTotal && cachedTotal) {
-                countTotal.innerText = cachedTotal;
+            if (cachedTableData && cachedHeaders && typeof updateSpreadsheet === 'function') {
+                //updateSpreadsheet(JSON.parse(cachedTableData), JSON.parse(cachedHeaders));
             }
-            
+
             this.refreshUI();
+            CardMonitor.getInstance().start(this.state.currentQuery);
         }
     },
 
     refreshUI() {
-        if (typeof buildDropdowns === 'function') buildDropdowns();
+        if (typeof window.buildDropdowns === 'function') window.buildDropdowns();
         if (typeof buildSortBar === 'function') buildSortBar(); 
         if (typeof applyFilters === 'function') applyFilters();
         if (typeof sortCards === 'function') sortCards(); 
@@ -67,10 +99,13 @@ const AppOrchestrator = {
         if (this.state.isLoading) return;
         
         const cardList = document.getElementById('global-card-list');
+        
         if (isNewSearch) {
             this.state.currentPage = 1;
             if (cardList) cardList.innerHTML = ''; 
-            sessionStorage.removeItem('last_search_html'); // Clear old cache
+            sessionStorage.removeItem('last_search_html');
+            sessionStorage.removeItem('last_search_table_data');
+            sessionStorage.removeItem('last_search_col_headers');
         }
 
         this.state.isLoading = true;
@@ -78,48 +113,57 @@ const AppOrchestrator = {
         if (spinner) spinner.style.display = "block";
 
         try {
-            const response = await fetch(
-                `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}`,
-                { headers: { 'X-Requested-With': 'XMLHttpRequest' } }
-            );
+            const sinceDate = this.getSinceDate(this.state.timeframe);
+            
+            // BUILD THE URL
+            // If it's NOT a new search (meaning it's the auto-loader loop), 
+            // we could optionally add updates_only=1 if you wanted to bypass 
+            // the paginator on the backend for those specific calls.
+            let url = `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}&since=${sinceDate}`;
+            
+            // We only add updates_only if we are NOT on the first page of a fresh search
+            // but your backend logic uses this to skip pagination entirely.
+            // Note: If you want infinite scroll to stay paginated, keep this off.
+            // If you want the "rest of the results" to dump in one go, uncomment below:
+            // if (!isNewSearch) url += '&updates_only=1';
+
+            const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await response.json();
 
-            // 1. Insert HTML as usual
             if (isNewSearch) {
                 cardList.innerHTML = data.html || ''; 
             } else {
                 cardList.insertAdjacentHTML('beforeend', data.html || '');
             }
 
-            // 2. Update the Counters
-            const countDisplayed = document.getElementById('count-displayed');
+            if (isNewSearch && data.table_data && data.table_data.length > 0) {
+                if (typeof updateSpreadsheet === 'function') {
+                    //updateSpreadsheet(data.table_data, data.col_headers);
+                    sessionStorage.setItem('last_search_table_data', JSON.stringify(data.table_data));
+                    sessionStorage.setItem('last_search_col_headers', JSON.stringify(data.col_headers));
+                }
+            }
+
             const countTotal = document.getElementById('count-total');
+            if (countTotal) countTotal.innerText = data.total_count || 0;
 
-            if (countTotal) {
-                // data.total_count should be sent from your Django View
-                countTotal.innerText = data.total_count || 0;
-            }
-
-            if (countDisplayed) {
-                // Count the actual card elements currently in the list
-                const currentCards = cardList.querySelectorAll('.card-item:not(.hidden-card):not(.folder)').length;
-                countDisplayed.innerText = currentCards;
-            }
-
-            // Update State
             this.state.hasNextPage = data.has_next;
             this.state.currentPage = data.next_page;
 
-            // --- CACHE THE UPDATE ---
             sessionStorage.setItem('last_search_html', cardList.innerHTML);
             sessionStorage.setItem('last_search_page', this.state.currentPage);
             sessionStorage.setItem('last_search_hasNext', this.state.hasNextPage);
             sessionStorage.setItem('last_search_total', data.total_count);
+            sessionStorage.setItem('last_search_timeframe', this.state.timeframe);
 
             this.refreshUI();
-
             this.state.isLoading = false; 
 
+            if (isNewSearch) {
+                CardMonitor.getInstance().start(this.state.currentQuery);
+            }
+
+            // AUTO-PAGINATION LOOP
             if (this.state.hasNextPage) {
                 setTimeout(() => this.performSearch(false), 50);
             } else {
