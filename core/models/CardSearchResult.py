@@ -295,10 +295,11 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     text_fields = ["unknown_words"]
 
-    listing_fields = ["parent_card__collection_id", "parent_card_id", "id", "full_name", "year", "brand", "subset", "card_name", "parallel",
-        "card_number", "city", "team", "serial_number", 
-        "attributes", "unknown_words", "title_to_be", "overall_status"
-    ]
+    listing_fields = ["parent_card__collection_id", "parent_card_id", "id", "ebay_listing_id", "list_price", 
+                    "full_name", "year", "brand", "subset", "card_name", "parallel",
+                    "card_number", "city", "team", "serial_number", 
+                    "attributes", "unknown_words", "title_to_be", "overall_status"
+                    ]
 
     listing_group_order = ["Raw", "ID", "PSA 10", "PSA 9", "PSA 8", "PSAx"]
 
@@ -307,6 +308,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     
     dynamic_listing_fields = ["front", "back"]
 
+    @property
+    def status(self):
+        return self.overall_status
+        
     @property
     def reverse_listing_groups(self):
         return self.listing_groups.all().order_by('-id')
@@ -867,9 +872,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return f"{city} {team}"
     
     #TODO:Too many saves
-    def build_sku(self):
+    def build_sku(self, force=False):
         
-        if not self.sku or self.sku == "" or self.sku == "--":
+        if force or not self.sku or self.sku == "" or self.sku == "--":
             self.sku = f"{self.parent_card.collection_id}-{self.parent_card_id}-{self.id}"
         return self.sku
     

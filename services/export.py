@@ -11,6 +11,7 @@ import requests
 
 def export_csrs_to_csv(csrs):
     """Exports Card objects to CSV and returns a downloadable response."""
+    '''legacy
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="card_collection.csv"'
 
@@ -20,7 +21,8 @@ def export_csrs_to_csv(csrs):
     for csr in csrs:
         writer.writerow(csr.export_to_csv())
 
-    return response
+    return response'''
+    pass
 
 
 def export_zip(csrs):
@@ -140,7 +142,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         #uploader.upload_and_share(csr.get_latest_front(), csr.display_full_name)
         #uploader.upload_and_share(csr.get_latest_reverse(), csr.display_full_name)
         #print("am i here", csr.sku)
-        listed_info.sku = csr.build_sku()
+        listed_info.sku = csr.build_sku(force=True)
         #print("am i here", csr.sku)
         print("SKU:", listed_info.sku)
         print("🔗 Public link:", listed_info.shareable_link_front)

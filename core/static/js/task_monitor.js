@@ -1,6 +1,6 @@
 window.StatelessTaskMonitor = (function() {
     let instance;
-    const POLL_INTERVAL = 5000;
+    const POLL_INTERVAL = 30000;
     const callbacks = [];
     
     // Create a unique key based on the current URL path

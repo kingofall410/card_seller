@@ -16,8 +16,6 @@ class CollectionStatus(models.TextChoices):
     
     IMPORTED = "imported", "Imported"
     ID = "identified", "Identified"
-    RTP = "ready to price", "Ready to price"
-    RTL = "ready to list", "Ready to list"
     LISTED = "listed", "Listed"
     CLOSED = "closed", "Closed"
 
@@ -122,24 +120,39 @@ class Card(models.Model):
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
     notes = models.TextField(blank=True)    
-    value = models.FloatField(default=True)
+    value = models.FloatField(default=0.0)
     modification_date = models.DateTimeField(auto_now=True)
+
+    @property
+    def display_sku(self):
+        asr = self.active_search_results()
+        if asr.overall_status == StatusBase.LISTED:
+            info = getattr(self, 'listed_card_info', None)
+            if info and info.list_price > 0.0:
+                return info.sku
+            else:
+                return asr.sku
+            return ""
+        else:
+            return f"{self.collection_id}-{self.id}-{asr.id}"
 
     def update_mod_date(self):
         self.modification_date = now() 
         self.save(update_fields=["modification_date"])
 
     def save(self, *args, **kwargs):
-        print("Card save")
+        print("Card save", self.id if self.pk else None)
         try:
             info = getattr(self, 'listed_card_info', None)
             asr = self.active_search_results()
             if info and float(info.list_price) > 0.0:
                 print("if")
                 self.value = info.list_price
-            elif asr:
+            elif asr and asr.ebay_msrp:
                 print("else", asr.ebay_msrp)
                 self.value = asr.ebay_msrp
+            else:
+                self.value = 0.0
             self.collection.update_value()
             super().save(*args, **kwargs)            
         except Exception as e:

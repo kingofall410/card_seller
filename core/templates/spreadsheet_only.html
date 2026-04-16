@@ -90,43 +90,46 @@ document.addEventListener('DOMContentLoaded', () => {
       pasteMode: 'overwrite', // or 'shift_down'
     },
 
-    afterChange: function(changes, source) {
-      if (isApplyingServerUpdate) {
-        console.log("afterChange skipping");
-        return;
-      }
+    afterChange: function (changes, source) {
+      if (source === 'loadData') return;
 
-      console.log("afterChange executing");
+      const rowChanges = {};
 
-      if (source === 'edit' || source === 'CopyPaste.paste') {
-        const columnMap = hot.getSettings().columns.map(col => col.data);
-        const rowChanges = {};
+      // 1. Group changes by row
+      changes.forEach(([row, col, oldVal, newVal]) => {
+        if (oldVal === newVal) return;
+        if (!rowChanges[row]) rowChanges[row] = {};
+        
+        // Store changes based on column index
+        rowChanges[row][col] = newVal;
+      });
 
-        // 🧩 Accumulate changes per row
-        changes.forEach(([row, prop, oldValue, newValue]) => {
-          const fieldName = typeof prop === 'string' ? prop : columnMap[prop];
-          if (!rowChanges[row]) rowChanges[row] = {};
-          rowChanges[row][fieldName] = newValue;
-        });
+      // 2. Process changes
+      Object.entries(rowChanges).forEach(([rowIndex, changedCols]) => {
+        const row = parseInt(rowIndex);
+        
+        // Define your column indices here
+        const BRAND_COL = 0; // Update these to your actual column indices
+        const CITY_COL = 1;
+        
+        // Get the full row data from Handsontable
+        const rowData = hot.getSourceDataAtRow(row);
+        
+        // Create the payload
+        const fields = {
+          brand: rowData.brand,
+          city: rowData.city,
+          // Check if the column index exists in the changedCols object
+          brand_is_manual: changedCols.hasOwnProperty(BRAND_COL),
+          city_is_manual: changedCols.hasOwnProperty(CITY_COL)
+        };
 
-        // 🧾 Include brand/city + is_manual flags
-        Object.entries(rowChanges).forEach(([rowIndex, fields]) => {
-          const row = parseInt(rowIndex);
-          const brand = hot.getDataAtCell(row, columnMap.indexOf('brand'));
-          const city = hot.getDataAtCell(row, columnMap.indexOf('city'));
+        // Update the changed fields specifically if they were modified
+        if (changedCols.hasOwnProperty(BRAND_COL)) fields.brand = changedCols[BRAND_COL];
+        if (changedCols.hasOwnProperty(CITY_COL)) fields.city = changedCols[CITY_COL];
 
-          const brandChanged = Object.prototype.hasOwnProperty.call(fields, 'brand');
-          const cityChanged = Object.prototype.hasOwnProperty.call(fields, 'city');
-
-          if (!brandChanged) fields.brand = brand;
-          if (!cityChanged) fields.city = city;
-
-          fields.brand_is_manual = brandChanged;
-          fields.city_is_manual = cityChanged;
-
-          quickEdit(hot, row, fields);
-        });
-      }
+        quickEdit(hot, row, fields);
+      });
     }
   });
   

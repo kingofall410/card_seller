@@ -4,7 +4,8 @@ const AppOrchestrator = {
         hasNextPage: false,
         isLoading: false,
         currentQuery: "",
-        timeframe: "30" // Default days
+        timeframe: "30", // Default days
+        activeFilters: {}
     },
 
     init() {
@@ -27,6 +28,13 @@ const AppOrchestrator = {
         this.setupCardMonitor();
     },
 
+    updateFilters(newFilters) {
+        if (newFilters) {
+            this.state.activeFilters = newFilters;
+        }
+        //this.performSearch(true); // Reset to page 1 for filtered results
+    },
+
     getSinceDate(days) {
         const d = new Date();
         d.setDate(d.getDate() - parseInt(days));
@@ -36,7 +44,7 @@ const AppOrchestrator = {
     updateTimeframe(days) {
         this.state.timeframe = days;
         sessionStorage.setItem('last_search_timeframe', days);
-        this.performSearch(true);
+        //this.performSearch(true);
     },
 
     setupCardMonitor() {
@@ -84,7 +92,7 @@ const AppOrchestrator = {
             }
 
             this.refreshUI();
-            CardMonitor.getInstance().start(this.state.currentQuery);
+            //CardMonitor.getInstance().start(/*this.state.currentQuery*/);
         }
     },
 
@@ -94,10 +102,27 @@ const AppOrchestrator = {
         if (typeof applyFilters === 'function') applyFilters();
         if (typeof sortCards === 'function') sortCards(); 
     },
-
+    flattenFilters(activeFilters) {
+        console.log("active filters pre flat:", activeFilters)
+        const flatList = [];
+        Object.keys(activeFilters).forEach(field => {
+            const filters = activeFilters[field];
+            if (Array.isArray(filters)) {
+                filters.forEach(f => {
+                    flatList.push({
+                        field: field, // Inject the field name here!
+                        op: f.op,
+                        val: f.val
+                    });
+                });
+            }
+        });
+        console.log("active filters post flat:", flatList)
+        return flatList;
+    },
     async performSearch(isNewSearch = true) {
         if (this.state.isLoading) return;
-        
+        console.log("performSearch", isNewSearch)
         const cardList = document.getElementById('global-card-list');
         
         if (isNewSearch) {
@@ -114,18 +139,16 @@ const AppOrchestrator = {
 
         try {
             const sinceDate = this.getSinceDate(this.state.timeframe);
-            
-            // BUILD THE URL
-            // If it's NOT a new search (meaning it's the auto-loader loop), 
-            // we could optionally add updates_only=1 if you wanted to bypass 
-            // the paginator on the backend for those specific calls.
+            console.log("Active filters: ", this.state.activeFilters)
+            // BUILD URL with Filters
             let url = `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}&since=${sinceDate}`;
-            
-            // We only add updates_only if we are NOT on the first page of a fresh search
-            // but your backend logic uses this to skip pagination entirely.
-            // Note: If you want infinite scroll to stay paginated, keep this off.
-            // If you want the "rest of the results" to dump in one go, uncomment below:
-            // if (!isNewSearch) url += '&updates_only=1';
+            console.log(this.state.activeFilters)
+            // Add filters if they exist
+            if (Object.keys(this.state.activeFilters).length > 0) {
+                const flatFilters = this.state.activeFilters//this.flattenFilters(this.state.activeFilters);
+                console.log("Flat", flatFilters);
+                url += `&filters=${encodeURIComponent(JSON.stringify(flatFilters))}`;
+            }
 
             const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await response.json();
@@ -164,10 +187,22 @@ const AppOrchestrator = {
             }
 
             // AUTO-PAGINATION LOOP
-            if (this.state.hasNextPage) {
+            const RENDER_LIMIT = 200;
+
+            // Update the count based on how many items were added in the last batch
+            const newItemsCount = document.querySelectorAll('.card-item').length; 
+            this.state.renderedCount = newItemsCount;
+
+            if (this.state.hasNextPage && this.state.renderedCount < RENDER_LIMIT) {
+                // Continue loop
                 setTimeout(() => this.performSearch(false), 50);
             } else {
+                // Stop loop: either no more pages or limit reached
                 if (spinner) spinner.style.display = "none";
+                
+                if (this.state.renderedCount >= RENDER_LIMIT) {
+                    console.log("Render limit of 200 reached. Switching to manual scroll.");
+                }
             }
 
         } catch (err) {
@@ -191,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (!hasCache) {
         // No cache found, run the initial default search
-        AppOrchestrator.performSearch(true); 
+        //AppOrchestrator.performSearch(true); 
     } else {
         // Cache was already loaded by .init() -> .loadFromCache()
         // We just hide the spinner in case it was defaulting to 'block'

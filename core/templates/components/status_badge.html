@@ -23,7 +23,7 @@
     <a href="{% url 'calendar' %}" 
        class="status-link"
        onclick="event.stopPropagation();"
-       title="{% if task.error_str %}Error: {{ task.error_str }}{% else %}Task: {{ task.name }}{% endif %}">
+       title="{% if task.error_str %}Error: {{ task.error_str }}{% else %}Task: {{ task.scheduled_for }}{% endif %}">
         <span class="status-badge status-{{ task.status|slugify }}">
             {{ task.get_status_display }}
         </span>

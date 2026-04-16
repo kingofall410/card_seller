@@ -71,6 +71,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                 print(f"Error creating keyword '{keyword}':", e)
 
 def add_token(field_key, value, all_field_data, user_settings=None):
+    print("Add token: ", field_key, value, all_field_data)
     new_obj = None
     if not user_settings:
         user_settings = User.objects.first().active_settings.first()
@@ -84,10 +85,11 @@ def add_token(field_key, value, all_field_data, user_settings=None):
             brand_obj = Brand.objects.get(raw_value=all_field_data["brand"], disabled_date=None)
         
         if brand_obj:
-            new_obj = Subset.create(value=value, settings=user_settings, field="brands", brand=brand_obj)
+            print(value)
+            new_obj = Subset.create(value=value, settings=user_settings, field="subsets", brand=brand_obj)
         else:
             #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
-            new_obj = Subset.objects.filter(raw_value=value).first()
+            new_obj = Subset.objects.get_or_create(raw_value=value).first()
 
     elif field_key == "cities" or field_key == "city":   
         new_obj = City.create(value=value, settings=user_settings, field="cities")

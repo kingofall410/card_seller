@@ -134,14 +134,15 @@ class Queue:
                     task.status = StatusBase.RUNNING # Update memory too
                     db_task.save(update_fields=["status"])
 
-                    is_success = task.run()
                     
-                    if is_success:
+                    if task.run():
                         print(f"[SUCCESS] {task.name} succeeded. Triggering successor: {task.successor_id}")
                         task.status = StatusBase.SUCCESS
                         db_task.status = StatusBase.SUCCESS
                         
-                        # ... (existing success logic)
+                        if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
+                            console.log("onsuccess", db_task.on_success_status)
+                            csr.overall_status = db_task.on_success_status
 
                         if task.successor_id:
                             # Update DB
@@ -150,23 +151,25 @@ class Queue:
                             for mt in self.tasks:
                                 if mt.db_id == task.successor_id:
                                     mt.status = StatusBase.PENDING
+                                    csr.overall_status = db_task.on_success_status
                     else:
-                        # ... (existing failure logic)
+                        print(f"[FAIL] {task.name} failed.")
+                        if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
+                            csr.overall_status = StatusBase.FAILED
                         task.status = StatusBase.FAILED
                         db_task.status = StatusBase.FAILED
 
                 except Exception as e:
-                    # ... (existing exception logic)
+                    print(f"[EXCEPTION] {task.name} failed.")
+                    if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
+                        csr.overall_status = StatusBase.FAILED
                     task.status = StatusBase.FAILED
                     db_task.status = StatusBase.FAILED
                 
                 finally:
                     db_task.save(update_fields=["status", "error_str"])
-                    if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
-                        console.log("onsuccess", db_task.on_success_status)
-                        csr.overall_status = db_task.on_success_status
+                    if csr:
                         csr.save(update_fields=["overall_status"])
-                        console.log("onsuccess2", csr.overall_status)
             
                     if self._stop.wait(timeout=self.interval):
                         break
@@ -190,7 +193,9 @@ class Queue:
         self.add(MemoryTask(scheduled_for=when, name=name, callback=callback, params=params, db_id=t.id))
         if csr:
             csr.overall_status = StatusBase.PENDING
+            csr.parent_card.listed_card_info.listing_datetime = when
             csr.save(update_fields=['overall_status'])
+            csr.parent_card.listed_card_info.save()
         return t
 
     def schedule_pricing_task(self, name, card, csr, callback, params, predecessor=None, on_success_status=StatusBase.PRICED):

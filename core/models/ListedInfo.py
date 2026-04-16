@@ -12,13 +12,13 @@ class ListedInfo(models.Model):
     list_price = models.FloatField(default=0.0)
     list_qty = models.IntegerField(default=0)
 
-    listing_id = models.CharField(max_length=50, blank=True)
+    listing_id = models.CharField(max_length=250, blank=True)
     #listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
-    sku = models.CharField(max_length=50, blank=True)
-    offer_id = models.CharField(max_length=50, blank=True, null=True)
+    sku = models.CharField(max_length=250, blank=True)
+    offer_id = models.CharField(max_length=250, blank=True, null=True)
     
     msrp = models.FloatField(default=0.0, null=True)
-    variation_title_base = models.CharField(max_length=50, blank=True, null=True)
+    variation_title_base = models.CharField(max_length=250, blank=True, null=True)
     
     shareable_link_front=models.CharField(max_length=250, null=True, blank=True)
     shareable_link_reverse=models.CharField(max_length=250, null=True, blank=True)
@@ -59,13 +59,13 @@ class ListedInfo(models.Model):
                 self.listing_datetime = last_task.scheduled_for
         self.list_price = csr.list_price
         self.list_qty = 1
-        self.listing_id = csr.ebay_listing_id
+        #self.listing_id = csr.ebay_listing_id
         #lci.listed_under_sku = csr.ebay_listed_under_sku
         self.sku = csr.sku
-        self.offer_id = csr.ebay_offer_id
+        #self.offer_id = csr.ebay_offer_id
         
         self.msrp = csr.ebay_msrp        
-        self.variation_title_base = csr.variation_title_base
+        #self.variation_title_base = csr.variation_title_base
         
         self.shareable_link_front=csr.shareable_link_front
         self.shareable_link_reverse=csr.shareable_link_reverse
@@ -86,7 +86,7 @@ class ListedInfo(models.Model):
                 lci.product_group = csr.ebay_product_group
                 lci.listing_datetime = last_task.scheduled_for
 
-        lci.list_price = csr.list_price
+        lci.list_price = csr.list_price if not lci.list_price else 0
         lci.list_qty = 1
         lci.listing_id = csr.ebay_listing_id
         #lci.listed_under_sku = csr.ebay_listed_under_sku
@@ -94,7 +94,7 @@ class ListedInfo(models.Model):
         lci.offer_id = csr.ebay_offer_id
         
         lci.msrp = csr.ebay_msrp        
-        lci.variation_title_base = csr.variation_title_base
+        #lci.variation_title_base = csr.variation_title_base
         
         lci.shareable_link_front=csr.shareable_link_front
         lci.shareable_link_reverse=csr.shareable_link_reverse
@@ -105,6 +105,8 @@ class ListedInfo(models.Model):
     def save(self, *args, **kwargs):
         csr = self.card.active_search_results()
         self.listing_detail_text = csr.title_to_be if csr else ""
+        if not self.listing_datetime and csr.listing_tasks.exists():
+            self.listing_datetime = csr.listing_tasks.latest("scheduled_for").scheduled_for
         self.card.save()
         self.card.update_mod_date()
         super().save(*args, **kwargs)

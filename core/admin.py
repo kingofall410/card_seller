@@ -12,7 +12,7 @@ class CardAdmin(admin.ModelAdmin):
 
 @admin.register(CardSearchResult)
 class CardSearchResultAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status', 'ebay_msrp']
+    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status', 'ebay_msrp', 'ebay_listing_id', 'sku', 'list_price']
     def get_form(self, request, obj=None, **kwargs):
         model_fields = [f.name for f in self.model._meta.many_to_many]
         print("Model fields:", model_fields)

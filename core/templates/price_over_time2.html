@@ -64,11 +64,8 @@
   <div class="title-header">{{ title }} – Sold Price Over Time</div>
 
   <div class="controls">
-    <label for="maxPrice-time">Max Price:</label>
-    <input type="number" oninput="updateChartWrapper()" id="maxPrice-time" value="1000" step="1" min="0" style="width: 60px;">
-
-    <label for="movingAvgWindow-time">Moving Avg:</label>
-    <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="1" step="1" min="1" style="width: 60px;">
+    <label for="movingAvgWindow-time">Window (% of points):</label>
+    <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="25" step="1" min="1" max="50" style="width: 60px;">
 
     <div id="toggle-container" style="margin-top: 12px;"></div>
   </div>
@@ -281,6 +278,7 @@
     labelEl.style.marginRight = "12px";
 
     document.getElementById("toggle-container").appendChild(labelEl);
+    
   });
 
   // -----------------------------------------------------
@@ -290,7 +288,7 @@
     return data.filter(([price]) => price <= maxPrice);
   }
 
-  function buildSeries(rawData, windowSize = 1) {
+  function buildSeries(rawData, windowPercentage = 1) {
     const groupedByDay = {};
 
     rawData.forEach(([price, title, thumb, date, id]) => {
@@ -316,23 +314,27 @@
 
     const sorted = dailyHighs.sort((a, b) => new Date(a.x) - new Date(b.x));
 
-    if (windowSize > 1) {
-      return sorted.map((point, i, arr) => {
-        const start = Math.max(0, i - Math.floor(windowSize / 2));
-        const end = Math.min(arr.length, i + Math.ceil(windowSize / 2));
-        const window = arr.slice(start, end);
-        const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
+    // Calculate dynamic window size
+    const totalPoints = sorted.length;
+    const windowSize2 = Math.max(1, Math.floor(totalPoints * (windowPercentage / 100)));
 
-        return {
-          ...point,
-          y: avg,
-          ids: [...new Set(window.flatMap(p => p.ids))]
-        };
-      });
+    if (windowSize2 > 1) {
+        return sorted.map((point, i, arr) => {
+            const start = Math.max(0, i - Math.floor(windowSize2 / 2));
+            const end = Math.min(arr.length, i + Math.ceil(windowSize2 / 2));
+            const window = arr.slice(start, end);
+            const avg = window.reduce((sum, p) => sum + p.y, 0) / window.length;
+
+            return {
+                ...point,
+                y: avg,
+                ids: [...new Set(window.flatMap(p => p.ids))]
+            };
+        });
     }
 
     return sorted;
-  }
+}
 
   function getToggleState(key) {
     const el = document.getElementById(`toggle-${key}`);
@@ -343,40 +345,60 @@
   // UPDATE CHART
   // -----------------------------------------------------
   window.updateChart = function() {
-    const maxPrice = parseFloat(document.getElementById("maxPrice-time").value);
-    const windowSize = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
+    const windowPercentage = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
     const datasets = [];
 
     let latestDate = null;
+    let globalMin = -1.0;
+    let globalMax = 0.0;
 
-    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
+    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data, min_price, max_price }) => {
       if (!getToggleState(key)) return;
 
-      const filtered = filterByPrice(data, maxPrice);
-      const series = buildSeries(filtered, windowSize);
+      //const filtered = filterByPrice(data, maxPrice);
+      const series = buildSeries(data, windowPercentage);
 
       if (series.length) {
         const lastPointDate = new Date(series[series.length - 1].x);
         if (!latestDate || lastPointDate > latestDate) {
           latestDate = lastPointDate;
         }
+
+        if ((min_price <= globalMin) || (globalMin < 0)) globalMin = min_price;
+        if (max_price > globalMax) globalMax = max_price;
       }
 
+      
       datasets.push({
-        label,
-        data: series,
-        fill: false,
-        backgroundColor: color.replace("0.8", "0.2"),
-        borderColor: color,
-        tension: 0.6,
-        borderWidth,
-        pointRadius: 0,
-        pointHoverRadius: 8,
-        pointHoverBorderWidth: 3,
-        pointHoverBackgroundColor: color.replace("0.8", "0.2"),
-        pointHoverBorderColor: color,
-        borderDash: lineStyle === "dotted" ? [6, 4] : []
-      });
+            label: `${label} (Avg)`,
+            data: series,
+            type: 'line',
+            fill: false,
+            borderColor: color,
+            tension: 0.6,
+            borderWidth: 2,
+            pointRadius: 0, // Hide points on the line
+            borderDash: lineStyle === "dotted" ? [6, 4] : []
+        });
+
+        // 3. Add Scatter Dataset (The Raw Sales)
+        // Map original data to the format required for the chart
+        const scatterData = data.map(([price, title, thumb, date, id]) => ({
+            x: new Date(date).toISOString(),
+            y: price,
+            title,
+            thumb,
+            ids: [String(id)]
+        }));
+
+        datasets.push({
+            label: `${label} (Sales)`,
+            data: scatterData,
+            type: 'scatter',
+            backgroundColor: color.replace("0.8", "0.4"),
+            pointRadius: 3,
+            pointHoverRadius: 8
+        });
     });
 
     datasetConfigs.forEach(({ key, max_date }) => {
@@ -391,7 +413,7 @@
     let minDate = undefined;
     if (latestDate) {
       minDate = new Date(latestDate);
-      minDate.setMonth(minDate.getMonth() - 6);
+      minDate.setFullYear(minDate.getFullYear() - 1);
     }
 
     if (timeChart) {
@@ -415,7 +437,8 @@
           },
           y: {
             title: { display: true, text: 'Price ($)' },
-            beginAtZero: true
+            min: globalMin,
+            max: globalMax,
           }
         },
         plugins: {

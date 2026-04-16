@@ -149,9 +149,18 @@
 </head>
 <body>
   {% include "header.html" %}
+  {% include "nav_buttons.html" with root_id=card_tuple.1 url_name="crop_review" up_url="collection" up="0" next=card_tuple.0.next.id previous=card_tuple.0.previous.id %}
+  <div id="title-block">
+    <div class="title">
+      <h2>Crop Review</h2>
+    </div>
+    <div class="collection-controls">
+    </div>
+  </div>
+  
   <div class="cropper-horizontal-wrapper">
-    {% for card_tuple in card_tuples %}
-      {% with card=card_tuple.0 card_id=card_tuple.1 search_results=card_tuple.1.active_search_results %}
+    {% for card_tuple in page_obj %}
+      {% with card=card_tuple.0 card_id=card_tuple.1 search_results=card_tuple.2 %}
       {% with meta=search_results.status|status_icon_meta %}
         <div class="cropper-block">
           <div class="status-icon">{{ meta.icon }}</div>

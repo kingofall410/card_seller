@@ -5,16 +5,17 @@ from services.models.task import Task, ListingTask
 from core.models.Status import StatusBase
 from core.models.ListedInfo import ListedInfo
 from core.models.Group import ProductGroup
-
+from django.db.models import Q
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Collection, CollectionStatus
+from core.models.Group import ProductGroup
 from core.models.CardSearchResult import CardSearchResult, ListingGroup
 from core.models.Card import Card
 # Miscellaneous views
 from django.apps import apps
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
-import re
+import re, json
 
 def hello_world(request):
     return render(request, "success.html")
@@ -22,8 +23,8 @@ def hello_world(request):
 def test_view(request):
 
     # Use prefetch_related to grab all nested data in 2-3 queries instead of hundreds
-    cards = Card.objects.filter(id=2803).delete()
-
+    results = CardSearchResult.objects.filter(~Q(overall_status='pending'))
+    print(results.count())
     '''for card in cards:
         # Assuming active_search_results() returns a queryset or object
         # This loop now uses the data already in memory

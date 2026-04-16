@@ -39,7 +39,22 @@ function handlePaste(event, collectionId) {
     }
 }
 
-  
+function submitAndGo(url) {
+    console.log("submit and go");
+    launchSequence()
+    // 1. Get the data
+    const rawData = sessionStorage.getItem('card_sequence');
+    const selections = rawData ? JSON.parse(rawData) : [];
+    
+    // Create a form, add CSRF, and append IDs
+    const $form = $('<form>', { action: url, target:"_blank", method: 'POST' }).hide();
+    selections.forEach(id => {
+        $form.append($('<input>', { type: 'hidden', name: 'card_ids', value: id }));
+    });
+
+    $form.appendTo('body').submit();
+}
+
 function submitCollection(url) {
     console.log("here");
     launchSequence()
@@ -533,18 +548,6 @@ function saveCollectionField(collectionId, fieldName, fieldValue) {
 
     // Add more fields here as needed
   });
-}
-
-
-function cropCard(collectionId, cardId) {
-    window.location.href = "/crop_review/"+collectionId
-    const cardIds = JSON.parse(cardId).map(Number);
-}
-
-function cropCollection(collectionId) {
-  const visibleCards = document.getElementById(`visible-cards-${collectionId}`);
-  const cardIds = JSON.parse(visibleCards.value).map(Number);
-  window.location.href = "/crop_review/"+collectionId
 }
 
 function loadReverse(wrapper) {

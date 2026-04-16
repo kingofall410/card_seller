@@ -126,11 +126,11 @@ def task_calendar(request):
     start_range = month_days[0]
     end_range = month_days[-1]
     
-    listingtasks = ListingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('scheduled_for')
-    pricingtasks = []#PricingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('scheduled_for')
+    listingtasks = ListingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('id')
+    
 
     day_map = {}
-    for task in (list(listingtasks)+list(pricingtasks)):
+    for task in listingtasks:
         d = task.scheduled_for.date()
         day_map.setdefault(d, []).append(task)
 

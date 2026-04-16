@@ -8,6 +8,7 @@
 <script src="{% static 'js/card_spreadsheet.js' %}"></script>
 <script src="{% static 'js/card_monitor.js' %}"></script>
 
+
 <script>
 // --- UI Management ---
 function switchTab(tabId, event) {
@@ -74,13 +75,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Start the monitor whenever a search is performed
     // searchFunction is your existing logic that calls the AJAX for the first time
-    window.performSearch = function(query) {
+    //window.performSearch = function(query) {
         // ... your existing AJAX call to clear and fill the initial page ...
         
         // Then tell the monitor to keep those cards updated
-        cardMon.setQuery(query);
-        cardMon.start(query);
-    };
+        //cardMon.setQuery(query);
+        //cardMon.start(query);
+    //};
 });
 
 // Called by your search result logic
@@ -122,6 +123,30 @@ function syncCardView(id, updatedFields) {
     if (updatedFields.status) {
         card.className = card.className.replace(/status-\w+/, `status-${updatedFields.status.toLowerCase()}`);
     }
+}
+
+function handleBulkUpdate() {
+    // Get the dropdown element
+    const dropdown = document.getElementById('status-dropdown');
+    const selectedValue = dropdown.value;
+    
+    // Construct the URL dynamically
+    const url = `/bulk_status_update/${selectedValue}/`;
+    
+    // Call your existing function or perform the fetch
+    submitCollection(url);
+}
+
+function handleBulkList() {
+    // Get the dropdown element
+    const dropdown = document.getElementById('group-dropdown');
+    const selectedValue = dropdown.value;
+    
+    // Construct the URL dynamically
+    const url = `/bulk_list/${selectedValue}/`;
+    
+    // Call your existing function or perform the fetch
+    submitCollection(url);
 }
 </script>
 <style>
@@ -261,17 +286,45 @@ function syncCardView(id, updatedFields) {
     }
 
     .move-menu a:hover { background-color: #f1f1f1; }
+    .handsontable td img {
+    display: block;
+    height: 250px; /* Or whatever height you want for your Mojo cards */
+    width: auto;
+}
 </style>
 {% include "header.html" %}
+{% get_product_groups as groups %}
 <div id="collection-0" class="collection">
 <div class="collection-node">
   <div class="collection-header">
     
-    <button onclick="submitCardForm(0, null, '/crop_review/0/')">✂</button>
+    <button onclick="submitAndGo('/crop_review/0/')">✂</button>
     <button onclick="submitCollection('/identify_collection/0/')">🔍</button>
     <button onclick="submitCollection('/price_collection/0/')">💲</button>
     <button onclick="submitCollection('/bulk_hold/0/')">✋</button>
-    
+    <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>          
+    <select id="status-dropdown" 
+            style="padding: 4px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-weight: bold; cursor: pointer; 
+                background-color: {{ meta.color }}; transition: background-color 0.3s;">
+        
+        {% for value, label in StatusBase.choices %}
+            {# Optional: Filter to only show Card-related statuses #}
+            <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkUpdate()">Bulk Status Update</button>
+
+    <select id="group-dropdown" class="group-select"
+              data-card-id="{{ card_id }}"
+              style="padding: 8px; border-radius: 6px; min-width: 180px;">
+        <option value="">No Group (Single Listing)</option>
+        <option value="__new__">➕ New Group…</option>
+
+        {% for g in groups %}
+          <option value="{{ g.key }}">{{ g.name }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkList()">Bulk List</button>
 
   </div>
   

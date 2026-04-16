@@ -126,39 +126,61 @@ document.addEventListener("DOMContentLoaded", function () {
     ----------------------------*/
     document.querySelectorAll(".group-select").forEach(select => {
         select.addEventListener("change", async function () {
-            if (this.value !== "__new__") return;
+            // 1. If we aren't creating a new group, we need to fetch the next date
+            if (this.value !== "__new__") {
+                const groupId = this.value;
+                const cardId = "{{ card_id }}"; // Ensure this template tag is rendered correctly
+                
+                // 2. Fetch the next available listing date from your server
+                try {
+                    const response = await fetch(`/get_next_listing_date/?group_id=${groupId}`);
+                    const data = await response.json();
+                    
+                    // 3. Find the specific schedule input for this card
+                    // Assuming your schedule input has an ID like 'schedule-123'
+                    const scheduleInput = document.getElementById(`schedule-${cardId}`);
+                    
+                    if (scheduleInput && data.next_date) {
+                        // Update the value with the date returned from the server
+                        scheduleInput.value = data.next_date;
+                    }
+                } catch (error) {
+                    console.error("Error fetching next date:", error);
+                }
+            } else {
 
-            const title = prompt("Enter a name for the new group:");
-            if (!title || title.trim() === "") {
-                this.value = ""; // Reset dropdown if cancelled
-                return;
-            }
+                const title = prompt("Enter a name for the new group:");
+                if (!title || title.trim() === "") {
+                    this.value = ""; // Reset dropdown if cancelled
+                    return;
+                }
 
-            const url = `/new_group/${encodeURIComponent(title.trim())}`;
+                const url = `/new_group/${encodeURIComponent(title.trim())}`;
 
-            try {
-                const response = await fetch(url);
-                const data = await response.json();
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
 
-                if (data.success) {
-                    // Create the option using the actual ID from the database
-                    const newOption = document.createElement("option");
-                    newOption.value = data.id; 
-                    newOption.textContent = data.title;
+                    if (data.success) {
+                        // Create the option using the actual ID from the database
+                        const newOption = document.createElement("option");
+                        newOption.value = data.id; 
+                        newOption.textContent = data.title;
 
-                    // Insert before the "__new__" option
-                    const newGroupOption = this.querySelector('option[value="__new__"]');
-                    this.insertBefore(newOption, newGroupOption);
+                        // Insert before the "__new__" option
+                        const newGroupOption = this.querySelector('option[value="__new__"]');
+                        this.insertBefore(newOption, newGroupOption);
 
-                    // Set the dropdown to the newly created group
-                    this.value = data.id;
-                } else {
-                    alert("Failed to create group: " + (data.error || "Unknown error"));
+                        // Set the dropdown to the newly created group
+                        this.value = data.id;
+                    } else {
+                        alert("Failed to create group: " + (data.error || "Unknown error"));
+                        this.value = "";
+                    }
+                } catch (err) {
+                    console.error("Group creation failed:", err);
                     this.value = "";
                 }
-            } catch (err) {
-                console.error("Group creation failed:", err);
-                this.value = "";
             }
         });
     });

@@ -25,6 +25,7 @@
         const triggerSearch = () => {
             const query = input.value.trim();
             // Dispatches a custom event so any parent can listen for it
+            console.log("Search query submitted: ", query)
             document.dispatchEvent(new CustomEvent('cardSearchTriggered', { detail: { query } }));
         };
 

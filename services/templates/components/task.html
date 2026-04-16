@@ -16,7 +16,7 @@
                 <td style="vertical-align:middle; padding: 2px 0;">
                     <div style="display:flex; align-items:center; gap:4px; font-size: 10px;">
                         <span>{{ task.status_icon }}</span>
-                        <small>{% if task.listingtask.group_key %}📂{% else %}📄{% endif %}</small>
+                        <small>{% if task.listingtask.group_key %}{% else %}⭐{% endif %}</small>
                         <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">
                             {{ task.listingtask.csr.display_full_name|default:task.name }}
                         </b>
@@ -29,10 +29,10 @@
                 <td colspan="{% if detail_level == 2 %}3{% else %}2{% endif %}" style="padding-bottom: 4px;">
                     <div class="csr-title" style="font-size: 11px; line-height: 1.2; display: flex; align-items: center; gap: 4px;">
                         {% if task.listingtask.group_key %}
-                            <span title="Group Listing">📂</span>
+                            <span title="Group Listing"></span>
                             <b>Group: {{ task.listingtask.group_key }}</b>
                         {% else %}
-                            <span title="Single Listing">📄</span>
+                            <span title="Single Listing">⭐</span>
                             <b>{{ task.listingtask.csr.display_full_name|truncatechars:25 }}</b>
                         {% endif %}
                     </div>

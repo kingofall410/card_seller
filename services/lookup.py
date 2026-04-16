@@ -107,7 +107,7 @@ def refresh_listing_groups(listing_groups=None, lg_ids=None):
     nr_pages = 1
 
     #matches map is keyword_string --> (listing variable, [listings])
-    matches_map = ebay.scrape_with_profile(keyword_strings, limit=50, max_pages=nr_pages)
+    matches_map = ebay.scrape_with_profile(keyword_strings, limit=50)
     csr.update_listings(matches_map)
         
     return matches_map

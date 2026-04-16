@@ -80,16 +80,27 @@ const sortConfig = [
     { label: 'Last Updated', attr: 'modification_date' }
 ];
 
+const filterConfig = [
+    { label: 'Year', attr: 'year' },
+    { label: 'Brand', attr: 'brand' },
+    { label: 'Subset', attr: 'subset' },
+    { label: 'Team', attr: 'team' },
+    { label: 'Status', attr: 'overall_status' },
+    { label: 'Collection', attr: 'collection' },
+    { label: 'Value ($)', attr: 'value' }
+];
+
 // --- UI BUILDERS ---
 
 window.buildDropdowns = function() {
     const container = document.getElementById('dynamic-selectors');
     if (!container) return;
-    
-    const attrs = ['year', 'brand', 'subset', 'team', 'status', 'collection', 'value']; 
     container.innerHTML = ''; 
 
-    attrs.forEach(attr => {
+    filterConfig.forEach(cfg => {
+        const attr = cfg.attr; // The actual data-attribute (e.g., 'full_name')
+        const label = cfg.label; // The UI label (e.g., 'Name')
+        
         const uniqueValues = new Set();
         document.querySelectorAll('.card-item:not(.folder)').forEach(card => {
             const val = card.getAttribute(`data-${attr}`);
@@ -99,8 +110,10 @@ window.buildDropdowns = function() {
         const select = document.createElement('select');
         select.className = 'dynamic-filter-select';
         
-        let optionsHTML = `<option value="label" disabled selected>${attr.toUpperCase()}</option>`;
-        optionsHTML += `<option value="all">-- Reset ${attr} --</option>`;
+        // Use label for the UI
+        let optionsHTML = `<option value="label" disabled selected>${label.toUpperCase()}</option>`;
+        optionsHTML += `<option value="all">-- Reset ${label} --</option>`;
+        
         Array.from(uniqueValues).sort().forEach(val => {
             optionsHTML += `<option value="${val}">${val}</option>`;
         });
@@ -112,13 +125,12 @@ window.buildDropdowns = function() {
             } else if (select.value !== 'label') {
                 if (!window.activeFilters[attr]) window.activeFilters[attr] = [];
                 
-                // Get current checkbox state at the TIME OF SELECTION
+                // Collect logic...
                 const opLT = document.getElementById('op-lt').checked;
                 const opEQ = document.getElementById('op-eq').checked;
                 const opNEQ = document.getElementById('op-neq').checked;
                 const opGT = document.getElementById('op-gt').checked;
                 
-                // Default to "=" if nothing is checked
                 let op = "=";
                 if (opLT) op = "<";
                 if (opGT) op = ">";
@@ -126,10 +138,10 @@ window.buildDropdowns = function() {
                 if (opGT && opEQ) op = ">=";
                 if (opNEQ) op = "!=";
 
-                // Check for duplicates
                 const exists = window.activeFilters[attr].some(f => f.val === select.value && f.op === op);
                 if (!exists) {
-                    window.activeFilters[attr].push({ val: select.value, op: op });
+                    // Important: Store using the 'attr' (the field name)
+                    window.activeFilters[attr].push({ val: select.value, op: op, field: attr });
                 }
             }
             select.value = 'label'; 
@@ -161,54 +173,78 @@ function buildSortBar() {
 
 // --- CORE LOGIC ---
 
-function applyFilters() {
-    const cards = document.querySelectorAll('.card-item:not(.folder)');
+async function applyFilters(mode = 'server') {
     const badgeContainer = document.getElementById('active-filter-badges');
     if (badgeContainer) badgeContainer.innerHTML = '';
-
     persistFilters();
 
-    // 1. Build Badges (Showing the operator)
+    // 1. Build Badges regardless of mode
     Object.keys(window.activeFilters).forEach(attr => {
         const filters = window.activeFilters[attr];
-        if (Array.isArray(filters) && filters.length > 0) {
-            createBadge(attr, filters);
-        }
+        if (Array.isArray(filters) && filters.length > 0) createBadge(attr, filters);
     });
 
-    // 2. Filter Cards
-    cards.forEach(card => {
-        let isVisible = true;
-        
-        for (const [attr, filters] of Object.entries(window.activeFilters)) {
-            if (!Array.isArray(filters) || filters.length === 0) continue;
+    // 2. Execution Logic
+    if (mode === 'server') {
+        AppOrchestrator.updateFilters(window.activeFilters);
+    } else {
+        const cards = document.querySelectorAll('.card-item:not(.folder)');
+        // 2. Filter Cards
+        cards.forEach(card => {
+            let isVisible = true;
             
-            const cardRaw = (card.getAttribute(`data-${attr}`) || '').toLowerCase().trim();
-            const cardNum = parseFloat(cardRaw.replace(/[$,\s]/g, ''));
-
-            // OR logic within a category: Card must match AT LEAST ONE filter in this attribute
-            let categoryMatch = false;
-            filters.forEach(f => {
-                const targetRaw = f.val.toLowerCase().trim();
-                const targetNum = parseFloat(targetRaw.replace(/[$,\s]/g, ''));
+            for (const [attr, filters] of Object.entries(window.activeFilters)) {
+                if (!Array.isArray(filters) || filters.length === 0) continue;
                 
-                // Use numeric comparison if both are numbers, otherwise alphabetical
-                const a = !isNaN(cardNum) && !isNaN(targetNum) ? cardNum : cardRaw;
-                const b = !isNaN(cardNum) && !isNaN(targetNum) ? targetNum : targetRaw;
+                const cardRaw = (card.getAttribute(`data-${attr}`) || '').toLowerCase().trim();
+                const cardNum = parseFloat(cardRaw.replace(/[$,\s]/g, ''));
 
-                if (f.op === "=" && a == b) categoryMatch = true;
-                else if (f.op === "<" && a < b) categoryMatch = true;
-                else if (f.op === ">" && a > b) categoryMatch = true;
-                else if (f.op === "<=" && a <= b) categoryMatch = true;
-                else if (f.op === ">=" && a >= b) categoryMatch = true;
-                else if (f.op === "!=" && a != b) categoryMatch = true;
-            });
+                // 1. Separate the "Requirements" (!=) from the "Matches" (everything else)
+                const notEquals = filters.filter(f => f.op === '!=');
+                const otherOps = filters.filter(f => f.op !== '!=');
 
-            if (!categoryMatch) { isVisible = false; break; }
-        }
-        
-        card.classList.toggle('hidden-card', !isVisible);
-    });
+                let categoryMatch = true; // Default to true
+
+                // 2. Evaluate Requirements (AND logic): 
+                // If any '!=' filter fails (meaning the value IS the forbidden value), the card is hidden.
+                for (const f of notEquals) {
+                    const targetRaw = f.val.toLowerCase().trim();
+                    const targetNum = parseFloat(targetRaw.replace(/[$,\s]/g, ''));
+                    const b = !isNaN(cardNum) && !isNaN(targetNum) ? targetNum : targetRaw;
+
+                    // If the value matches the forbidden value, this requirement fails
+                    if (cardNum == b || cardRaw == b) {
+                        categoryMatch = false; 
+                        break; 
+                    }
+                }
+
+                // 3. Evaluate Matches (OR logic):
+                // Only apply this if there are actually other operators and we haven't already failed the '!=' checks
+                if (categoryMatch && otherOps.length > 0) {
+                    let orMatch = false;
+                    for (const f of otherOps) {
+                        const targetRaw = f.val.toLowerCase().trim();
+                        const targetNum = parseFloat(targetRaw.replace(/[$,\s]/g, ''));
+                        const b = !isNaN(cardNum) && !isNaN(targetNum) ? targetNum : targetRaw;
+                        const a = !isNaN(cardNum) && !isNaN(targetNum) ? cardNum : cardRaw;
+
+                        if (f.op === "=" && a == b) orMatch = true;
+                        else if (f.op === "<" && a < b) orMatch = true;
+                        else if (f.op === ">" && a > b) orMatch = true;
+                        else if (f.op === "<=" && a <= b) orMatch = true;
+                        else if (f.op === ">=" && a >= b) orMatch = true;
+                        
+                        if (orMatch) break;
+                    }
+                    categoryMatch = orMatch;
+                }
+
+                if (!categoryMatch) { isVisible = false; break; }
+            }
+            card.classList.toggle('hidden-card', !isVisible);
+        });
+    }
 
     // Sync Spreadsheet
     if (typeof SpreadsheetModule !== 'undefined' && SpreadsheetModule.filterByCardIds) {
@@ -220,21 +256,29 @@ function applyFilters() {
 }
 
 function createBadge(attr, filters) {
+    // If it's a sort, we do not want to create a badge group at all
+    if (attr === 'sort') return;
+
     const container = document.getElementById('active-filter-badges');
     const badgeGroup = document.createElement('div');
     badgeGroup.className = 'active-badge';
-    badgeGroup.innerHTML = `<strong>${attr.toUpperCase()}: </strong>`;
+    
+    const config = filterConfig.find(c => c.attr === attr);
+    const displayLabel = config ? config.label : attr;
+
+    badgeGroup.innerHTML = `<strong>${displayLabel.toUpperCase()}: </strong>`;
     
     filters.forEach(f => {
         const item = document.createElement('span');
-        // Display as "Brand: > Topps"
         item.innerHTML = `${f.op} ${f.val} <small>&times;</small>`;
+        
         item.onclick = () => {
             window.activeFilters[attr] = window.activeFilters[attr].filter(x => !(x.val === f.val && x.op === f.op));
             applyFilters();
         };
         badgeGroup.appendChild(item);
     });
+    
     container.appendChild(badgeGroup);
 }
 
@@ -246,14 +290,30 @@ function resetAllFilters() {
     document.getElementById('op-neq').checked = false;
     document.getElementById('op-gt').checked = false;
     document.querySelectorAll('.dynamic-filter-select').forEach(s => { if(s.tagName === 'SELECT') s.value = 'label'; });
+    buildSortBar(); // Rebuild UI
     applyFilters();
 }
 
 function handleSortClick(attr) {
-    if (currentSort.attr === attr) { currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc'; }
-    else { currentSort.attr = attr; currentSort.dir = 'asc'; }
+    // Toggle direction if clicking the same field
+    if (currentSort.attr === attr) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.attr = attr;
+        currentSort.dir = 'asc';
+    }
+
+    // SAVE STATE: Structure as { field, op, val } 
+    // where 'op' is the direction and 'val' is the attribute name
+    window.activeFilters['sort'] = [{ 
+        field: 'sort', 
+        op: currentSort.dir, 
+        val: currentSort.attr 
+    }];
+
     buildSortBar();
     sortCards();
+    applyFilters(); // Now includes the sort state in the payload
 }
 
 function sortCards() {

@@ -13,7 +13,7 @@ const CardMonitor = (function() {
             const cardElements = document.querySelectorAll('[data-id]');
             if (cardElements.length === 0) return;
 
-            try {
+            /*try {
                 // We ONLY send the query and the baseline date
                 const params = new URLSearchParams({ 
                     q: query, 
@@ -37,7 +37,7 @@ const CardMonitor = (function() {
                 }
             } catch (err) {
                 console.error("[CardMonitor] Poll Error:", err);
-            }
+            }*/
         };
 
         return {

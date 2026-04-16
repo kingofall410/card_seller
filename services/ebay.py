@@ -647,7 +647,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=1095):
                     query["keywords"] = quote_plus(current_search)
                     result_data[current_search] = (keywords[1], [])
 
-                    while row_count < limit and page_num < max_pages:
+                    while page_num < max_pages:
                         query["offset"] = page_num * limit
                         url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
                         print("URL:", url)

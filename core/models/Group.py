@@ -1,7 +1,10 @@
 from django.db import models
+from django.db.models import Q
 from collections import defaultdict
 from core.models.Utilities import FieldStructure
 from core.models.Status import StatusBase
+from datetime import timedelta
+from django.utils import timezone
 
 class ProductGroup(models.Model):
     group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
@@ -11,6 +14,28 @@ class ProductGroup(models.Model):
     #variation_title_struct = models.ForeignKey(FieldStructure, related_name="groups", on_delete=models.DO_NOTHING)
   
     variation_data = models.JSONField(default=dict)
+
+    @property
+    def next_listing_datetime(self):
+        
+        # Retrieve the last CSR based on the listing date
+        ocsr_list = self.products.exclude(parent_card__listed_card_info__listing_datetime__isnull=True).order_by('parent_card__listed_card_info__listing_datetime')
+        for csr in ocsr_list:
+            print(csr.id, csr.parent_card.listed_card_info.listing_datetime)
+        last_csr = ocsr_list.last()
+        #print("last", last_csr.id)
+        if last_csr and last_csr.parent_card and last_csr.parent_card.listed_card_info:
+            last_lci = last_csr.parent_card.listed_card_info
+            if last_lci.listing_datetime:
+
+                # Use timedelta to add 1 day to the existing datetime
+                return max(timezone.now(), (last_csr.parent_card.listed_card_info.listing_datetime + timedelta(days=1)))
+            else:
+                return max(timezone.now(), (last_csr.listing_tasks.last().scheduled_for + timedelta(days=1)))
+        
+        # Return current time if no previous listing exists
+        return timezone.now()
+
 
     @property
     def size(self):
@@ -73,7 +98,7 @@ class ProductGroup(models.Model):
         csrs = new_csrs+list(self.products.filter(overall_status=StatusBase.LISTED))
         print("csrs", csrs)
         sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
-        variant_skus = [csr.parent_card.listed_card_info.sku for csr in sorted_csrs]
+        variant_skus = [(csr.parent_card.listed_card_info.sku) for csr in sorted_csrs]
         variation_title_bases = [csr.variation_title_base for csr in sorted_csrs]
 
         # Group SKUs by title

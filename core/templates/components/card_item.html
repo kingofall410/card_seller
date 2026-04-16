@@ -32,16 +32,17 @@
 </style>
 {% with asr=card.active_search_results %}
 {% with display_name=asr|get_attribute:"display_full_name" display_year=asr|get_attribute:"display_year" display_brand=asr|get_attribute:"display_brand" %}
-{% with display_subset=asr|get_attribute:"display_subset" display_team=asr|get_attribute:"display_team" %}
-        
-<div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}" data-id-status="{{ card.latest_id_task.status }}" data-pricing-status="{{ card.latest_pricing_task.status }}" data-listing-status="{{ card.latest_listing_task.status }}" data-id="{{ card.id }}" data-year="{{ display_year }}" data-brand="{{ display_brand }}" data-subset="{{ display_subset }}" data-name="{{ display_full_name }}" data-team="{{ display_team }}" data-value="{{ card.value }}" data-modification_date="{{ card.modification_date }}" data-status="{{ asr.overall_status }}" data-collection="{{ card.collection_id }}" >   
+{% with display_subset=asr|get_attribute:"display_subset" display_team=asr|get_attribute:"display_team" display_sku=card.display_sku %}
+    
+<div id="card-{{ card.id }}" class="card-item status-{{ asr.overall_status|lower }}" data-id-status="{{ card.latest_id_task.status }}" data-pricing-status="{{ card.latest_pricing_task.status }}" data-listing-status="{{ card.latest_listing_task.status }}" data-id="{{ card.id }}" data-year="{{ display_year }}" data-brand="{{ display_brand }}" data-subset="{{ display_subset }}" data-name="{{ display_full_name }}" data-team="{{ display_team }}" data-value="{{ card.value }}" data-modification_date="{{ card.modification_date }}" data-overall_status="{{ asr.overall_status }}" data-collection="{{ card.collection_id }}" data-sku="{{ display_sku }}">
     <div class="card-checkbox">
         <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
     </div>
 
     <a href="/card/{{ card.id }}/" target="_blank" onclick="launchSequence('{{ card.id }}');" class="card-main-link" title="hello">
         <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
-        <div class="card-meta">{{ display_year }} {{ display_brand }}</div>
+        <div class="card-meta">{{ asr.overall_status }}</div>
+        <div class="card-meta">{{ display_year }} {{ display_brand }} {{ display_subset }}</div>
         <div class="card-meta">${{ card.value|floatformat:2 }}</div>
         
         <div class="image-wrapper" onmouseenter="loadReverse(this)">
@@ -50,7 +51,7 @@
         </div>
     </a>
 
-    <div class="card-meta" style="color:#000; font-size:10px;">SKU: {{ card.collection_id }}-{{ card.id }}-{{ asr.id }}</div>
+    <div class="card-meta" style="color:#000; font-size:10px;">SKU: {{ display_sku }}</div>
 
     <div class="card-status-footer">
         <div class="status-column">

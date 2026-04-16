@@ -19,12 +19,69 @@ from django.db import connection, transaction, IntegrityError
 from django.db.models import Q
 from django.template.loader import render_to_string
 from core.views import collection_views
-from django.utils.timezone import now
+from django.utils.timezone import now 
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.db.models import F, Value, CharField
 from django.db.models.functions import Concat
-from django.conf import settings
+from django.conf import settings as app_settings
+import operator
+from django.core.exceptions import FieldError
+from django.db.models import OuterRef, Subquery
+
+def build_q_from_filters(filters_json):
+    if not filters_json:
+        return Q()
+    
+    data = json.loads(filters_json)
+    final_q = Q()
+    op_map = {'=': 'exact', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte', '!=': 'neq'}
+
+    for field, items in data.items():
+        field_q = Q()
+        for f in items:
+            op = f.get('op')
+            val = f.get('val')
+            
+            # Logic for field mapping
+            target = 'latest_status' if field == 'overall_status' else (
+                field if hasattr(Card, field) else f"search_results__{field}"
+            )
+            
+            if op == '!=':
+                field_q |= ~Q(**{target: val})
+            else:
+                lookup = f"{target}__{op_map.get(op, 'exact')}"
+                field_q |= Q(**{lookup: val})
+        
+        final_q &= field_q
+    return final_q
+
+# Card-related views
+@csrf_exempt
+def card_test(request):
+    if request.method == 'POST':
+        try:
+            card_ids = request.POST.getlist('card_ids[]')
+            for card_id in card_ids:
+                card = Card.objects.get(id=card_id)
+                if not hasattr(card, 'listed_card_info'):
+                    li = ListedInfo.create_from_card(card)
+                    li.save()
+                else:
+                    li = card.listed_card_info
+
+                if card.active_search_results() and card.active_search_results().overall_status == StatusBase.LISTED:
+                    li.update_from_csr(card.active_search_results())
+                    li.list_price = card.active_search_results().list_price
+                    li.save()
+                card.save()
+                
+
+            return JsonResponse({"success": 'true'}, status=200)
+        except Exception as e:
+            traceback.print_exc()
+            return JsonResponse({'error': str(e)}, status=400)
 
 # Card-related views
 @csrf_exempt
@@ -93,32 +150,19 @@ def view_card(request, card_id):
 
 
 @csrf_exempt
-def crop_review(request, collection_id):  
-
-    collection = Collection.objects.get(id=collection_id)
-    if request.method == "POST":
-        try:
-            card_ids = json.loads(request.POST.get('card_ids', '[]'))
-            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
-        except json.JSONDecodeError:
-            card_list = list(collection.cards.order_by('id'))
-    else:
-        card_list = list(collection.cards.order_by('id'))
-
-    if not card_list:
-        print("no cards")
-        collection = Collection.objects.get(id=collection_id)
-        card_list = collection.cards.all()
-
-    page_number = request.GET.get('page', 1)
+def crop_review(request, collection_id):
+    # Standard POST retrieval
+    card_ids = request.POST.getlist('card_ids')
     
-    #TODO: in these paginated views we need to encapsulate the non-page data better
-    card_tuples = [(card, id_, results) for card in card_list for id_ in (card.id, card.reverse_id) for results in [card.active_search_results()]]
-    #print(card_tuples)
-    paginator = Paginator(card_tuples, len(card_tuples))
-    page_obj = paginator.get_page(page_number)
-    #print("fin:", page_number, "of", paginator.num_pages)
-    return render(request, "crop_review.html", {"page_obj": page_obj, "filtered":(collection.cards.count()-len(card_tuples))})
+    if card_ids:
+        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+    else:
+        card_list = []
+
+    
+    card_tuples = [(card, id_) for card in card_list for id_ in (card.id, card.reverse_id) ]
+    print("CR", card_tuples)
+    return render(request, "crop_review.html", {"card_tuples": card_tuples})
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -140,85 +184,108 @@ def get_spreadsheet_data(request):
     if request.method == 'POST':
         try:
             card_ids = request.POST.getlist('card_ids[]') 
-            print(card_ids)
-            # Use your MEDIA_URL (usually '/media/') to prefix the file path
-            #media_prefix = settings.MEDIA_URL 
 
             records = CardSearchResult.objects.filter(parent_card_id__in=card_ids).annotate(
                 # Path: parent_card -> cropped_image object -> img field
-                front_url=F('parent_card__cropped_image__img'),
-                reverse_url=F('parent_card__cropped_reverse__img'),
-            ).values(*CardSearchResult.listing_fields, 'front_url', 'reverse_url')
-            print(records)
-            return JsonResponse(list(records), safe=False)
+                front_url=Concat(Value(app_settings.MEDIA_URL), F('parent_card__cropped_image__img'), output_field=CharField()),
+                reverse_url=Concat(Value(app_settings.MEDIA_URL), F('parent_card__cropped_reverse__img'), output_field=CharField()),
+                ).distinct('parent_card_id').values('front_url', *CardSearchResult.listing_fields, 'reverse_url')
+
+            #print(card_ids)
+            return JsonResponse(list(records), safe=False, status=200)
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=400)
-
 def card_search_ajax(request):
     query = request.GET.get('q', '').strip()
     since_date_str = request.GET.get('since')
+    filters_json = request.GET.get('filters')
     is_update = request.GET.get('updates_only') is not None
-
-    # 1. Combined Query: Search Text AND Modification Date >= Since Date
-    # We start with the text filters
+    
+    # 1. Define the Subquery to get the 'latest' overall_status
+    latest_result_status = CardSearchResult.objects.filter(
+        parent_card=OuterRef('pk')
+    ).order_by('-id').values('overall_status')[:1]
+    
+    # 2. Base Query: Start with Card and annotate the latest status
+    cards_queryset = Card.objects.annotate(
+        latest_status=Subquery(latest_result_status)
+    )
+    
+    # 3. Base Text Filters (The 'filters' Q object you previously defined)
     filters = Q(
         Q(search_results__full_name__icontains=query) |
         Q(search_results__year__icontains=query) |
         Q(search_results__brand__icontains=query) |
-        Q(search_results__team__icontains=query) |
-        Q(search_results__city__icontains=query) |
-        Q(search_results__subset__icontains=query)
+        Q(search_results__team__icontains=query) 
     )
-
-    # 2. Add the hard 'since' constraint if provided
+    
+    # 4. Handle Filters vs Sort
+    filter_payload = json.loads(filters_json) if filters_json else {}
+    
+    # Separate filter data from sort data to prevent the 'sort__exact' error
+    filter_only_data = {k: v for k, v in filter_payload.items() if k != 'sort'}
+    
+    # Build Q object for filters only
+    dynamic_q = build_q_from_filters(json.dumps(filter_only_data))
+    final_q = filters & dynamic_q
+    
+    # 5. Add modification date constraint
     if since_date_str:
         target_date = parse_datetime(since_date_str)
         if target_date:
-            if timezone.is_naive(target_date):
-                target_date = timezone.make_aware(target_date)
+            final_q &= Q(modification_date__gte=target_date)
             
-            # Use gte (>=) for both initial search and updates per your requirement
-            filters &= Q(modification_date__gte=target_date)
-
-    # Execute the single query
-    cards_list = Card.objects.filter(filters).distinct().order_by('-modification_date', '-id')
-    total_count = cards_list.count()
-
-    # 3. UI Logic (Pagination vs Patching)
+    # Execute base filtering
+    cards_list = cards_queryset.filter(final_q)
+    
+    # 6. Handle Sorting separately from Filtering
+    sort_data = filter_payload.get('sort')
+    if sort_data and isinstance(sort_data, list) and len(sort_data) > 0:
+        # Expected structure: { 'val': 'field_name', 'op': 'asc'/'desc' }
+        s = sort_data[0]
+        field = s.get('val')
+        direction = s.get('op', 'asc').lower()
+        
+        # Add a '-' prefix for descending, ensure field is safe
+        order_prefix = '-' if direction == 'desc' else ''
+        cards_list = cards_list.order_by(f"{order_prefix}{field}")
+    else:
+        # Default sort
+        cards_list = cards_list.order_by('-id')
+    
+    # Use distinct to handle potential duplicates from joins
+    cards_list = cards_list.distinct()
+    
+    print("SQL Query:", cards_list.query)
+    
+    # 7. UI Logic (Pagination vs Patching)
     if is_update:
-        # Patching: Send modified cards
         cards_to_render = cards_list
         has_next = False
         next_page = None
     else:
-        # Standard Search Pagination
-        paginator = Paginator(cards_list, 10)
+        paginator = Paginator(cards_list, 50)
         page_num = request.GET.get('page', 1)
         page_obj = paginator.get_page(page_num)
         cards_to_render = page_obj
         has_next = page_obj.has_next()
         next_page = page_obj.next_page_number() if has_next else None
 
-    # 4. Generate HTML Partial
+    # 8. Generate HTML Partial
     html = render_to_string('components/search_results_partial.html', {
         'cards': cards_to_render,
         'is_refresh': is_update
     }, request=request)
 
-    # 5. Spreadsheet Data
-    columns = CardSearchResult.listing_fields  
-    table_data = [] 
-    #if request.GET.get('page') == '1' or is_update: 
-        #table_data = collection_views.spreadsheet_rows_from_search_result(cards_to_render, columns) 
-
+    # 9. Return JSON Response
     return JsonResponse({
         'html': html,
-        'table_data': table_data,
-        'col_headers': columns,
+        'table_data': [], # Add logic here if needed
+        'col_headers': CardSearchResult.listing_fields,
         'has_next': has_next,
         'next_page': next_page,
-        'total_count': total_count,
+        'total_count': cards_list.count(),
         'server_time': timezone.now().isoformat()
     })
     
@@ -452,6 +519,27 @@ def bulk_hold(request, collection_id):
 
     for card in card_list:
         perform_status_update(card.active_search_results().id, StatusBase.HELD)
+
+    return JsonResponse({"success": True, "error": ""})
+
+@csrf_exempt
+def bulk_status_update(request, status_value):  
+
+    try:
+        card_ids = request.POST.getlist('card_ids[]') 
+        
+        if len(card_ids):    
+            print("lenny", len(card_ids))       
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        else:
+            print("F2")
+            card_list = list(collection.cards.order_by('id'))
+    except json.JSONDecodeError:
+        print("F1")
+        card_list = []
+        
+    for card in card_list:
+        perform_status_update(card.active_search_results().id, status_value)
 
     return JsonResponse({"success": True, "error": ""})
 

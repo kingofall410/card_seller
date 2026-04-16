@@ -53,7 +53,7 @@ def identify_collection(request, collection_id):
 
     collection = Collection.objects.get(id=collection_id)
     try:
-        card_ids = request.POST.getlist('card_ids[] ') 
+        card_ids = request.POST.getlist('card_ids[]') 
         
         if len(card_ids):           
             card_list = Card.objects.filter(id__in=card_ids).order_by('id')

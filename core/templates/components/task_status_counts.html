@@ -1,0 +1,64 @@
+{% block content %}
+         
+<div class="d-flex align-items-center gap-2" id="task-heartbeat-monitor">
+    <span class="badge rounded-pill bg-primary shadow-sm">
+        <i class="bi bi-cpu-fill me-1" id="task-spinner" style="display:none;"></i>
+        Pending: <span id="count-pending">0</span>
+    </span>
+    <span class="badge rounded-pill bg-warning text-dark shadow-sm">
+        Staged: <span id="count-staged">0</span>
+    </span>
+    <span class="badge rounded-pill bg-danger shadow-sm">
+        Failed: <span id="count-failed">0</span>
+    </span>
+</div>
+
+<script>
+    const TaskMonitor = {
+        elements: {
+            pending: document.getElementById('count-pending'),
+            staged: document.getElementById('count-staged'),
+            failed: document.getElementById('count-failed'),
+            spinner: document.getElementById('task-spinner')
+        },
+
+        async refresh() {
+           /* try {
+                const response = await fetch('/services/task_monitor_data/');
+                const result = await response.json();
+                const tasks = result.data || [];
+
+                // Update Counts
+                const counts = tasks.reduce((acc, task) => {
+                    acc[task.status] = (acc[task.status] || 0) + 1;
+                    return acc;
+                }, {});
+
+                this.elements.pending.innerText = counts.pending || 0;
+                this.elements.staged.innerText  = counts.staged || 0;
+                this.elements.failed.innerText  = counts.failed || 0;
+
+                // Toggle spinner if anything is 'running' or 'pending'
+                const isActive = (counts.running > 0 || counts.pending > 0);
+                this.elements.spinner.style.display = isActive ? 'inline-block' : 'none';
+
+                // If Handsontable exists on the current page, update it too
+                if (window.hot && typeof hot.loadData === 'function') {
+                    hot.loadData(tasks);
+                }
+
+            } catch (err) {
+                console.error("Heartbeat failed:", err);
+            }*/
+        },
+
+        init() {
+            // Initial hit and 2s interval
+            this.refresh();
+            setInterval(() => this.refresh(), 2000);
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => TaskMonitor.init());
+</script>
+{% endblock %}

@@ -37,6 +37,7 @@ urlpatterns = [
     path("collection/<int:collection_id>", collection_views.view_collection, name="collection"),
     path("collection/", collection_views.view_ad_hoc_collection, name="view_ad_hoc_collection"),
     path("card/<int:card_id>/", card_views.view_card, name="view_card"),
+    path("card_test/", card_views.card_test, name="card_test"),
     path("card_search_ajax/", card_views.card_search_ajax, name="card_search_ajax"),    
     path("update_csr_status_only/<int:csr_id>", card_views.update_csr_status_only, name="update_csr_status_only"),    
     path("settings/upload/<str:file_type>/", settings_views.settings_file_upload, name="settings_file_upload"),
@@ -64,6 +65,8 @@ urlpatterns = [
     path('async_lg_monitor/', card_views.async_lg_monitor, name='async_lg_monitor'),
     path('price_collection/<int:collection_id>/', collection_views.price_collection, name="price_collection"),
     path('bulk_hold/<int:collection_id>/', card_views.bulk_hold, name="bulk_hold"),
+    path('bulk_list/<str:group_key>/', export_views.bulk_list, name='bulk_list'),
+    path('bulk_status_update/<slug:status_value>/', card_views.bulk_status_update, name="bulk_status_update"),
     path('identify_collection/<int:collection_id>/', collection_views.identify_collection, name="identify_collection"),
     path('listings/', collection_views.listing_view, name="listing_view")
 

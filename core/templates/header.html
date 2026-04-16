@@ -1,312 +1,290 @@
 {% load custom_tags %}
+
 <style>
-.nav-link {
-  display: block;
-  padding: 12px 16px;
-  text-decoration: none;
-  color: #333;
-  font-weight: bold;
-  border-bottom: 1px solid #eee;
-  transition: background 0.2s ease;
+    /* Navigation Core */
+    .custom-navbar {
+        background-color: #333;
+        padding: 8px 24px;
+        display: flex;
+        align-items: center;
+        position: relative;
+        gap: 20px;
+    }
+
+    .nav-link, .sub-nav-link {
+        display: block;
+        padding: 12px 16px;
+        text-decoration: none;
+        color: #333;
+        font-weight: bold;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s ease;
+    }
+
+    .nav-link:hover, .sub-nav-link:hover { background-color: #f2f4f7; }
+    
+    .sub-nav-link { width: 100%; text-align: left; background: white; border: none; font-size: 0.9rem; }
+
+    .navbar-link { color: white; text-decoration: none; font-weight: bold; }
+    .navbar-link:hover { text-decoration: underline; }
+
+    /* Dropdown Systems */
+    .dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background-color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        border-radius: 6px;
+        z-index: 1000;
+        min-width: 300px;
+    }
+
+    /* Task Sub-Menu (Slide out) */
+    .nav-item-wrapper { position: relative; }
+    .sub-dropdown-menu {
+        display: none;
+        position: absolute;
+        left: 100%;
+        top: 0;
+        background-color: white;
+        box-shadow: 5px 2px 10px rgba(0,0,0,0.15);
+        border-radius: 0 6px 6px 0;
+        border-left: 1px solid #eee;
+        min-width: 180px;
+    }
+    .nav-item-wrapper:hover .sub-dropdown-menu { display: block; }
+
+    /* Status Colors - Collection */
+    .status-ready-to-price { background-color: #ffcc0020; }
+    .status-ready-to-list  { background-color: #33cc3320; }
+    .status-identified     { background-color: #ffe6e6; }
+    
+    /* Utility */
+    .add-button {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    /* Custom Task Badges */
+.task-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 50px; /* This makes it a "pill" */
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.nav-link:hover {
-  background-color: #f2f4f7;
+.bg-pending { background-color: #0d6efd; } /* Blue */
+.bg-staged  { background-color: #ffc107; color: #333; } /* Yellow */
+.bg-failed  { background-color: #dc3545; } /* Red */
+
+/* Flex container for the badges */
+#task-heartbeat-monitor {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
-.navbar-link {
-  color: white;
-  text-decoration: none;
-  font-weight: bold;
-  margin-right: 24px;
+/* Simple CSS Spinner (Since you aren't using Bootstrap Icons) */
+.spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s linear infinite;
+    margin-right: 6px;
+    display: inline-block;
+}
+.bg-success { background-color: #198754; } /* Green */
+
+/* Ensure the badges don't wrap and look tight in the nav */
+#task-heartbeat-monitor {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: #444; /* Slight contrast from nav */
+    padding: 4px 12px;
+    border-radius: 8px;
 }
 
-.navbar-link:hover {
-  text-decoration: underline;
-}
-
-/* Ensure the main dropdown doesn't clip the sub-menu */
-.task-dropdown .dropdown-menu {
-  overflow: visible !important;
-}
-
-/* Hover Logic */
-.nav-item-wrapper:hover .sub-dropdown-menu {
-  display: block;
-}
-
-/* Sub-dropdown positioning */
-.sub-dropdown-container:hover .sub-dropdown-menu {
-  display: block;
-}
-/* Sub-menu styling */
-.sub-dropdown-menu {
-  display: none;
-  position: absolute;
-  left: 100%; /* Spits it out to the right */
-  top: 0;
-  background-color: white;
-  box-shadow: 5px 2px 10px rgba(0,0,0,0.15);
-  border-radius: 0 6px 6px 0;
-  border-left: 1px solid #eee;
-  min-width: 180px;
-  z-index: 1001;
-
-
-}/* Reset buttons inside forms to look like nav links */
-.sub-nav-link {
-  display: block;
-  width: 100%;
-  padding: 12px 16px;
-  text-align: left;
-  background: white;
-  border: none;
-  border-bottom: 1px solid #eee;
-  font-size: 0.9rem;
-  font-weight: bold;
-  cursor: pointer;
-  color: #333;
-  transition: background 0.2s;
-}
-
-.sub-nav-link:hover {
-  background-color: #f2f4f7;
-}
-/* card status colors */
-.nav-link .status-pending { color: #fff4cc; background-color: #fff4cc20;}
-.nav-link .status-failed  { color: #af1e1e; background-color: #af1e1e20;}
-.nav-link .status-other   { color: #383838; background-color: #383838;}
-.nav-link .status-listed  { color: #4ca4c2; background-color: #4ca4c220;}
-
-/* collection status colors */
-.status-imported      { background-color: #ffffff; }
-.status-ready-to-price{ background-color: #ffcc0020; }
-.status-ready-to-list { background-color: #33cc3320; }
-.status-identified    { background-color: #ffe6e6; }
-.status-closed        { background-color: #383838; }
-
-.nav-link.status-imported:hover,
-.nav-link.status-identified:hover,
-.nav-link.status-readyprice:hover,
-.nav-link.status-readylist:hover,
-.nav-link.status-listed:hover {
-  filter: brightness(0.95);
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 </style>
 
-<nav style="background-color: #333; padding: 16px 24px; display: flex; align-items: center; position: relative;">
+<nav class="custom-navbar">
+    <div class="dropdown">
+        <button class="dropdown-toggle" style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
+            🗂️ COLLECTION ▾
+        </button>
+        <div class="dropdown-menu" style="min-width: 400px;">
+            <a href="{% url 'manage_collection' %}" class="nav-link">🗃️ All Collections...</a>
+            <a href="{% url 'new_collection' %}" class="nav-link">✨ New Collection...</a>
+            <hr style="margin:0; border-color:#eee;">
+            {% get_collections as collections %}
+            {% for collection in collections %}
+                <a href="{% url 'collection' collection.id %}" class="nav-link status-{{ collection.status|slugify }}">
+                    {{ collection.id }}. {{ collection.name }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
 
-  <!-- COLLECTION DROPDOWN -->
-  <div class="dropdown collection-dropdown" style="position: relative; margin-right: 24px;">
-    <button class="dropdown-toggle"
-            style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
-      🗂️ COLLECTION ▾
+    <div class="dropdown">
+        <button class="dropdown-toggle" style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
+            📤 TASK QUEUE ▾
+        </button>
+        <div class="dropdown-menu" style="overflow: visible;">
+            <div class="nav-item-wrapper">
+                <a href="{% url 'task_queue' %}" class="nav-link d-flex justify-content-between">
+                    <span>Active Queue...</span>
+                    <span style="color: #ccc;">▶</span>
+                </a>
+                <div class="sub-dropdown-menu">
+                    <form method="POST" action="{% url 'start_queue' %}">{% csrf_token %}<button class="sub-nav-link">▶ Start</button></form>
+                    <form method="POST" action="{% url 'stop_queue' %}">{% csrf_token %}<button class="sub-nav-link">⏹ Stop</button></form>
+                    <form method="POST" action="{% url 'reset_queue' %}" onsubmit="return confirm('Reset?');">{% csrf_token %}<button class="sub-nav-link" style="color: #af1e1e;">🔄 Reset</button></form>
+                </div>
+            </div>
+            <a href="{% url 'calendar' %}" class="nav-link">📅 Task Calendar</a>
+        </div>
+    </div>
+
+    <a href="{% url 'listing_view' %}" class="navbar-link">💲 LISTINGS</a>
+    <a href="{% url 'admin:index' %}" class="navbar-link">🛠️ ADMIN</a>
+    <a href="{% url 'test_view' %}" class="navbar-link">🧪 TEST</a>
+    <button class="add-button" onclick="document.getElementById('cardFileInput_0').click()">➕ CARD</button>
+
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+    <button id="monitor-toggle" onclick="TaskMonitor.toggle()" 
+        style="background: #555; color: white; border: 1px solid #777; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">
+        OFF
     </button>
 
-    <div class="dropdown-menu"
-         style="
-           display: none;
-           position: absolute;
-           top: 100%;
-           left: 0;
-           background-color: white;
-           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-           border-radius: 6px;
-           overflow: hidden;
-           min-width: 420px;
-           z-index: 1000;
-         ">
-      <a href="{% url 'manage_collection' %}" class="nav-link">
-        🗃️ All Collections...
-      </a>
-      <a href="{% url 'new_collection' %}" class="nav-link">
-        ✨ New Collection...
-      </a>
-
-
-      {% get_collections as collections %}
-      {% for collection in collections %}
-        <a href="{% url 'collection' collection.id %}" class="nav-link status-{{ collection.status|slugify }}">
-          {{ collection.id }}. {{ collection.name }}
-        </a>
-      {% endfor %}
-
-    </div>
-  </div>
-
-  <!-- TASK QUEUE DROPDOWN -->
-  <div class="dropdown task-dropdown" style="position: relative; margin-right: 24px;">
-      <button class="dropdown-toggle"
-              style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
-        📤 TASK QUEUE ▾
-      </button>
-
-      <div class="dropdown-menu"
-          style="
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            background-color: white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            border-radius: 6px;
-            min-width: 520px;
-            z-index: 1000;
-            overflow: visible; /* CRITICAL: Allows the sub-menu to pop out the side */
-          ">
-        
-        <div class="nav-item-wrapper" style="position: relative;">
-          <a href="{% url 'task_queue' %}" class="nav-link" style="display: flex; justify-content: space-between;">
-            <span>Task Queue...</span>
-            <span style="color: #ccc;">▶</span>
-          </a>
-
-          <div class="sub-dropdown-menu">
-            <form method="POST" action="{% url 'start_queue' %}">
-              {% csrf_token %}
-              <button type="submit" class="sub-nav-link">▶ Start Queue</button>
-            </form>
-            <form method="POST" action="{% url 'stop_queue' %}">
-              {% csrf_token %}
-              <button type="submit" class="sub-nav-link">⏹ Stop Queue</button>
-            </form>
-            <form method="POST" action="{% url 'reset_queue' %}" onsubmit="return confirm('Reset all tasks?');">
-              {% csrf_token %}
-              <button type="submit" class="sub-nav-link" style="color: #af1e1e; border-bottom: none;">🔄 Reset Queue</button>
-            </form>
-          </div>
-        </div>
-
-        <a href="{% url 'calendar' %}" class="nav-link">
-          Task Calendar...
-        </a>
-
-        </div>
-    </div>
-      {% get_tasks as tasks %}    
-      {% for task in tasks %}
-        <span
-           class="nav-link status-{{ task.status|slugify }}"
-           style="display: flex; align-items: center; gap: 10px; padding: 8px;">
-
-          {% if task.img %}
-            <img src="{{ task.img }}" class="thumb"
-                 style="height: 40px; width: 40px; object-fit: contain;">
-          {% else %}
-            <div style="height: 40px; width: 40px; display:flex; align-items:center; justify-content:center; color:#aaa;">
-              —
-            </div>
-          {% endif %}
-
-          <div style="display: flex; flex-direction: column;">
-
-            {% if task.card %}
-              <span style="font-size: 0.85rem; color: #333;">
-                <b>{{ task.card.listing_title }}</b> — ${{ task.card.listing_price }}
-              </span>
-            {% endif %}
-
-            <span style="font-size: 0.85rem; color: #666;">
-              {{ task.scheduled_for }}
-            </span>
-
-            <span style="font-size: 0.85rem;">
-              {{ task.status_icon }}
-            </span>
-          </div>
-            <!-- DELETE BUTTON -->
-              <form method="POST"
-                    action="{% url 'delete_task' task.id %}"
-                    style="margin-left:auto; padding-left:10px;">
-                <button type="submit"
-                        style="background:none; border:none; color:#b00; font-weight:bold; cursor:pointer;">
-                  ✖
-                </button>
-              </form>
-
+    <div id="task-heartbeat-monitor" style="opacity: 0.4; transition: opacity 0.3s ease;">
+        <span class="task-badge bg-pending">
+            <span id="task-spinner" class="spinner" style="display:none;"></span>
+            Pending: <span id="count-pending">0</span>
         </span>
-      {% endfor %}
+        <span class="task-badge bg-success">
+            Success: <span id="count-success">0</span>
+        </span>
+        <span class="task-badge bg-failed">
+            Failed: <span id="count-failed">0</span>
+        </span>
     </div>
-  </div>
+</div>
 
-  <!-- OTHER NAV LINKS -->
-  <a href="{% url 'listing_view' %}" class="navbar-link">
-     💲 LISTINGS
-  </a>
+    <a href="{% url 'settings' %}" class="navbar-link">⚙️</a>
 
-  <a href="{% url 'admin:index' %}" class="navbar-link">
-     🛠️ ADMIN
-  </a>
+    <input type="file" id="cardFileInput_0" style="display:none;" accept="image/*" onchange="uploadImage(0, this.files)" multiple>
+</nav>
 
-  <a href="{% url 'test_view' %}" class="navbar-link">
-     🧪 TEST
-  </a>
-  <button name="card" class="add-button"
-              onclick='triggerFileUpload("cardFileInput_0")'
-              title="Add Card">➕ Card</button>
-
-  <a href="{% url 'settings' %}" class="navbar-link" style="margin-left: auto;">
-     ⚙️ SETTINGS
-  </a>
-
-  <!-- Hidden inputs for click uploads -->
-  <input type="file"
-        id="cardFileInput_0"
-        style="display:none;"
-        accept="image/*"
-        onchange="uploadImage(0, this.files)"
-        multiple>
-  </nav>
 <script>
-function triggerFileUpload(elementId) {
-  document.getElementById(elementId).click();
-}
-document.addEventListener("DOMContentLoaded", function() {
-  const dropdowns = document.querySelectorAll(".dropdown");
+    // --- Dropdown Logic ---
+    document.addEventListener("click", (e) => {
+        const isButton = e.target.classList.contains('dropdown-toggle');
+        const allMenus = document.querySelectorAll(".dropdown-menu");
+        
+        if (!isButton) {
+            allMenus.forEach(m => m.style.display = "none");
+            return;
+        }
 
-  dropdowns.forEach(dropdown => {
-    const button = dropdown.querySelector(".dropdown-toggle");
-    const menu = dropdown.querySelector(".dropdown-menu");
-
-    button.addEventListener("click", function(e) {
-      e.stopPropagation();
-
-      // Close other dropdowns
-      document.querySelectorAll(".dropdown-menu").forEach(m => {
-        if (m !== menu) m.style.display = "none";
-      });
-
-      menu.style.display = (menu.style.display === "block") ? "none" : "block";
+        const currentMenu = e.target.nextElementSibling;
+        allMenus.forEach(m => { if(m !== currentMenu) m.style.display = "none"; });
+        currentMenu.style.display = currentMenu.style.display === "block" ? "none" : "block";
     });
-  });
 
-  document.addEventListener("click", function() {
-    document.querySelectorAll(".dropdown-menu").forEach(menu => {
-      menu.style.display = "none";
-    });
-  });
-});
+    // --- Task Heartbeat Logic ---
+    const TaskMonitor = {
+        isActive: false, // Default to OFF
+        elements: {
+            pending: document.getElementById('count-pending'),
+            success: document.getElementById('count-success'),
+            failed:  document.getElementById('count-failed'),
+            spinner: document.getElementById('task-spinner'),
+            container: document.getElementById('task-heartbeat-monitor'),
+            toggleBtn: document.getElementById('monitor-toggle')
+        },
 
-function uploadImage(collectionId, files) {
-  if (!files || files.length === 0) return;
+        toggle() {
+            this.isActive = !this.isActive;
+            
+            if (this.isActive) {
+                this.elements.toggleBtn.innerText = "ON";
+                this.elements.toggleBtn.style.background = "#198754"; // Green
+                this.elements.container.style.opacity = "1";
+                this.refresh(); // Immediate refresh when turned on
+            } else {
+                this.elements.toggleBtn.innerText = "OFF";
+                this.elements.toggleBtn.style.background = "#555"; // Gray
+                this.elements.container.style.opacity = "0.4";
+                this.elements.spinner.style.display = 'none'; // Stop spinner immediately
+            }
+        },
 
-  const formData = new FormData();
-  for (let i = 0; i < files.length; i++) {
-    formData.append("images", files[i]); // Django expects 'images' as a list
-  }
-  formData.append("collection_id", collectionId);
+        async refresh() {
+            // --- CRITICAL: Exit if the monitor is toggled off ---
+            if (!this.isActive) return;
 
-  fetch("/upload_image/", {
-    method: "POST",
-    body: formData,
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      location.reload(); // or dynamically insert new cards
-    } else {
-      alert("Upload failed: " + data.message);
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const response = await fetch(`/services/task_monitor_data/?start_date=${today}&end_date=${today}`);
+                const result = await response.json();
+                const tasks = result.data || [];
+
+                const counts = { pending: 0, success: 0, failed: 0 };
+                let showSpinner = false;
+                const now = new Date();
+
+                tasks.forEach(t => {
+                    if (counts.hasOwnProperty(t.status)) counts[t.status]++;
+
+                    if (t.status === 'running') {
+                        showSpinner = true;
+                    } else if (t.status === 'pending' && t.scheduled_for) {
+                        const diffMins = (new Date(t.scheduled_for) - now) / 1000 / 60;
+                        if (diffMins > 0 && diffMins <= 10) showSpinner = true;
+                    }
+                });
+
+                this.elements.pending.innerText = counts.pending;
+                this.elements.success.innerText = counts.success;
+                this.elements.failed.innerText  = counts.failed;
+                this.elements.spinner.style.display = showSpinner ? 'inline-block' : 'none';
+
+            } catch (err) {
+                console.error("Heartbeat failed:", err);
+            }
+        },
+
+        init() {
+            // Don't call refresh() immediately here since it's default OFF
+            setInterval(() => this.refresh(), 30000);
+        }
+    };
+    document.addEventListener('DOMContentLoaded', () => TaskMonitor.init());
+
+    // --- Upload Logic ---
+    function uploadImage(colId, files) {
+        if (!files.length) return;
+        const fd = new FormData();
+        for (let f of files) fd.append("images", f);
+        fd.append("collection_id", colId);
+
+        fetch("/upload_image/", { method: "POST", body: fd })
+            .then(r => r.json())
+            .then(d => d.success ? location.reload() : alert("Fail: " + d.message));
     }
-  });
-}
 </script>
