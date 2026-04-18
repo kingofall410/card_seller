@@ -220,32 +220,16 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     league = models.CharField(max_length=500, blank=True)
     features = models.CharField(max_length=500, blank=True)
     ebay_listing_id = models.CharField(max_length=100, blank=True)
-    ebay_listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
+    #ebay_listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
     sku = models.CharField(max_length=100, blank=True)
     ebay_offer_id = models.CharField(max_length=100, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
 
-    ebay_mean_price = models.FloatField(default=0.0)
-    ebay_median_price = models.FloatField(default=0.0)
-    ebay_mode_price = models.FloatField(default=0.0)
-    ebay_low_price = models.FloatField(default=0.0)
-    ebay_high_price = models.FloatField(default=0.0)
-
-    ebay_low_sold_price = models.FloatField(default=0.0)
-    ebay_high_sold_price = models.FloatField(default=0.0)
-    ebay_last_sold_price = models.FloatField(default=0.0)
-    ebay_last_five_avg_sold_price = models.FloatField(default=0.0)
-    ebay_avg_sold_price = models.FloatField(default=0.0)
     ebay_msrp = models.FloatField(default=0.0, null=True)
     ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="products")
     variation_title_base = models.CharField(max_length=100, blank=True, null=True)
 
-    '''id_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
-    refinement_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
-    pricing_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
-    front_cropping_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)
-    back_cropping_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.UNEXECUTED)'''
     overall_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.IMPORTED)
     
     shareable_link_front=models.CharField(max_length=250, null=True, blank=True)
@@ -265,7 +249,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     #this one determines search_results.html order.  The others do fuckall?
     display_fields = [
-       "year", "brand", "subset", "card_name", "parallel", "full_name", "card_number", "city", "team", "attributes", "condition" 
+       "year", "brand", "subset", "card_name", "parallel", "full_name", "card_number", "city", "team", "attributes", "condition", "filter_terms"
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words",  "text_search_string", "sold_search_string", "filter_terms", #"serial_number", "condition", "number_grade"
@@ -322,10 +306,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if sold:
             sold.delete()
 
-        self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-psa -sgc -cgc -beckett")    
+        self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")    
         #if there's a condition already specified, use that, otherwise do a PSA by default
         if self.condition:
-            self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -psa -sgc -cgc -beckett")
+            self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
         else:
             self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
             self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
@@ -371,14 +355,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         
         self.title_to_be = self.build_title(condition_sensitive=True)
         self.variation_title_base = self.build_title(short=True, condition_sensitive=True)
-
-        '''filter_terms = self.filter_terms or "" if self.filter_terms != "-" else ""
-        if not self.sold_search_string_is_manual:
-            self.sold_search_string = str(self.build_title(shorter=True))+" "+filter_terms
+        self.filter_terms = self.filter_terms or " -box -pack -variation -sp -ssp -complete -lot"
         
-        if not self.text_search_string_is_manual:
-            self.text_search_string = str(self.build_title(shorter=True))+" "+filter_terms'''
-
         self.parent_card.update_mod_date()
         
         self.sport = ""
@@ -620,7 +598,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         if pcard.cropped_reverse:        
             csr.reverse_crop_params = CropParams.clone(pcard.cropped_reverse.crop_params.last())        
         csr.ebay_msrp = 0.0
-        csr.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-psa -sgc -cgc -beckett")
+        csr.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett")
         csr.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
         csr.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
         csr.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
@@ -701,30 +679,53 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return csr
     
     def build_set_options(self):
-     
+    
         def get_field_variations(field_value):
             if not field_value or str(field_value).startswith('/'):
                 return []
-                  
+            
             words = field_value.split()
             variations = []
             
-            # Get all sub-combinations of words in this specific field
+            # Get all sub-combinations of words
             for r in range(len(words), 0, -1):
                 for combo in combinations(words, r):
                     variations.append(" ".join(combo))
             return variations
 
+        # 1. Prepare fields and get pools
         fields = [self.display_value("brand"), self.display_value("subset")]
-        # 2. Build a pool of variations for each valid field
-        field_pools = [get_field_variations(val) for val in fields if get_field_variations(val)]
+        
+        # 2. Add an empty string to each pool to represent "0 choices" from that field
+        # We filter out None/Empty values initially, then append '' to each valid list
+        field_pools = []
+        for val in fields:
+            variations = get_field_variations(val)
+            if variations:
+                # Add '' so that the product includes the option of not picking from this pool
+                field_pools.append([''] + variations)
+            else:
+                # If the field itself was empty, effectively only '' is available
+                field_pools.append([''])
 
-        # 3. Generate the Cartesian Product (One choice from each field, in order)
+        # 3. Generate the Cartesian Product
+        # The product will now include combinations like ('', ''), ('Brand', ''), ('', 'Subset'), etc.
+        raw_combos = list(product(*field_pools))
+        
+        # 4. Join and clean up results
+        # We strip() to remove spaces if one of the fields in the pair was empty
+        set_options = set()
+        for combo in raw_combos:
+            joined = " ".join(combo).strip()
+            if joined:  # Only add if it's not a completely empty string
+                set_options.add(joined)
+                
+        # Add back the single brand-only option if desired
         brand_only = self.display_value("brand")
-        set_options = [" ".join(combo) for combo in product(*field_pools)]
-        set_options += [brand_only] if brand_only not in set_options else []
+        if brand_only:
+            set_options.add(brand_only)
 
-        return set_options
+        return sorted(list(set_options))
 
     def build_card_name_options(self):
         card_name_str = self.display_value("card_name")

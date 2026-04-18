@@ -55,49 +55,36 @@ const SpreadsheetModule = (function() {
 
                         const rowChanges = {};
 
-                        // 1. Group changes by row
-                        changes.forEach(([row, col, oldVal, newVal]) => {
+                        changes.forEach(([row, prop, oldVal, newVal]) => {
                             if (oldVal === newVal) return;
+
                             if (!rowChanges[row]) rowChanges[row] = {};
-                            rowChanges[row][col] = newVal;
+
+                            // Normalization: If newVal is null, undefined, or empty, send ""
+                            // This handles when a user hits 'Delete' or 'Backspace' in a cell
+                            const sanitizedValue = (newVal === null || newVal === undefined) ? "" : newVal;
+
+                            const fieldName = prop; 
+                            rowChanges[row][fieldName] = sanitizedValue;
+                            
+                            // Set the manual flag
+                            rowChanges[row][`${fieldName}_is_manual`] = true;
                         });
 
-                        // 2. Define your column configuration
-                        const COL_MAP = {
-                            8: 'brand',
-                            13: 'city',
-                            14: 'subset' // Example index for Subset
-                            // Add other column indices here as needed
-                        };
-
-                        // 3. Process changes
-                        Object.entries(rowChanges).forEach(([rowIndex, changedCols]) => {
+                        // Process rows
+                        Object.entries(rowChanges).forEach(([rowIndex, fields]) => {
                             const row = parseInt(rowIndex);
                             const rowData = hotInstance.getSourceDataAtRow(row);
 
-                            // Initialize with default values (Brand and City)
-                            const fields = {
-                                brand: rowData.brand,
-                                city: rowData.city,
-                                brand_is_manual: false,
-                                city_is_manual: false
+                            // Final payload assembly
+                            const payload = {
+                                // Ensure defaults are also strings, not nulls
+                                brand: rowData.brand || "",
+                                city: rowData.city || "",
+                                ...fields
                             };
 
-                            // Dynamically process the changed column(s)
-                            Object.entries(changedCols).forEach(([colIndex, newValue]) => {
-                                const col = parseInt(colIndex);
-                                const fieldName = COL_MAP[col];
-
-                                if (fieldName) {
-                                    // Update the value
-                                    fields[fieldName] = newValue;
-                                    // Set the is_manual flag
-                                    fields[`${fieldName}_is_manual`] = true;
-                                }
-                            });
-
-                            // Send to quickEdit with the structured payload
-                            quickEdit(hotInstance, row, fields);
+                            quickEdit(hotInstance, row, payload);
                         });
                     }
                 });
@@ -164,11 +151,11 @@ const SpreadsheetModule = (function() {
 
         // Step 1: Get visible row data
         const visibleRowData = hot.getDataAtRow(visualRow);
-        const csrId = visibleRowData[3];
+        const csrId = visibleRowData[2];
 
         // Step 2: Resolve source index using getSourceDataArray
         const sourceData = hot.getSourceDataArray();
-        const sourceRowIndex = sourceData.findIndex(row => String(row[3]) == csrId);
+        const sourceRowIndex = sourceData.findIndex(row => String(row[2]) == csrId);
 
         if (sourceRowIndex < 0) {
             console.warn("Source row not found for csrId:", csrId);

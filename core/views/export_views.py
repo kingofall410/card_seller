@@ -43,9 +43,10 @@ def perform_list(csr_id, publish, group_key, publish_dt=None, price=None, qty=No
     
     core_config = apps.get_app_config("core")
     core_config.queue.schedule_listing_task(name=f"list csr {csr_id}", card=csr.parent_card, csr=csr, when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
-    csr.overall_status = StatusBase.STAGED
+    csr.overall_status = StatusBase.STAGED if csr.overall_status == StatusBase.PENDING else csr.overall_status
     csr.save()
-    if group: 
+    if group and csr.overall_status == StatusBase.STAGED: 
+        group.add_to_product_group_internal(csr)
         group.save()
 
 @csrf_exempt

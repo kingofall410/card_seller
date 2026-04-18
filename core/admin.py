@@ -4,6 +4,7 @@ from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGr
 from core.models.Group import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Cropping import CropParams, CroppedImage
+from core.models.Archive import CardArchive, CSRArchive, CroppedImageArchive, ListedInfoArchive
 
 @admin.register(Card)
 class CardAdmin(admin.ModelAdmin):
@@ -30,6 +31,10 @@ admin.site.register(CroppedImage)
 admin.site.register(Collection)
 admin.site.register(ListingGroup)
 admin.site.register(ListedInfo)
+admin.site.register(ListedInfoArchive)
+admin.site.register(CardArchive)
+admin.site.register(CSRArchive)
+admin.site.register(CroppedImageArchive)
 
 @admin.register(ProductGroup)
 class ProductGroupAdmin(admin.ModelAdmin):

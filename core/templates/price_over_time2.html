@@ -64,12 +64,14 @@
   <div class="title-header">{{ title }} – Sold Price Over Time</div>
 
   <div class="controls">
-    <label for="movingAvgWindow-time">Window (% of points):</label>
+    <label for="movingAvgWindow-time">Window (%):</label>
     <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="25" step="1" min="1" max="50" style="width: 60px;">
+    
+    <label for="maxPriceLimit">Max Price ($):</label>
+    <input type="number" oninput="updateChartWrapper()" id="maxPriceLimit" value="0" step="100" style="width: 80px;">
 
     <div id="toggle-container" style="margin-top: 12px;"></div>
   </div>
-
   <div class="chart-container">
     <canvas id="priceTimeChart-{{ title }}"></canvas>
   </div>
@@ -346,16 +348,23 @@
   // -----------------------------------------------------
   window.updateChart = function() {
     const windowPercentage = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
+    const userMaxLimit = parseFloat(document.getElementById("maxPriceLimit").value) || 0;
     const datasets = [];
 
     let latestDate = null;
-    let globalMin = -1.0;
-    let globalMax = 0.0;
+    let globalMin = Infinity; // Start high to find the true min
+    let globalMax = 0;
 
-    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data, min_price, max_price }) => {
-      if (!getToggleState(key)) return;
+    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
+        if (!getToggleState(key)) return;
 
-      //const filtered = filterByPrice(data, maxPrice);
+        // 1. Calculate boundaries using raw data (the 'data' array)
+        data.forEach(([price]) => {
+            if (price < globalMin) globalMin = price;
+            if (price > globalMax) globalMax = price;
+        });
+
+        // 2. Build datasets (Line + Scatter)...
       const series = buildSeries(data, windowPercentage);
 
       if (series.length) {
@@ -364,8 +373,6 @@
           latestDate = lastPointDate;
         }
 
-        if ((min_price <= globalMin) || (globalMin < 0)) globalMin = min_price;
-        if (max_price > globalMax) globalMax = max_price;
       }
 
       
@@ -400,6 +407,9 @@
             pointHoverRadius: 8
         });
     });
+    
+    // 3. Apply configurable Top boundary
+    const chartMax = (userMaxLimit > 0) ? userMaxLimit : globalMax;
 
     datasetConfigs.forEach(({ key, max_date }) => {
       if (!getToggleState(key)) return;
@@ -437,8 +447,8 @@
           },
           y: {
             title: { display: true, text: 'Price ($)' },
-            min: globalMin,
-            max: globalMax,
+            min: globalMin * 0.95,
+            max: chartMax,
           }
         },
         plugins: {

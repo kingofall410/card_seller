@@ -93,7 +93,7 @@ def price_only_card(card_id, settings_id, ss=None):
 
 def refresh_listing_groups(listing_groups=None, lg_ids=None):
     keyword_strings = []
-    
+    print("refresh", listing_groups, lg_ids)
     #IDs take precedence over objects passed in
     if lg_ids:
         listing_groups = ListingGroup.objects.filter(id__in=lg_ids)

@@ -9,6 +9,9 @@ class StatusBase(models.TextChoices):
     PRICED = "priced", "Priced"
     LISTED = "listed", "Listed"
     HELD = "held","Held"
+    ARCHIVED = "archived", "Archived"
+    UNLISTED = "unlisted", "Unlisted"
+    REHYDRATED = "rehydrated", "Rehydrated"
     #pending, failed
 
     #task
@@ -42,4 +45,6 @@ class StatusBase(models.TextChoices):
             cls.CLOSED: {"icon": "🔒", "color": "#e6f7ff"},
             cls.SUCCESS: {"icon": "✔️", "color": "#fff1f0"},
             cls.HELD: {"icon": "✋", "color": "#fff1f0"},
+            cls.REHYDRATED: {"icon": "✔️", "color": "#444"},
+            cls.UNLISTED: {"icon": "✋", "color": "#fff1f0"},
         }.get(value, {"icon": "❓", "color": "#ffe6e6"})

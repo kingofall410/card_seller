@@ -98,6 +98,32 @@ $(document).ready(function () {
 });
 
 
+function handleArchive(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (confirm(`Are you sure you want to archive this card? (${cardId})`)) {
+        fetch(`/archive/${cardId}/`, {method: 'POST'})
+        .then(response => {
+            if (response.ok) {
+                //document.getElementById(`card-${cardId}`).style.opacity = '0.3';
+                // Optionally remove from DOM or refresh spreadsheet
+            }
+        });
+    }
+}
+
+function handleRehydrate(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    fetch(`/rehydrate/${cardId}/`, { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+        alert("Card rehydrated successfully!");
+        location.reload(); // Refresh to show restored data via your get_attribute tags
+    });
+}
 
 function updateCharCount(input) {
     const maxLength = 80;

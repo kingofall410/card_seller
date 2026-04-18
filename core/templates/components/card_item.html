@@ -46,8 +46,8 @@
         <div class="card-meta">${{ card.value|floatformat:2 }}</div>
         
         <div class="image-wrapper" onmouseenter="loadReverse(this)">
-            <img src="{{ card.cropped_image.url }}" class="thumbnail default" onerror="this.src='/static/images/missing_card.png';" loading="lazy">
-            <img data-src="{{ card.cropped_reverse.url }}" class="thumbnail hover" onerror="this.src='/static/images/missing_reverse.png';">
+            <img src="{{ card.cropped_image.thumbnail.url }}" class="thumbnail default" onerror="this.src='/static/images/missing_card.png';" loading="lazy">
+            <img data-src="{{ card.cropped_reverse.thumbnail.url }}" class="thumbnail hover" onerror="this.src='/static/images/missing_reverse.png';">
         </div>
     </a>
 

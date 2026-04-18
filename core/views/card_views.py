@@ -8,6 +8,7 @@ from core.models.ListingGroup import ListingGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Status import StatusBase
 from core.models.CardSearchResult import CardSearchResult
+from core.models.Archive import CardArchive
 from services.models.models import Settings
 from django.db import models
 from django.core.paginator import Paginator
@@ -57,26 +58,55 @@ def build_q_from_filters(filters_json):
         final_q &= field_q
     return final_q
 
+@csrf_exempt
+def bulk_archive(request):
+    try:
+        card_ids = request.POST.getlist('card_ids[]')
+        if len(card_ids):
+            print("lenny", len(card_ids))
+            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+        else:
+            print("no cards", len(card_ids))
+            card_list = list(collection.cards.order_by('id'))
+    except json.JSONDecodeError:
+        card_list = list(collection.cards.order_by('id'))
+    
+    for card in card_list:
+        CardArchive.archive(card.id)
+
+    return JsonResponse({"success": 'true'}, status=200)
+
+@csrf_exempt
+def archive(request, card_id):
+    ca = CardArchive.archive(card_id)
+    return JsonResponse({"success": 'true'}, status=200)
+
+@csrf_exempt
+def rehydrate(request, card_id):
+    card = CardArchive.rehydrate({"original_id":card_id}, 117)
+
 # Card-related views
 @csrf_exempt
 def card_test(request):
     if request.method == 'POST':
         try:
             card_ids = request.POST.getlist('card_ids[]')
-            for card_id in card_ids:
-                card = Card.objects.get(id=card_id)
-                if not hasattr(card, 'listed_card_info'):
-                    li = ListedInfo.create_from_card(card)
-                    li.save()
-                else:
-                    li = card.listed_card_info
+            ca = CardArchive.archive(card_ids[0])
+            #card = CardArchive.rehydrate(9, 117)
+            
+            #card.save()
+            '''if not hasattr(card, 'listed_card_info'):
+                li = ListedInfo.create_from_card(card)
+                li.save()
+            else:
+                li = card.listed_card_info
 
-                if card.active_search_results() and card.active_search_results().overall_status == StatusBase.LISTED:
-                    li.update_from_csr(card.active_search_results())
-                    li.list_price = card.active_search_results().list_price
-                    li.save()
-                card.save()
-                
+            if card.active_search_results() and card.active_search_results().overall_status == StatusBase.LISTED:
+                li.update_from_csr(card.active_search_results())
+                li.list_price = card.active_search_results().list_price
+                li.save()
+            card.save()'''
+            
 
             return JsonResponse({"success": 'true'}, status=200)
         except Exception as e:
@@ -185,17 +215,43 @@ def get_spreadsheet_data(request):
         try:
             card_ids = request.POST.getlist('card_ids[]') 
 
-            records = CardSearchResult.objects.filter(parent_card_id__in=card_ids).annotate(
-                # Path: parent_card -> cropped_image object -> img field
+            # 1. Fetch the QuerySet (remove .values())
+            # We keep the annotation for the URLs as they are efficient in SQL
+            records = CardSearchResult.objects.filter(
+                parent_card_id__in=card_ids
+            ).annotate(
                 front_url=Concat(Value(app_settings.MEDIA_URL), F('parent_card__cropped_image__img'), output_field=CharField()),
                 reverse_url=Concat(Value(app_settings.MEDIA_URL), F('parent_card__cropped_reverse__img'), output_field=CharField()),
-                ).distinct('parent_card_id').values('front_url', *CardSearchResult.listing_fields, 'reverse_url')
+            ).distinct('parent_card_id')
 
-            #print(card_ids)
-            return JsonResponse(list(records), safe=False, status=200)
+            # 2. Build the display-value list manually
+            processed_data = []
+            
+            # listing_fields should contain the raw field names (e.g., 'brand', 'subset')
+            fields_to_process = CardSearchResult.listing_fields
+
+            for csr in records:
+                # Initialize with the already-calculated URLs
+                row = {
+                    'front_url': csr.front_url,
+                    'reverse_url': csr.reverse_url,
+                    'id': csr.id,
+                }
+                
+                # Use your get_attribute logic for every listing field
+                for field in fields_to_process:
+                    if hasattr(csr, f"display_{field}"):
+                        # This calls your convention: csr|get_attribute:"display_brand"
+                        row[field] = getattr(csr, f"display_{field}")
+                
+                processed_data.append(row)
+
+            return JsonResponse(processed_data, safe=False, status=200)
+
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=400)
+
 def card_search_ajax(request):
     query = request.GET.get('q', '').strip()
     since_date_str = request.GET.get('since')
@@ -473,9 +529,9 @@ def async_price_search(request, lg_id):
     listing_group = ListingGroup.objects.get(id=lg_id)
     csr = listing_group.search_result
     card = csr.parent_card
-    listing_group.save()
-    #core_config = apps.get_app_config("core")
-    #core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=csr, card=card, callback=lookup.refresh_listing_groups, params={"lg_ids":[lg_id]}, on_success_status=StatusBase.PRICED)
+    
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=csr, card=card, callback=lookup.refresh_listing_groups, params={"lg_ids":[lg_id]}, on_success_status=StatusBase.PRICED)
 
     return JsonResponse({"success": True, "error": ""})
 

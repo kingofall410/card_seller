@@ -20,10 +20,6 @@ def get_attribute(obj, attr):
     retval = getattr(obj, attr, None)
     return retval or ""
 
-@register.filter
-def crop_display_img(obj):
-    return obj.crop_display_img()
-
 @register.simple_tag
 def get_choices():
     return CollectionStatus.choices

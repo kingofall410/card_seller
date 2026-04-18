@@ -24,7 +24,7 @@ def task_monitor_data(request):
     start_str = request.GET.get('start_date')
     end_str = request.GET.get('end_date')
 
-    queryset = Task.objects.all() # Or StatusBase.objects.all()
+    queryset = ListingTask.objects.all() # Or StatusBase.objects.all()
 
     if start_str and end_str:
         # Using __date lookup if your strings are YYYY-MM-DD
@@ -37,7 +37,7 @@ def task_monitor_data(request):
     # Sort by closest to "now" so the monitor sees imminent changes first
     tasks = queryset.annotate(
         time_diff_seconds=Abs(Extract(F('scheduled_for') - now, 'epoch'))
-    ).order_by('time_diff_seconds')[:200]
+    ).order_by('time_diff_seconds')
 
     data = []
     for t in tasks:
@@ -143,12 +143,31 @@ def task_calendar(request):
     # 4. Build Unified Day Objects
     day_objects = []
     for d in month_days:
+        # Fetch and sort tasks by ID
+        tasks = sorted(day_map.get(d, []), key=lambda t: t.id)
+        
+        # Build the Day Summary
+        summary = {
+            "total_tasks": len(tasks),
+            "success": sum(1 for task in tasks if task.status == StatusBase.SUCCESS),
+            "success_val": sum(task.listingtask.card.listed_card_info.list_price for task in tasks if task.status == StatusBase.SUCCESS),
+            "failed": sum(1 for task in tasks if task.status == StatusBase.FAILED),
+            "failed_val": sum(task.listingtask.card.listed_card_info.list_price for task in tasks if task.status == StatusBase.FAILED),
+            "pending": sum(1 for task in tasks if task.status == StatusBase.PENDING),
+            "pending_val": sum(task.listingtask.card.listed_card_info.list_price for task in tasks if task.status == StatusBase.PENDING)
+            # Add any other logic like checking for specific task statuses here
+        }
+
+        in_current_month = (d.month == current.month)
+        in_current_week = (week_start <= d <= week_end)
+
         day_objects.append(SimpleNamespace(
             date=d,
-            tasks=day_map.get(d, []),
+            tasks=[task for task in tasks if in_current_week or task.status != StatusBase.SUCCESS],
+            summary=summary, # <--- The new summary object
             is_today=(d == today),
-            in_current_month=(d.month == current.month),
-            in_current_week=(week_start <= d <= week_end)
+            in_current_month=in_current_month,
+            in_current_week=in_current_week
         ))
 
     context = {
@@ -197,3 +216,4 @@ def task_reset(request, task_id):
     task.reset(new_dt)
 
     return JsonResponse({"status": "ok"})
+

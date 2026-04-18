@@ -103,10 +103,9 @@ class ListedInfo(models.Model):
         return lci
 
     def save(self, *args, **kwargs):
-        csr = self.card.active_search_results()
-        self.listing_detail_text = csr.title_to_be if csr else ""
-        if not self.listing_datetime and csr.listing_tasks.exists():
-            self.listing_datetime = csr.listing_tasks.latest("scheduled_for").scheduled_for
-        self.card.save()
-        self.card.update_mod_date()
+        if self.card:
+            csr = self.card.active_search_results()
+            self.listing_detail_text = csr.title_to_be if csr else ""
+            
+            self.card.update_mod_date()
         super().save(*args, **kwargs)

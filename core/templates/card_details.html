@@ -84,6 +84,14 @@
                     onerror="this.onerror=null; this.src='{% static 'images/missing_reverse.png' %}';"
                     class="thumbnail hover">
             </div>
+            <div class="card-actions">
+                <button type="button" class="btn-archive" onclick="handleArchive(event, '{{ card_id }}')">
+                    <i class="fas fa-archive"></i> Archive
+                </button>
+                <button type="button" class="btn-rehydrate" onclick="handleRehydrate(event, '{{ card_id }}')">
+                    <i class="fas fa-sync"></i> Rehydrate
+                </button>
+            </div>
         </div>
     </div>
 </div>

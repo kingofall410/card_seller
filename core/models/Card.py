@@ -7,11 +7,13 @@ import numpy as np
 import cv2
 from django.core.files.base import ContentFile
 from core.models.CardSearchResult import CardSearchResult
+from core.models.Archive import CardArchive
 from django.conf import settings as app_settings
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils.timezone import now
 import traceback
+
 class CollectionStatus(models.TextChoices):
     
     IMPORTED = "imported", "Imported"
@@ -254,30 +256,19 @@ class Card(models.Model):
             return os.path.join(directory, file_list[next_index])
         except (ValueError, IndexError):
             return None
-
-    def crop_display_img(self):
-        if self.cropped_image:
-            return self.cropped_image.img.url
-        return self.portrait_image.img.url
-    
-    def reverse_crop_display_img(self):
-        if self.cropped_reverse:
-            return self.cropped_reverse
-        return self.reverse_image
-
         
     def clear_listed_info(self):
         self.listed_card_info.clear()
         csr = self.active_search_results()
         csr.ebay_product_group = None
         csr.save()
-        self.save()
-        
+        self.save()        
 
     @classmethod
-    def create(cls, collection):
+    def create(cls, collection, create_li=True):
         card = Card.objects.create(collection=collection)
-        card.listed_card_info = ListedInfo.create_from_card(card)
+        if create_li:
+            card.listed_card_info = ListedInfo.create_from_card(card)
         card.save()
         return card
 

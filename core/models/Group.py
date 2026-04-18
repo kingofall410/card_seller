@@ -23,7 +23,8 @@ class ProductGroup(models.Model):
         for csr in ocsr_list:
             print(csr.id, csr.parent_card.listed_card_info.listing_datetime)
         last_csr = ocsr_list.last()
-        #print("last", last_csr.id)
+        print("last", last_csr.id)
+        
         if last_csr and last_csr.parent_card and last_csr.parent_card.listed_card_info:
             last_lci = last_csr.parent_card.listed_card_info
             if last_lci.listing_datetime:
@@ -93,6 +94,10 @@ class ProductGroup(models.Model):
 
         return update_qty_payload
     
+    def add_to_product_group_internal(self, new_csr):
+        new_csr.ebay_product_group = self
+        new_csr.save(update_fields=["ebay_product_group"])
+
     def export_to_ebay_variation_group(self, new_csrs):
         
         csrs = new_csrs+list(self.products.filter(overall_status=StatusBase.LISTED))

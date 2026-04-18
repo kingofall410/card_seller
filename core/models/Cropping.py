@@ -1,6 +1,8 @@
 from django.db import models
 from django.core.files import File
 import os
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
 
 class CropParams(models.Model):
         
@@ -11,7 +13,7 @@ class CropParams(models.Model):
     rotate = models.FloatField(default=0.0)
     display_offset_left = models.FloatField(default=0.0)
     display_offset_top = models.FloatField(default=0.0)
-    img = models.ForeignKey('core.CroppedImage', on_delete=models.DO_NOTHING, related_name="crop_params", null=True)
+    img = models.ForeignKey('core.CroppedImage', on_delete=models.CASCADE, related_name="crop_params", null=True)
 
     @classmethod
     def create(cls, image, x=0, y=0, width=0, height=0, left=0, top=0, rotate=0.0):
@@ -40,13 +42,16 @@ class CroppedImage(models.Model):
 
     #upload_filepath = models.CharField(max_length=250, blank=True)
     img = models.ImageField(blank=True)
-
+    thumbnail = ImageSpecField(source='img',
+                                processors=[ResizeToFill(160, 213)],
+                                format='JPEG',
+                                options={'quality': 60})
     def url(self):
         return self.img.url 
            
     def path(self):
         return self.img.path      
-    
+
     def update(self,content, crop_params):
         
         #save new crop params

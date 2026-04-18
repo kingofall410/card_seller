@@ -65,6 +65,26 @@
             text-transform: uppercase;
             color: #888;
         }
+        /* Day Summary Header */
+        .day-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .summary-badge {
+            padding: 2px 6px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .summary-success { background: #d4edda; color: #000; }
+        .summary-failed { background: #f8d7da; color: #000; }
+        .summary-pending { background: #f4dd834b; color: #000; }
 
         .day-cell { background: #fff; padding: 10px; display: flex; flex-direction: column; }
         .day-cell.today { background-color: var(--today-bg); }
@@ -163,10 +183,25 @@
     {% endfor %}
 
     {% for day in day_objects %}
-        <div class="day-cell {% if day.is_today %}today{% endif %} {% if day.in_current_week %}is-current-week{% endif %}" 
-             data-date="{{ day.date|date:'Y-m-d' }}"
-             data-col="{% cycle '0' '1' '2' '3' '4' '5' '6' %}">
+        <div class="day-cell {% if day.is_today %}today{% endif %} {% if day.summary.is_busy %}is-busy{% endif %}" 
+            data-date="{{ day.date|date:'Y-m-d' }}"
+            data-col="{% cycle '0' '1' '2' '3' '4' '5' '6' %}">
+            
             <div class="day-number">{{ day.date.day }}</div>
+
+            {% if day.summary %}
+                <div class="day-summary">
+                    {% if day.summary.success > 0 %}
+                        <span class="summary-badge summary-success"> {{ day.summary.success }} / ${{ day.summary.success_val|floatformat:0 }}  </span>
+                    {% endif %}
+                    {% if day.summary.pending > 0 %}
+                        <span class="summary-badge summary-pending"> {{ day.summary.pending }} / ${{ day.summary.pending_val|floatformat:0 }}  </span>
+                    {% endif %}
+                    {% if day.summary.failed > 0 %}
+                        <span class="summary-badge summary-failed"> {{ day.summary.failed }} / ${{ day.summary.failed_val|floatformat:0 }}  </span>
+                    {% endif %}
+                </div>
+            {% endif %}
             <div class="task-list-wrapper">
                 {% for task in day.tasks %}
                     <div id="task-{{ task.id }}" data-task-type="{{ task.task_type }}">
