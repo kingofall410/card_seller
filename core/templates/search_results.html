@@ -128,8 +128,7 @@ input[readonly] {
                 rows="5"
                 style="width: 100%; box-sizing: border-box;"
                 data-default="{{ resolved_value }}"
-                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})">
-              {{ resolved_value }}
+                oninput="rebuildTitle('{{ field_name }}', {{ card_counter }})">{{ resolved_value }}
             </textarea>
 
 

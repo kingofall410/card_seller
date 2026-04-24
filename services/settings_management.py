@@ -1,5 +1,5 @@
 import io, csv
-from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Condition, Parallel, Settings
+from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, User, Season, Condition, Parallel, Settings, CardName
 from django.shortcuts import render, redirect
     
 def load_settings_file(dj_file, file_type, user_settings=None):
@@ -71,25 +71,18 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                 print(f"Error creating keyword '{keyword}':", e)
 
 def add_token(field_key, value, all_field_data, user_settings=None):
-    print("Add token: ", field_key, value, all_field_data)
+    print("Add token: ", field_key, value, all_field_data, user_settings)
     new_obj = None
     if not user_settings:
+        print("a")
         user_settings = User.objects.first().active_settings.first()
-    
+    print("c")
     if field_key == "brands" or field_key == "brand": 
         new_obj = Brand.create(value=value, settings=user_settings, field="brands")
 
     elif field_key == "subsets" or field_key == "subset":
-        brand_obj = None
-        if all_field_data:
-            brand_obj = Brand.objects.get(raw_value=all_field_data["brand"], disabled_date=None)
-        
-        if brand_obj:
-            print(value)
-            new_obj = Subset.create(value=value, settings=user_settings, field="subsets", brand=brand_obj)
-        else:
-            #TODO: this should actually probably throw an error, but it needs to be allowed for collapse
-            new_obj = Subset.objects.get_or_create(raw_value=value).first()
+        print("f")
+        new_obj = Subset.create(value=value, settings=user_settings, field="subsets")
 
     elif field_key == "cities" or field_key == "city":   
         new_obj = City.create(value=value, settings=user_settings, field="cities")
@@ -115,5 +108,9 @@ def add_token(field_key, value, all_field_data, user_settings=None):
         new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "parallel":
         new_obj = Parallel.create(value=value, settings=user_settings, field=field_key)
+    elif field_key == "card_name":
+        new_obj = CardName.create(value=value, settings=user_settings, field=field_key)
+    elif field_key == "year" or field_key =="season":
+        new_obj = Season.create(value=value, settings=user_settings, field=field_key)
     
     return new_obj

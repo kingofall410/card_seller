@@ -1,4 +1,5 @@
 from django.db import models
+from django.db import IntegrityError, DatabaseError
 #from django.db.models import Avg
 from django.utils import timezone
 #from scipy.stats import trim_mean
@@ -12,6 +13,7 @@ from services.models.models import Brand, Subset, Team, City, KnownName, CardAtt
 #from services import settings_management as app_settings
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import traceback
 #from itertools import product, combinations
 
 class ListingGroup(models.Model):
@@ -39,6 +41,19 @@ class ListingGroup(models.Model):
     recent_avg_price = models.FloatField(default=0.0)
     min_date = models.DateField(null=True)
     max_date = models.DateField(null=True)
+    
+    recent_date = models.DateField(null=True)
+    
+    trend_recent = models.FloatField(default=0.0)
+    trend_overall = models.FloatField(default=0.0)
+    trend_unfiltered = models.FloatField(default=0.0)
+
+    overall_start_price = models.FloatField(default=0.0)
+    overall_end_price = models.FloatField(default=0.0)
+    unfiltered_start_price = models.FloatField(default=0.0)
+    unfiltered_end_price = models.FloatField(default=0.0)
+    
+    recent_trend_start_price = models.FloatField(default=0.0)
 
     class Meta:
         unique_together = ("search_result", "label")
@@ -64,46 +79,60 @@ class ListingGroup(models.Model):
 
     @classmethod
     def create(cls, search_result, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
-        # 1. Ensure parent exists
+        # 1. Force save the parent and ensure it has an ID
         search_result.save()
+        if not search_result.id:
+            print("❌ Parent SearchResult has no ID. Cannot create group.")
+            return None
 
-        # 2. Use defaults for fields that can change, only match on core identity
-        group, created = cls.objects.get_or_create(
-            search_result=search_result,
-            label=label,
-            is_img=is_img,
-            is_sold=is_sold,
-            defaults={
-                'filter_terms': filter_terms,
-                'id_string': id_string,
-                'color': "rgba(60, 179, 113, 0.8)" if is_sold else "rgba(204, 153, 0, 0.3)"
-            }
-        )
+        # 2. Use ONLY the absolute unique identifiers to find the record
+        # If these match, we update. If not, we create.
+        try:
+            group, created = cls.objects.get_or_create(
+                search_result=search_result,
+                label=label,
+                # If is_img or is_sold changes a group's identity, keep them here. 
+                # If not, move them to defaults.
+                is_img=is_img, 
+                is_sold=is_sold,
+                defaults={'filter_terms': filter_terms, 'id_string': id_string}
+            )
+        except cls.MultipleObjectsReturned:
+            # Emergency backup: if the DB is already messy, grab the last one
+            group = cls.objects.filter(search_result=search_result, label=label).last()
+            created = False
 
-        if not created:
-            # If it already existed, update the fields manually
-            group.filter_terms = filter_terms
-            group.id_string = id_string
-        
-        # 3. Set visual properties
-        group.display = not is_wide and not is_img
+        # 3. Now set the fields that might have changed
+        group.filter_terms = filter_terms
+        group.id_string = id_string
+        group.is_wide = is_wide
+        group.display = "Raw" in label
         group.border_width = 3 if is_refined else 1
         group.line_style = "dotted" if is_wide else "solid"
-        
-        # 4. Final Save
+        group.color = "rgba(60, 179, 113, 0.8)" if is_sold else "rgba(204, 153, 0, 0.3)"
+
+        # 4. The Final Save
         try:
             group.save()
-            print(f"✅ Group {'Created' if created else 'Updated'}: ID {group.id}")
+            # If this works, the ID will definitely be there
+            print(f"✅ Final Save Success. ID: {group.id}")
+            return group
         except Exception as e:
-            print(f"❌ Failed to save group: {e}")
-            
-        return group
+            print(f"❌ THE ACTUAL DB ERROR: {e}")
+            # Look closely at this output - it will name the specific field causing the crash
+            return None
+    @property
+    def relevence_filter_bounds(self):
+        data = [float(l.ebay_price) for l in self.listings.all()]
+        return self.get_relevence_filter_bounds(data)
+    
+    def get_relevence_filter_bounds(self, data):
 
-    def filter_outliers(self, data):
         if len(data) < 4:  # Statistical filtering requires a decent sample size
-            return data
-            
+            return -1, 99999
+
         data.sort()
+
         # Calculate Quartiles
         q1, _, q3 = statistics.quantiles(data, n=4)
         iqr = q3 - q1
@@ -111,51 +140,144 @@ class ListingGroup(models.Model):
         # Define bounds (standard multiplier is 1.5)
         lower_bound = q1 - (1.5 * iqr)
         upper_bound = q3 + (1.5 * iqr)
+
+        return lower_bound, upper_bound
+
+    def filter_outliers(self, data):
+        lower_bound, upper_bound = self.get_relevence_filter_bounds(data)
         
         return [x for x in data if lower_bound <= x <= upper_bound]    
 
     def save(self, *args, **kwargs):
         if self.pk and self.listings.exists():
-            listing_list = self.listings.all()
+            # 1. Sort the OBJECTS once. display_date() is a function, so call it in the key.
+            listing_list = sorted(self.listings.all(), key=lambda x: x.display_date)
             
-            # 1. Process Dates First
-            # Get all display dates as ISO strings
+            # 2. Extract date strings using the function
             date_strings = [l.display_date for l in listing_list if l.display_date]
             
             if date_strings:
-                # Find Min/Max date strings
-                min_dt_str = min(date_strings)
-                max_dt_str = max(date_strings)
+                # Since listing_list is sorted, min is index 0, max is index -1
+                min_dt_str = date_strings[0]
+                max_dt_str = date_strings[-1]
                 
-                # Convert to date objects
                 self.min_date = datetime.fromisoformat(min_dt_str.replace("Z", "+00:00")).date()
                 self.max_date = datetime.fromisoformat(max_dt_str.replace("Z", "+00:00")).date()
                 
-                # 6-Month Threshold
                 six_months_ago = self.max_date - relativedelta(months=6)
-            
-            # 2. Process Prices (Convert to float for math)
-            # Filter out None values and convert to float once
-            float_prices = [float(l.ebay_price) for l in listing_list if l.ebay_price is not None]
-            float_prices_recent = [float(l.ebay_price) for l in listing_list if l.ebay_price and l.display_date and datetime.fromisoformat(l.display_date.replace("Z", "+00:00")).date() >= six_months_ago]
-            
-            clean_recent_prices = self.filter_outliers(float_prices_recent)
-            if float_prices:
-                self.min_price = min(float_prices)
-                self.max_price = max(float_prices)
-                self.avg_price = sum(float_prices) / len(float_prices)
-                self.recent_avg_price = sum(clean_recent_prices) / len(clean_recent_prices)
+                self.recent_date = six_months_ago
+                total_days = (self.max_date - self.min_date).days or 1
 
-                if self.min_price > 0:
-                    self.price_spread = ((self.max_price - self.min_price) / self.min_price) * 100
+                # 3. Segregate Data while MAINTAINING ORDER
+                # We build these from the already-sorted listing_list
+                recent_listings = []
+                float_prices_all = []
+                
+                for l in listing_list:
+                    if l.ebay_price is not None:
+                        price = float(l.ebay_price)
+                        float_prices_all.append(price)
+                        
+                        # Check if this listing is "recent"
+                        l_date_str = l.display_date
+                        if l_date_str:
+                            l_date = datetime.fromisoformat(l_date_str.replace("Z", "+00:00")).date()
+                            if l_date >= six_months_ago:
+                                recent_listings.append(l)
+
+                # Extract recent prices from the recent_listings (which are still sorted)
+                float_prices_recent = [float(l.ebay_price) for l in recent_listings]
+
+                # 4. Filter Outliers (Maintains relative order)
+                clean_prices_all = self.filter_outliers(float_prices_all)
+                clean_prices_recent = self.filter_outliers(float_prices_recent)
+
+                if clean_prices_all:
+                    self.min_price = min(float_prices_all)
+                    self.max_price = max(float_prices_all)
+                    self.avg_price = sum(float_prices_all) / len(float_prices_all)
+
+                    # --- 1. TREND UNFILTERED (First 5% Avg to Last 5%) ---
+                    if len(float_prices_all) >= 2:
+                        # 1. Calculate buffer (5% of data)
+                        buffer_size = max(1, int(len(float_prices_all) * 0.2))
+
+                        # 2. Start point: Average of the FIRST 5%
+                        first_5_percent_avg = sum(float_prices_all[:buffer_size]) / buffer_size
+
+                        # 3. End point: Average of the LAST 5% 
+                        # FIXED SLICE: [-buffer_size:] gets the end of the list
+                        last_5_percent_avg = sum(float_prices_all[-buffer_size:]) / buffer_size
+                        print("bs", buffer_size, first_5_percent_avg, last_5_percent_avg)
+                        
+                        # 4. Calculate ftrend
+                        if first_5_percent_avg > 0:
+                            self.trend_overall = ((last_5_percent_avg - first_5_percent_avg) / first_5_percent_avg * 100)
+                        else:
+                            self.trend_overall = 0
+
+                        # Store the start and end points for JS plotting
+                        self.unfiltered_start_price = first_5_percent_avg
+                        self.unfiltered_end_price = last_5_percent_avg
+                        
+                    # --- 1. TREND OVERALL (First 5% Avg to Last 5%) ---
+                    if len(clean_prices_all) >= 2:
+                        # 1. Calculate buffer (5% of data)
+                        buffer_size = max(1, int(len(clean_prices_all) * 0.2))
+
+                        # 2. Start point: Average of the FIRST 5%
+                        first_5_percent_avg = sum(clean_prices_all[:buffer_size]) / buffer_size
+
+                        # 3. End point: Average of the LAST 5% 
+                        # FIXED SLICE: [-buffer_size:] gets the end of the list
+                        last_5_percent_avg = sum(clean_prices_all[-buffer_size:]) / buffer_size
+                        print("bs", buffer_size, first_5_percent_avg, last_5_percent_avg)
+                        
+                        # 4. Calculate ftrend
+                        if first_5_percent_avg > 0:
+                            self.trend_overall = ((last_5_percent_avg - first_5_percent_avg) / first_5_percent_avg * 100)
+                        else:
+                            self.trend_overall = 0
+
+                        # Store the start and end points for JS plotting
+                        self.overall_start_price = first_5_percent_avg
+                        self.overall_end_price = last_5_percent_avg
+                        #this will be the RRP
+                        self.recent_avg_price = self.overall_end_price
+
+                    # --- 2. TREND RECENT (Branching off the Overall Trend) ---
+                    if len(clean_prices_recent) >= 2:
+                        # 1. Find the "Overall Trend Value" at the moment the recent period started
+                        # We use the index to find how far through the timeline we are
+                        total_count = len(clean_prices_all)
+                        recent_count = len(clean_prices_recent)
+                        progress_ratio = (total_count - recent_count) / total_count if total_count > 0 else 0
+
+                        # The Y-value on the Overall Trend line where the Recent Trend starts
+                        self.recent_trend_start_price = self.overall_start_price + (
+                            (self.overall_end_price - self.overall_start_price) * progress_ratio
+                        )
+
+                        # Recent trend starts at the branch and ends at the actual current average (last 5%)
+                        self.trend_recent = ((last_5_percent_avg - self.recent_trend_start_price) / self.recent_trend_start_price * 100) if self.recent_trend_start_price > 0 else 0
+                    else:
+                        self.trend_recent = 0
+                        self.recent_avg_price = self.avg_price
+
+                    # --- VELOCITY ---
+                    total_months = total_days / 30.44
+                    self.velocity_total = len(listing_list) / total_months if total_months > 0 else len(listing_list)
+                    
+                    recent_days = (self.max_date - six_months_ago).days
+                    recent_months = min(recent_days, total_days) / 30.44
+                    self.velocity_recent = len(recent_listings) / recent_months if recent_months > 0 else 0
                 else:
-                    self.price_spread = 0
-            else:
-                self.min_price = self.max_price = self.avg_price = 0
-        print(f"Saving LG {self.id}; RAP={self.recent_avg_price}")
+                    # Reset values if no clean prices found
+                    self.min_price = self.max_price = self.avg_price = 0
+                    self.trend_overall = self.trend_recent = self.velocity_total = self.velocity_recent = 0
+            
         self.search_string = " ".join(filter(None, [self.id_string, self.filter_terms]))
         super().save(*args, **kwargs)
-        print(f"After super.save Saving LG {self.id}; RAP={self.recent_avg_price}")
         self.search_result.update_value()
 
     def serialize_listings(self):

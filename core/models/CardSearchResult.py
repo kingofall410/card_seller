@@ -36,7 +36,7 @@ class OverrideableFieldsMixin(models.Model):
             else:
                 print("G")
                 selected_token = app_settings.add_token(field, value, all_field_data, user_settings=None)
-                print("H:", selected_token)
+                #print("H:", selected_token)
                 if selected_token:
                     avail_token_manager.add(selected_token)
                 print("I")
@@ -50,6 +50,13 @@ class OverrideableFieldsMixin(models.Model):
             pass
 
         return selected_token
+
+    def check_update_set_token(self, field_name, field_value):
+        #the_set = CardSet.objects.get_or_create(
+        print("year:", self.year_selected_token, self.display_year)
+        print("brand:", self.brand_selected_token, self.display_brand)
+        print("subset:", self.subset_selected_token, self.display_subset)
+
 
     def set_ovr_attribute(self, field, new_field_value, is_manual, all_field_data={}):
         print("setting over: ", field)
@@ -85,7 +92,10 @@ class OverrideableFieldsMixin(models.Model):
         #remove this hardcode
         if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
-    
+
+        #if field in self.set_definition_fields:
+            #self.check_update_set_token(field, new_field_value)
+
     def __getattr__(self, name):
         #print("getattr", name)
         if name.startswith("display_"):
@@ -249,7 +259,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     #this one determines search_results.html order.  The others do fuckall?
     display_fields = [
-       "year", "brand", "subset", "card_name", "parallel", "full_name", "card_number", "city", "team", "attributes", "condition", "filter_terms"
+       "year", "brand", "subset", "card_name", "parallel", "full_name", "card_number", "city", "team", "attributes", "condition", "filter_terms", "unknown_words"
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words",  "text_search_string", "sold_search_string", "filter_terms", #"serial_number", "condition", "number_grade"
@@ -276,6 +286,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ]
 
     calculated_fields = ["title_to_be", "text_search_string", "sold_search_string"]#, "filter_terms"]
+    
+    set_definition_fields = ["year", "brand", "subset"]
 
     text_fields = ["unknown_words"]
 
@@ -349,14 +361,19 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return self.reverse_crop_params
         else:
             return self.front_crop_params
-        
+     
+    def perform_status_update(self, new_status):
+        self.overall_status = new_status
+        # Use .filter().update() to avoid re-triggering ASR.save()
+        type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
+
+
     def save(self, *args, **kwargs):
         print("saving csr", self.id, self.title_to_be, self.title_to_be_m, self.title_to_be_is_manual)
         
         self.title_to_be = self.build_title(condition_sensitive=True)
         self.variation_title_base = self.build_title(short=True, condition_sensitive=True)
-        self.filter_terms = self.filter_terms or " -box -pack -variation -sp -ssp -complete -lot"
-        
+        self.filter_terms = self.filter_terms or " -box -pack -variation -sp -ssp -lot -auto -autograph"
         self.parent_card.update_mod_date()
         
         self.sport = ""
@@ -480,7 +497,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         ]
 
         # Add to summary as a single tuple
-        #summary["unknown_words"] = [(1, 100, ", ".join(unknown_tokens))]
+        summary["unknown_words"] = [(1, 100, ", ".join(unknown_tokens))]
 
         print("Aggregate with percentages:")
         for field, entries in summary.items():
@@ -520,7 +537,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     else:
                         final_value = ""
 
-                self.set_ovr_attribute(field_name, final_value, False)
+                if field_name in self.overrideable_fields:
+                    self.set_ovr_attribute(field_name, final_value, False)
+                elif field_name != 'condition':
+                    setattr(self, field_name, final_value)
 
         
         self.set_ovr_attribute("title_to_be", self.build_title(condition_sensitive=True), False)
@@ -579,6 +599,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 else:
                     print("setting: ", field_name, field_value)
                     setattr(self, field_name, field_value)
+
             elif hasattr(self.parent_card, field_name):
                 setattr(self.parent_card, field_name, field_value)
         print("done")
@@ -1022,8 +1043,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             val2 = raw_group.modified_avg
         print("UV", val, val2)
         self.ebay_msrp = val
-        self.parent_card.listed_card_info.msrp = self.ebay_msrp
-        self.save(update_fields=["ebay_msrp"])
+        if hasattr(self.parent_card, "listed_card_info"):
+            self.parent_card.listed_card_info.msrp = self.ebay_msrp
+            self.save(update_fields=["ebay_msrp"])
         self.parent_card.save()
 
 #TODO: needs to be refactored into ProductGroup

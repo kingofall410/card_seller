@@ -12,7 +12,7 @@
   <style>
     .chart-container {
       width: 100%;
-      min-height: 400px;
+      min-height: 500px;
       margin: 40px auto;
     }
     .title-header {
@@ -30,7 +30,6 @@
     }
     canvas {
       width: 100% !important;
-      height: 400px !important;
       }
   #chartjs-custom-tooltip {
   position: fixed;        /* instead of absolute */
@@ -57,20 +56,60 @@
     margin-top: 6px;
     border-radius: 4px;
   }
+.title-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px; /* Space between title and button */
+  text-align: center;
+  margin-top: 20px;
+  font-size: 22px;
+  font-weight: bold;
+}
 
+.refresh-btn {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.refresh-btn:hover {
+  background-color: #e0e0e0;
+}
+
+.refresh-btn:active {
+  background-color: #d0d0d0;
+  transform: translateY(1px);
+}
   </style>
 </head>
 <body>
-  <div class="title-header">{{ title }} – Sold Price Over Time</div>
-
+  <div class="title-header">
+  {{ title }} – Sold Price Over Time
+  <button type="button" class="refresh-btn" id="refresh-trigger" onclick="updateChartData()">
+      🔄 Refresh
+  </button>
+</div>
   <div class="controls">
-    <label for="movingAvgWindow-time">Window (%):</label>
-    <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="25" step="1" min="1" max="50" style="width: 60px;">
-    
-    <label for="maxPriceLimit">Max Price ($):</label>
-    <input type="number" oninput="updateChartWrapper()" id="maxPriceLimit" value="0" step="100" style="width: 80px;">
+      <label for="movingAvgWindow-time">Window (%):</label>
+      <input type="number" oninput="updateChartWrapper()" id="movingAvgWindow-time" value="25" step="1" min="1" max="50" style="width: 60px;">
+      
+      <label for="maxPriceLimit">Max Price ($):</label>
+      <input type="number" oninput="updateChartWrapper()" id="maxPriceLimit" value="0" step="100" style="width: 80px;">
 
-    <div id="toggle-container" style="margin-top: 12px;"></div>
+      <div style="margin-top: 12px;">
+        <label><input type="radio" name="timeRange" value="3" onchange="updateChartWrapper()" checked> 3 Months</label>
+        <label><input type="radio" name="timeRange" value="6" onchange="updateChartWrapper()"> 6 Months</label>
+        <label><input type="radio" name="timeRange" value="12" onchange="updateChartWrapper()"> 1 Year</label>
+        <label><input type="radio" name="timeRange" value="0" onchange="updateChartWrapper()"> All Time</label>
+      </div>
+
+      <div id="toggle-container" style="margin-top: 12px;"></div>
   </div>
   <div class="chart-container">
     <canvas id="priceTimeChart-{{ title }}"></canvas>
@@ -336,7 +375,7 @@
     }
 
     return sorted;
-}
+  }
 
   function getToggleState(key) {
     const el = document.getElementById(`toggle-${key}`);
@@ -349,128 +388,262 @@
   window.updateChart = function() {
     const windowPercentage = Math.max(1, parseInt(document.getElementById("movingAvgWindow-time").value));
     const userMaxLimit = parseFloat(document.getElementById("maxPriceLimit").value) || 0;
+    
     const datasets = [];
-
-    let latestDate = null;
-    let globalMin = Infinity; // Start high to find the true min
     let globalMax = 0;
+    const today = new Date();
+    const todayISO = today.toISOString();
 
-    datasetConfigs.forEach(({ key, label, color, borderWidth, lineStyle, data }) => {
-        if (!getToggleState(key)) return;
+    // --- STEP 1: PRE-CALCULATE BOUNDARIES ---
+    // We need to know the latest date across all datasets BEFORE we set the minDate
+    let absoluteLatestDate = null;
+    datasetConfigs.forEach(({ key, data, rp_upper }) => {
+      if (!getToggleState(key)) return;
+      data.forEach(([price, , , date]) => {    
+        const d = new Date(date);
+        if (!absoluteLatestDate || d > absoluteLatestDate) absoluteLatestDate = d;
+      });
+      if (rp_upper > globalMax) globalMax = rp_upper;
+    });
+    
+    // --- STEP 2: CALCULATE VIEWPORT (The Buttons) ---
+    const radioEl = document.querySelector('input[name="timeRange"]:checked');
+    const selectedRange = radioEl ? parseInt(radioEl.value) : 0;
 
-        // 1. Calculate boundaries using raw data (the 'data' array)
-        data.forEach(([price]) => {
-            if (price < globalMin) globalMin = price;
-            if (price > globalMax) globalMax = price;
+    let minDate = undefined;
+    if (selectedRange > 0) {
+        // Look back from Today
+        minDate = new Date(today); 
+        minDate.setMonth(minDate.getMonth() - selectedRange);
+    }
+
+    // --- STEP 3: BUILD DATASETS ---
+    datasetConfigs.forEach(({ key, label, color, lineStyle, data, trend_overall, trend_recent, recent_date, velocity_recent, overall_start_price, overall_end_price, branch_point_y, rp_upper, rp_lower, unfiltered_start, unfiltered_end }) => {
+      if (!getToggleState(key)) return;
+      
+      const series = buildSeries(data, windowPercentage);
+      console.log(rp_upper, series[0])
+      if (!series.length) return;
+      if (label.includes("ID")) {
+          datasets.push({
+            label: `${label} Valid Zone`,
+            data: [
+                { x: series[0].x, y: rp_upper }, // Start of the ceiling
+                { x: todayISO, y: rp_upper }     // End of the ceiling
+            ],
+            type: 'line',
+            // 'origin' fills from the line down to the 0 axis
+            fill: 'origin', 
+            // Use a very low decimal for the alpha (0.03 to 0.07)
+            backgroundColor: 'rgba(247, 234, 199, 0.6)', 
+            borderColor: 'transparent', 
+            pointRadius: 0,
+            lineTension: 0,
+            showLine: true,
+            order: 10 // Ensures it stays behind the scatter dots
+        });
+      } else {
+        // 1. OVERALL TREND LINE
+        const overallStartPrice = overall_start_price; 
+        const overallCurrentPrice = overallStartPrice * (1 + (trend_overall / 100));
+        console.log("overall:", overallStartPrice, overallCurrentPrice, overall_end_price, trend_overall)
+        datasets.push({
+            label: `${label} Overall Trend`,
+            data: [
+                { x: series[0].x, y: overallStartPrice }, 
+                { x: todayISO, y: overallCurrentPrice }
+            ],
+            type: 'line',
+            borderColor: color,
+            borderDash: [6, 9],
+            pointRadius: 0,
+            yAxisID: 'y' 
         });
 
-        // 2. Build datasets (Line + Scatter)...
-      const series = buildSeries(data, windowPercentage);
+        // 2. RECENT TREND LINE
+        const recentStartDate = new Date(recent_date).toISOString();
+        const recentStartPoint = branch_point_y;
 
-      if (series.length) {
-        const lastPointDate = new Date(series[series.length - 1].x);
-        if (!latestDate || lastPointDate > latestDate) {
-          latestDate = lastPointDate;
-        }
+        // The starting Y is now calculated relative to the Overall Line's height at that time
+        const recentCurrentPrice = branch_point_y * (1 + (trend_recent / 100));
+        console.log("recent:", recentStartPoint, overallCurrentPrice)
+        console.log("rcp:", recentCurrentPrice, trend_recent, branch_point_y)
+        console.log(todayISO)
+        datasets.push({
+            label: `${label} Recent Trend (${trend_recent.toFixed(1)}%)`,
+            data: [
+                { x: recentStartDate, y: recentStartPoint }, 
+                { x: todayISO, y: recentCurrentPrice }
+            ],
+            type: 'line',
+            borderColor: color,
+            borderDash: [2, 2],
+            pointRadius: 0,
+            yAxisID: 'y' 
+        });
+            
+        // UNFILTERED TREND LINE
+        const unfilteredStart = unfiltered_start; 
+        const unfilteredEnd = unfiltered_end
+        console.log("overall:", overallStartPrice, overallCurrentPrice, overall_end_price, trend_overall)
+        datasets.push({
+            label: `Unfiltered`,
+            data: [
+                { x: series[0].x, y: unfilteredStart }, 
+                { x: todayISO, y: unfilteredEnd }
+            ],
+            type: 'line',
+            borderColor: 'rgba(255, 99, 132, 0.8)',
+            borderDash: [6, 9],
+            pointRadius: 0,
+            yAxisID: 'y' 
+        });
 
-      }
-
-      
-      datasets.push({
+        // 3. Price Avg Line
+        datasets.push({
             label: `${label} (Avg)`,
             data: series,
             type: 'line',
-            fill: false,
             borderColor: color,
             tension: 0.6,
             borderWidth: 2,
-            pointRadius: 0, // Hide points on the line
+            pointRadius: 0,
             borderDash: lineStyle === "dotted" ? [6, 4] : []
         });
 
-        // 3. Add Scatter Dataset (The Raw Sales)
-        // Map original data to the format required for the chart
-        const scatterData = data.map(([price, title, thumb, date, id]) => ({
-            x: new Date(date).toISOString(),
-            y: price,
-            title,
-            thumb,
-            ids: [String(id)]
-        }));
-
+        // 4. Sales Velocity
         datasets.push({
-            label: `${label} (Sales)`,
-            data: scatterData,
-            type: 'scatter',
-            backgroundColor: color.replace("0.8", "0.4"),
-            pointRadius: 3,
-            pointHoverRadius: 8
+            label: `${label} Velocity`,
+            data: series.map(p => ({ x: p.x, y: velocity_recent })),
+            type: 'line',
+            backgroundColor: color.replace("0.8", "0.05"),
+            fill: true,
+            yAxisID: 'yVelocity',
+            pointRadius: 0,
+            borderWidth: 0
         });
+      }
+      // 5. Raw Sales (Scatter)
+      // 1. Map your colors while you map your data
+      const scatterData = [];
+      const pointColors = [];
+
+      data.forEach(([price, title, thumb, date, id]) => {
+          scatterData.push({
+              x: new Date(date).toISOString(),
+              y: price,
+              title,
+              thumb,
+              ids: [String(id)]
+          });
+
+          // Define your threshold logic here
+          if (price > rp_upper) {
+              pointColors.push('rgba(255, 99, 132, 0.8)'); // Red for high price
+          } else {
+              pointColors.push(color.replace("0.8", "0.4")); // Default color
+          }
+      });
+
+      // 2. Pass the array to the dataset
+      datasets.push({
+          label: `${label} (Sales)`,
+          data: scatterData,
+          type: 'scatter',
+          backgroundColor: pointColors, // Chart.js maps this index-to-index
+          pointRadius: 3,
+          pointHoverRadius: 8
+      });
     });
     
-    // 3. Apply configurable Top boundary
-    const chartMax = (userMaxLimit > 0) ? userMaxLimit : globalMax;
+    const chartMax = ((userMaxLimit > 0) ? userMaxLimit : globalMax*3);
 
-    datasetConfigs.forEach(({ key, max_date }) => {
-      if (!getToggleState(key)) return;
-
-      const date = new Date(max_date);
-      if (!latestDate || date > latestDate) {
-        latestDate = date;
-      }
-    });
-
-    let minDate = undefined;
-    if (latestDate) {
-      minDate = new Date(latestDate);
-      minDate.setFullYear(minDate.getFullYear() - 1);
-    }
-
+    // --- STEP 4: RENDER ---
     if (timeChart) {
-      timeChart.clear();
-      timeChart.destroy();
-      timeChart = null;
+        timeChart.destroy();
     }
 
     timeChart = new Chart(ctxTime, {
-      type: 'line',
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            type: 'time',
-            time: { unit: 'month', tooltipFormat: 'MMM dd, yyyy' },
-            title: { display: true, text: 'Date' },
-            min: minDate
-          },
-          y: {
-            title: { display: true, text: 'Price ($)' },
-            min: globalMin * 0.95,
-            max: chartMax,
-          }
-        },
-        plugins: {
-          // tooltip: {
-          //   enabled: false,
-          //   external: externalTooltipHandler
-          // },
-          zoom: {
-            pan: { enabled: true, mode: 'x' },
-            zoom: {
-              wheel: { enabled: true },
-              pinch: { enabled: true },
-              mode: 'x'
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { 
+                        unit: 'month',
+                        displayFormats: { month: 'MMM yyyy' }
+                    },
+                    min: minDate,
+                    max: todayISO, 
+                    title: { display: true, text: 'Date' }
+                },
+                y: {
+                    type: 'linear',
+                    position: 'right',
+                    max: chartMax,
+                    min: 0,
+                    title: { display: true, text: 'Price ($)' }
+                }/*,
+                yVelocity: {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Sales/Mo' }
+                }*/
+            },
+            plugins: {
+                tooltip: {
+                  enabled: false,
+                  external: externalTooltipHandler
+                },
+                legend: { display: true },
+                zoom: {
+                    pan: { enabled: true, mode: 'x' },
+                    zoom: { wheel: { enabled: true }, mode: 'x' }
+                }
             }
-          }
         }
-      }
     });
   };
 
   updateChartWrapper();
+  window.updateChartData = async function() {
+      const btn = document.getElementById('refresh-trigger');
+      const csr_id = "{{ search_result_id }}"; // Your ListedInfo ID
+
+      try {
+          btn.innerHTML = "⌛ Updating...";
+          btn.disabled = true;
+
+          const response = await fetch('/refresh_lg_calcs/{{ search_result.id }}/', {
+              method: 'POST'
+          });
+
+          const result = await response.json();
+
+          if (!result.error) {
+              console.log("Success:", result.message);
+              // Reload to show the newly calculated trend lines
+              window.location.reload();
+          } else {
+              console.error("Server Error:", result.message);
+              btn.innerHTML = "❌ Error";
+          }
+      } catch (error) {
+          console.error("Fetch Error:", error);
+          btn.innerHTML = "❌ Error";
+      } finally {
+          setTimeout(() => {
+              btn.innerHTML = "🔄 Refresh";
+              btn.disabled = false;
+          }, 2000);
+      }
+  };
 })();
+
 </script>
 
 </body>

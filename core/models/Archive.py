@@ -53,7 +53,7 @@ class CroppedImageArchive(models.Model):
             return cia
         except CroppedImage.DoesNotExist:
             return False
-
+#ok rehydration is working; Next steps: Alter the process to MOVE main files and delete the un-archived files 
 class CSRArchive(models.Model):
     
     original_id = models.IntegerField() # Keep reference to the old PK

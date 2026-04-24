@@ -97,9 +97,8 @@ def refresh_listing_groups(listing_groups=None, lg_ids=None):
     #IDs take precedence over objects passed in
     if lg_ids:
         listing_groups = ListingGroup.objects.filter(id__in=lg_ids)
-        
+    
     csr = listing_groups[0].search_result
-
     id_string = csr.build_search_string()
     for listing_group in listing_groups:
         keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))

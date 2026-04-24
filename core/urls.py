@@ -66,6 +66,7 @@ urlpatterns = [
     path('async_price_card/<int:csr_id>/', card_views.async_price_card, name="async_price_card"),    
     path('async_price_search/<int:lg_id>/', card_views.async_price_search, name="async_price_search"),    
     path('async_lg_monitor/', card_views.async_lg_monitor, name='async_lg_monitor'),
+    path('refresh_lg_calcs/<int:csr_id>/', card_views.refresh_lg_calcs, name='refresh_lg_calcs'),    
     path('price_collection/<int:collection_id>/', collection_views.price_collection, name="price_collection"),
     path('bulk_hold/<int:collection_id>/', card_views.bulk_hold, name="bulk_hold"),
     path('bulk_list/<str:group_key>/', export_views.bulk_list, name='bulk_list'),

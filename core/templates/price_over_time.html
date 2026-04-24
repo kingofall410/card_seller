@@ -216,7 +216,37 @@
           }
         });
       };
+      window.updateChartData = async function() {
+          const btn = document.getElementById('btn-refresh');
+          const objectId = "{{ object_id }}"; 
 
+          try {
+              btn.innerHTML = "⌛ Calculating...";
+              btn.disabled = true;
+
+              // UPDATED: Points to your specific endpoint
+              // Added ?t= to ensure the browser doesn't cache the response
+              const response = await fetch(`/update_li_fields/${objectId}/?t=${new Date().getTime()}`);
+              const result = await response.json();
+
+              if (result.status === 'success') {
+                  console.log("Python fields updated and saved!");
+                  
+                  // If your Python logic changed the underlying data, 
+                  // you might need to reload the page to see new trend numbers.
+                  // Otherwise, just redraw the chart:
+                  updateChartWrapper();
+                  
+                  btn.innerHTML = "✅ Done";
+                  setTimeout(() => { btn.innerHTML = "🔄 Refresh Data"; }, 2000);
+              }
+          } catch (error) {
+              console.error("Endpoint call failed:", error);
+              btn.innerHTML = "❌ Error";
+          } finally {
+              btn.disabled = false;
+          }
+      };
       window.updateChartWrapper = function() {
         updateChart({
           soldListings,

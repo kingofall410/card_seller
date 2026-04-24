@@ -93,7 +93,7 @@ class SettingsToken(models.Model):
     def join_input_phrases(cls, input_str, max_len=4):
         #print("TOP: ", input_str)
 
-        input_tokens = re.findall(r'[a-z0-9]+(?:-[a-z0-9]+)*', input_str.lower())          
+        input_tokens = re.findall(r"[a-z0-9]+(?:'[a-z0-9]+)*", input_str.lower())
         joined_input_tokens = []
 
         for n in range(max_len, 0, -1):
@@ -259,20 +259,18 @@ class Brand(SettingsToken):
 class Subset(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="subsets")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="subsets", default=1)
-    parent_brand = models.ForeignKey(Brand, on_delete=models.CASCADE, default=1, related_name="subsets")
+    parent_brand = models.ForeignKey(Brand, on_delete=models.CASCADE, null=True, related_name="subsets")
 
     def __str__(self):
         return f"{self.parent_brand.raw_value} {self.raw_value}"
     
     @classmethod
-    def create(cls, value, settings, field, brand):
-        subs_obj, _ = Subset.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, parent_brand=brand)
-        subs_obj.primary_token = subs_obj
-        subs_obj.save()
+    def create(cls, value, settings, field):
+        print("create")
+        subs_obj, created = Subset.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
+        
         return subs_obj
     
-    class Meta:
-        unique_together = ("raw_value", "parent_settings", "field_key", "parent_brand") 
     
 class City(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="cities")
@@ -396,3 +394,21 @@ class CardName(SettingsToken):
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")
+
+'''
+class CardSet(models.Model):
+    year = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="sets")
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="sets")
+    subset = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="sets")
+
+    class Meta:
+        unique_together = ("year", "brand", "subset")
+       
+class SetParallels(models.Model):
+    the_set = models.ForeignKey(CardSet, on_delete=models.CASCADE, related_name="sps")
+    the_parallel = models.ForeignKey(Parallel, on_delete=models.CASCADE, related_name="sps")
+    filter_terms = models.CharField(max_length=500, default="")
+
+    class Meta:
+        unique_together = ("the_set", "the_parallel")'''
+       

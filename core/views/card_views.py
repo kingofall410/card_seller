@@ -29,6 +29,7 @@ from django.conf import settings as app_settings
 import operator
 from django.core.exceptions import FieldError
 from django.db.models import OuterRef, Subquery
+import traceback
 
 def build_q_from_filters(filters_json):
     if not filters_json:
@@ -79,6 +80,8 @@ def bulk_archive(request):
 @csrf_exempt
 def archive(request, card_id):
     ca = CardArchive.archive(card_id)
+    #card = Card.objects.get(id=card_id)
+    #card.active_search_results().collapse_token_maps()
     return JsonResponse({"success": 'true'}, status=200)
 
 @csrf_exempt
@@ -90,8 +93,7 @@ def rehydrate(request, card_id):
 def card_test(request):
     if request.method == 'POST':
         try:
-            card_ids = request.POST.getlist('card_ids[]')
-            ca = CardArchive.archive(card_ids[0])
+            cards = Card.objects.filter(id__gt=4102).filter(id__lt=4119).delete()
             #card = CardArchive.rehydrate(9, 117)
             
             #card.save()
@@ -169,8 +171,20 @@ def view_card(request, card_id):
             "max_price": group.max_price,
             "min_date": group.min_date.isoformat() if group.min_date else None,
             "max_date": group.max_date.isoformat() if group.max_date else None,
+            "recent_date": group.recent_date.isoformat() if group.recent_date else None,
             "display_default": group.display,
+            "trend_overall": group.trend_overall,
+            "trend_recent": group.trend_recent,
+            "overall_start_price": group.overall_start_price,
+            "overall_end_price": group.overall_end_price,
+            "branch_point_y": group.recent_trend_start_price,
+            "rp_upper": group.relevence_filter_bounds[1],
+            "rp_lower": group.relevence_filter_bounds[0],
+            "unfiltered_start": group.unfiltered_start_price,
+            "unfiltered_end": group.unfiltered_end_price
+    
         })
+        print ("start price", group.label, group.overall_start_price, group.recent_trend_start_price)
 
     card_tuple = (first_card, first_card.id, cc_asr, [], [], [], [], [], [], [], [], json.dumps(dataset_configs))
             
@@ -424,9 +438,20 @@ def update_csr_fields(request):
     try:
         csr.update_fields(field_data)
     except Exception as e:
+        
+        traceback.print_exc()
         return JsonResponse({"error": True, "message": f"Update failed: {str(e)}"}, status=500)
     
     return JsonResponse({"success": True, "search_result":model_to_dict(csr, fields=CardSearchResult.calculated_fields) })
+
+
+@csrf_exempt
+def refresh_lg_calcs(request, csr_id):
+    lgs = ListingGroup.objects.filter(search_result_id=csr_id)
+    for lg in lgs:
+        lg.save()
+
+    return JsonResponse({"success": True})
 
 @csrf_exempt
 def update_li_fields(request):
@@ -450,6 +475,11 @@ def update_li_fields(request):
     if hasattr(listed_info, fieldname):
         setattr(listed_info, fieldname, fieldvalue)
         listed_info.save()
+        card = listed_info.card
+        asr = card.active_search_results()
+        if asr.overall_status == StatusBase.PRICED:
+            asr.perform_status_update(StatusBase.REVIEWED)
+        card.save()
     else:
         return JsonResponse({"error": True, "message": f"Invalid field '{fieldname}'"}, status=400)
 
@@ -599,21 +629,13 @@ def bulk_status_update(request, status_value):
 
     return JsonResponse({"success": True, "error": ""})
 
-def perform_status_update(csr_id, new_status):
-    # Fetch and update
-    obj = CardSearchResult.objects.get(id=csr_id)
-    obj.overall_status = new_status
-    obj.save(update_fields=['overall_status'])
-    obj.parent_card.update_mod_date()
-
 @csrf_exempt
 def update_csr_status_only(request, csr_id):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            new_status = data.get('status')
-            
-            perform_status_update(csr_id, new_status)            
+            new_status = data.get('status')            
+            CardSearchResult.objects.get(id=csr_id).perform_status_update(new_status)
             
             return JsonResponse({
                 'success': True, 

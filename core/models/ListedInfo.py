@@ -106,6 +106,5 @@ class ListedInfo(models.Model):
         if self.card:
             csr = self.card.active_search_results()
             self.listing_detail_text = csr.title_to_be if csr else ""
-            
             self.card.update_mod_date()
         super().save(*args, **kwargs)

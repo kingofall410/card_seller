@@ -58,7 +58,7 @@
 
             <div class="csr-tab-content wide-overlay" id="csr-charts">
                 <div class="chart-container-inner">
-                    {% include "price_over_time2.html" with datasetConfigs=datasetConfigs %}
+                    {% include "price_over_time2.html" with datasetConfigs=datasetConfigs search_result=search_result %}
                 </div>
             </div>
 
@@ -176,7 +176,7 @@
         top: 0; /* Sits below tabs + panel */
         left: 0;
         width: 145%;
-        height: 550px;
+        height: auto;
         z-index: 1000;
         background: white;
         padding: 15px;

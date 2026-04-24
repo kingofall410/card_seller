@@ -6,7 +6,7 @@
   <div class="listing-header-container" style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
     <div style="display: flex; justify-content: space-between; align-items: baseline;">
       <span class="listing-header-label" style="font-weight: bold; font-size: 1.1rem;">
-        {{ listing_group.label }} ({{ listing_group.listings.count }}) - ${{ listing_group.recent_avg_price|floatformat:0 }} ---- - ${{ listing_group.modified_avg|floatformat:0 }}
+        {{ listing_group.id }} {{ listing_group.label }} ({{ listing_group.listings.count }}) - ${{ listing_group.recent_avg_price|floatformat:0 }} ---- - ${{ listing_group.modified_avg|floatformat:0 }}
       </span>
       <div class="search-string" style="font-size: 0.8rem; color: #777; font-family: monospace;">
         {{ listing_group.id_string }} {{ listing_group.filter_terms }}

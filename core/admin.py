@@ -24,12 +24,15 @@ class CardSearchResultAdmin(admin.ModelAdmin):
         return super().get_form(request, obj, **kwargs)
 
 
+@admin.register(ListingGroup)
+class CardAdmin(admin.ModelAdmin):
+    list_display = ['id']
+
 admin.site.register(ProductListing)
 admin.site.register(ListingTitle)
 admin.site.register(CropParams)
 admin.site.register(CroppedImage) 
 admin.site.register(Collection)
-admin.site.register(ListingGroup)
 admin.site.register(ListedInfo)
 admin.site.register(ListedInfoArchive)
 admin.site.register(CardArchive)

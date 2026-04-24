@@ -137,19 +137,24 @@ class Card(models.Model):
             return ""
         else:
             return f"{self.collection_id}-{self.id}-{asr.id}"
-
+            
     def update_mod_date(self):
         self.modification_date = now() 
-        self.save(update_fields=["modification_date"])
+        # Use .filter().update() instead of self.save()
+        type(self).objects.filter(pk=self.pk).update(modification_date=self.modification_date)
 
     def save(self, *args, **kwargs):
         print("Card save", self.id if self.pk else None)
         try:
             info = getattr(self, 'listed_card_info', None)
             asr = self.active_search_results()
+
             if info and float(info.list_price) > 0.0:
                 print("if")
                 self.value = info.list_price
+                #if still moving toward listing
+                if asr.overall_status == StatusBase.PRICED:
+                    asr.perform_status_update(StatusBase.REVIEWED)
             elif asr and asr.ebay_msrp:
                 print("else", asr.ebay_msrp)
                 self.value = asr.ebay_msrp
