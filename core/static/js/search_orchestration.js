@@ -138,10 +138,13 @@ const AppOrchestrator = {
         if (spinner) spinner.style.display = "block";
 
         try {
-            const sinceDate = this.getSinceDate(this.state.timeframe);
+            let sinceString = "";
+            if (this.state.timeframe > 0) {
+                sinceString = `&since=${this.getSinceDate(this.state.timeframe)}`;
+            }
             console.log("Active filters: ", this.state.activeFilters)
             // BUILD URL with Filters
-            let url = `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}&since=${sinceDate}`;
+            let url = `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}${sinceString}`;
             console.log(this.state.activeFilters)
             // Add filters if they exist
             if (Object.keys(this.state.activeFilters).length > 0) {

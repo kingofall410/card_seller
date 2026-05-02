@@ -20,10 +20,8 @@ class ProductGroup(models.Model):
         
         # Retrieve the last CSR based on the listing date
         ocsr_list = self.products.exclude(parent_card__listed_card_info__listing_datetime__isnull=True).order_by('parent_card__listed_card_info__listing_datetime')
-        for csr in ocsr_list:
-            print(csr.id, csr.parent_card.listed_card_info.listing_datetime)
+        
         last_csr = ocsr_list.last()
-        print("last", last_csr.id)
         
         if last_csr and last_csr.parent_card and last_csr.parent_card.listed_card_info:
             last_lci = last_csr.parent_card.listed_card_info

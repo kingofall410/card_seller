@@ -113,14 +113,24 @@ function handleArchive(event, cardId) {
     }
 }
 
-function handleRehydrate(event, cardId) {
+function handleTest(event, cardId) {
     event.preventDefault();
     event.stopPropagation();
     
-    fetch(`/rehydrate/${cardId}/`, { method: 'POST' })
+    fetch(`/single_card_test/${cardId}/`, { method: 'POST' })
     .then(response => response.json())
     .then(data => {
-        alert("Card rehydrated successfully!");
+        location.reload(); // Refresh to show restored data via your get_attribute tags
+    });
+}
+
+function handleResku(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    fetch(`/re_sku/${cardId}/`, { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
         location.reload(); // Refresh to show restored data via your get_attribute tags
     });
 }

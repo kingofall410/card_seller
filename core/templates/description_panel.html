@@ -41,18 +41,14 @@
     <div class="notes-header">
       📝 <span>Listing Description</span>
     </div>
-    <textarea id="listing-details" class="notes-content">
-      {{ card.listed_card_info.listing_detail_text | safe }}
-    </textarea>
+    <textarea id="listing_detail_text" class="notes-content" onchange="handleEnterPress('listing_detail_text', {{ card_id }}, {{ search_result.id }})">{{ card.listed_card_info.listing_detail_text | safe }}></textarea>
   </div>
 
   <div class="notes-panel">
     <div class="notes-header">
       📦 <span>Notes</span>
     </div>
-    <textarea id="notes" class="notes-content">
-      {{ card.listed_card_info.listing_notes | safe }}
-    </textarea>
+    <textarea id="field_listing_notes-{{ card_id }}" class="notes-content" onchange="handleEnterPress('listing_notes', {{ card_id }}, {{ search_result.id }})">{{ card.listed_card_info.listing_notes | safe }}</textarea>
   </div>
 
 </div>

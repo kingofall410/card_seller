@@ -125,6 +125,59 @@ class Card(models.Model):
     value = models.FloatField(default=0.0)
     modification_date = models.DateTimeField(auto_now=True)
 
+
+    @property
+    def safe_front_thumbnail_url(self):
+        try:
+            # 1. Check if the field has a name/path at all
+            if not self.cropped_image:
+                return f"/static/images/missing_card.png"
+                
+            # 2. Check if the physical file exists on the Ubuntu disk
+            # Accessing .path triggers the FileNotFoundError if the file is gone
+            if os.path.exists(self.cropped_image.img.path):
+                return self.cropped_image.thumbnail.url
+                
+        except (FileNotFoundError, ValueError, Exception) as e:
+            # Log it if you want to know which IDs are broken
+            # print(f"Missing file for ID {self.id}: {e}")
+            pass
+        
+        # 3. Fallback to placeholder
+        return f"/static/images/missing_card.png"
+
+            
+
+    @property
+    def safe_reverse_thumbnail_url(self):
+        try:
+            # 1. Check if the field has a name/path at all
+            if not self.cropped_reverse:
+                return f"/static/images/missing_card.png"
+                
+            # 2. Check if the physical file exists on the Ubuntu disk
+            # Accessing .path triggers the FileNotFoundError if the file is gone
+            if os.path.exists(self.cropped_reverse.img.path):
+                return self.cropped_reverse.thumbnail.url
+                
+        except (FileNotFoundError, ValueError, Exception) as e:
+            # Log it if you want to know which IDs are broken
+            # print(f"Missing file for ID {self.id}: {e}")
+            pass
+        
+        # 3. Fallback to placeholder
+        return f"/static/images/missing_card.png"
+
+    def re_sku(self):
+        info = getattr(self, 'listed_card_info', None)
+        if info and info.sku:
+            info.sku += "_2"
+        elif info:
+            info.sku = f"{self.collection_id}-{self.id}-{self.active_search_results().id}_2"
+        else:
+            info = ListedInfo.create_from_csr(self.active_search_results())
+        info.save()
+
     @property
     def display_sku(self):
         asr = self.active_search_results()

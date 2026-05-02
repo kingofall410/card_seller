@@ -126,7 +126,7 @@ class Queue:
                     continue
 
                 db_task = Task.objects.get(id=task.db_id)
-                csr = None
+                csr = db_task.listingtask.csr if hasattr(db_task, "listingtask") else None
                 on_success_status = StatusBase.SUCCESS 
 
                 try:
@@ -140,8 +140,8 @@ class Queue:
                         task.status = StatusBase.SUCCESS
                         db_task.status = StatusBase.SUCCESS
                         
-                        if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
-                            console.log("onsuccess", db_task.on_success_status)
+                        if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.HELD]:
+                            print("onsuccess", db_task.on_success_status)
                             csr.overall_status = db_task.on_success_status
 
                         if task.successor_id:
@@ -184,11 +184,11 @@ class Queue:
                 print("[QUEUE] Stop signal received during interval. Exiting loop.")
                 break
 
-    def schedule_listing_task(self, name, card, csr, when, callback, params):
+    def schedule_listing_task(self, name, card, csr, when, callback, params, on_success_status=StatusBase.LISTED):
         t = ListingTask.objects.create(
             name=name, scheduled_for=when, card=card, csr=csr, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=StatusBase.PENDING
+            params_json=json.dumps(params), status=StatusBase.PENDING, on_success_status=on_success_status
         )
         self.add(MemoryTask(scheduled_for=when, name=name, callback=callback, params=params, db_id=t.id))
         if csr:

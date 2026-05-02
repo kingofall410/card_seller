@@ -4,6 +4,7 @@ from django.forms.models import model_to_dict
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
 
+
 class CroppedImageArchive(models.Model):
 
     original_id = models.IntegerField() # Keep reference to the old PK
@@ -22,8 +23,9 @@ class CroppedImageArchive(models.Model):
         print("arc", arc.id)
         # Move file back
         original_path = arc.path.replace("archive/", "")
-        with default_storage.open(arc.path) as source:
-            default_storage.save(original_path, source)
+        if default_storage.exists(arc.path):
+            with default_storage.open(arc.path) as source:
+                default_storage.save(original_path, source)
         
         # Create production model
         return CroppedImage.objects.create(
@@ -40,7 +42,8 @@ class CroppedImageArchive(models.Model):
             im = CroppedImage.objects.get(id=id)
             
             new_path = f"archive/{im.img.name}"
-            default_storage.save(new_path, im.img.open())
+            if default_storage.exists(new_path):
+                default_storage.save(new_path, im.img.open())
 
             # 3. Save to Archive
             cia = CroppedImageArchive.objects.create(
@@ -48,7 +51,6 @@ class CroppedImageArchive(models.Model):
                 path=new_path
             )
             
-            # 4. Delete Original
             im.delete()
             return cia
         except CroppedImage.DoesNotExist:
@@ -221,12 +223,13 @@ class CardArchive(models.Model):
     @classmethod
     def archive(cls, card_id):
         from core.models.Card import Card
+        from core.models.ListedInfo import ListedInfo
         with transaction.atomic():
             try:
                 # 1. Fetch
                 card = Card.objects.get(id=card_id)
                 csr = card.search_results.last()
-                li = card.listed_card_info
+                li = card.listed_card_info if hasattr(card, "listed_card_info") else ListedInfo.create_from_card(card)
                 # 2. Dump to JSON (using model_to_dict)
                 # Exclude fields that don't serialize well (like FileFields)
                 card_data = model_to_dict(card, fields=['upload_date', 'reverse_id', 'notes', 'value', 'modification_date']) 

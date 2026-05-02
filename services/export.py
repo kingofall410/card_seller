@@ -142,7 +142,7 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
         #uploader.upload_and_share(csr.get_latest_front(), csr.display_full_name)
         #uploader.upload_and_share(csr.get_latest_reverse(), csr.display_full_name)
         #print("am i here", csr.sku)
-        listed_info.sku = csr.build_sku(force=True)
+        listed_info.sku = csr.build_sku()
         #print("am i here", csr.sku)
         print("SKU:", listed_info.sku)
         print("🔗 Public link:", listed_info.shareable_link_front)

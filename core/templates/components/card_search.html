@@ -12,8 +12,9 @@
 <div class="timeframe-selector" style="justify-content: center; display: flex; gap: 15px; margin-bottom: 10px; font-size: 13px; color: #666;">
     <span style="font-weight: bold;">Timeframe:</span>
     <label><input type="radio" name="search-timeframe" value="7" onchange="AppOrchestrator.updateTimeframe(this.value)"> Last Week</label>
-    <label><input type="radio" name="search-timeframe" value="30" checked onchange="AppOrchestrator.updateTimeframe(this.value)"> Last 30 Days</label>
+    <label><input type="radio" name="search-timeframe" value="30" onchange="AppOrchestrator.updateTimeframe(this.value)"> Last 30 Days</label>
     <label><input type="radio" name="search-timeframe" value="60" onchange="AppOrchestrator.updateTimeframe(this.value)"> Last 60 Days</label>
+    <label><input type="radio" name="search-timeframe" value="0" checked onchange="AppOrchestrator.updateTimeframe(this.value)"> All Time</label>
 </div>
 <script src="{% static 'js/search_orchestration.js' %}"></script>
 <script>

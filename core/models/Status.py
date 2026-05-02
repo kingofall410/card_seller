@@ -13,6 +13,7 @@ class StatusBase(models.TextChoices):
     UNLISTED = "unlisted", "Unlisted"
     REHYDRATED = "rehydrated", "Rehydrated"
     REVIEWED = "reviewed", "Reviewed"
+    SOLD = "sold", "Sold"
     #pending, failed
 
     #task
@@ -37,7 +38,7 @@ class StatusBase(models.TextChoices):
             cls.IMPORTED: {"icon": "🚫", "color": "#ffffff"},
             cls.IDED: {"icon": "✋", "color": "#fffbe6"},
             cls.STAGED: {"icon": "✋", "color": "#fffbe6"},
-            cls.PRICED: {"icon": "$", "color": "#fff1f0"},
+            cls.PRICED: {"icon": "💲", "color": "#fff1f0"},
             cls.AUTO_PRICED: {"icon": "🤖", "color": "#fff1f0"},
             cls.LISTED: {"icon": "", "color": "#f6ffed"},
             cls.RUNNING: {"icon": "✔️", "color": "#ff0000"},
@@ -49,4 +50,5 @@ class StatusBase(models.TextChoices):
             cls.REHYDRATED: {"icon": "✔️", "color": "#444"},
             cls.UNLISTED: {"icon": "✋", "color": "#fff1f0"},
             cls.REVIEWED: {"icon": "✔️", "color": "#fff1f0"},
+            cls.SOLD: {"icon": "💲💲💲", "color": "#fff1f0"},
         }.get(value, {"icon": "❓", "color": "#ffe6e6"})

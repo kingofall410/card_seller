@@ -322,10 +322,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #if there's a condition already specified, use that, otherwise do a PSA by default
         if self.condition:
             self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
-        else:
-            self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
-            self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
-            self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
+        self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
+        self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
+        self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
         
         self.save()
 
@@ -602,6 +601,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
             elif hasattr(self.parent_card, field_name):
                 setattr(self.parent_card, field_name, field_value)
+            elif hasattr(self.parent_card, "listed_card_info") and hasattr(self.parent_card.listed_card_info, field_name):
+                setattr(self.parent_card.listed_card_info, field_name, field_value)
+                self.parent_card.listed_card_info.save()
         print("done")
         self.save()
         print("done2")
@@ -892,12 +894,22 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         team = self.display_value("team")
         #print (f"build_full_team: {city} {team}")
         return f"{city} {team}"
+
+    @property
+    def has_valid_sku(self):
+        parent_sku = self.parent_card.listed_card_info.sku
+        return (self.sku and self.sku.strip != "" and self.sku.find("-") > 0) \
+            or (parent_sku and parent_sku.strip != "" and parent_sku.find("-") > 0)
     
     #TODO:Too many saves
     def build_sku(self, force=False):
+        print("bs", force, self.sku, self.parent_card.listed_card_info.sku)
         
-        if force or not self.sku or self.sku == "" or self.sku == "--":
+        if force or not self.has_valid_sku:
             self.sku = f"{self.parent_card.collection_id}-{self.parent_card_id}-{self.id}"
+        elif not self.sku:
+            self.sku = self.parent_card.listed_card_info.sku
+        print(self.sku)
         return self.sku
     
     #TODO: This has grown enough now to condense

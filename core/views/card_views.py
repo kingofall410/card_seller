@@ -37,26 +37,32 @@ def build_q_from_filters(filters_json):
     
     data = json.loads(filters_json)
     final_q = Q()
-    op_map = {'=': 'exact', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte', '!=': 'neq'}
+    op_map = {'=': 'exact', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte'}
 
     for field, items in data.items():
         field_q = Q()
+        
+        # Determine the database path for the field
+        target = 'latest_status' if field == 'overall_status' else (
+            field if hasattr(Card, field) else f"search_results__{field}"
+        )
+
         for f in items:
             op = f.get('op')
             val = f.get('val')
             
-            # Logic for field mapping
-            target = 'latest_status' if field == 'overall_status' else (
-                field if hasattr(Card, field) else f"search_results__{field}"
-            )
-            
             if op == '!=':
-                field_q |= ~Q(**{target: val})
+                # Use &= for hard exclusion: "Must not be A AND must not be B"
+                final_q &= ~Q(**{f"{target}": val})
             else:
+                # Use |= for inclusion: "Can be X OR Y"
                 lookup = f"{target}__{op_map.get(op, 'exact')}"
                 field_q |= Q(**{lookup: val})
         
-        final_q &= field_q
+        # Only combine field_q if it actually contains positive filters
+        if field_q:
+            final_q &= field_q
+            
     return final_q
 
 @csrf_exempt
@@ -87,33 +93,46 @@ def archive(request, card_id):
 @csrf_exempt
 def rehydrate(request, card_id):
     card = CardArchive.rehydrate({"original_id":card_id}, 117)
+    return JsonResponse({"success": 'true'}, status=200)
+
+@csrf_exempt
+def re_sku(request, card_id):
+    card = Card.objects.get(id=card_id).re_sku()
+    return JsonResponse({"success": 'true'}, status=200)
+
+@csrf_exempt
+def single_card_test(request, card_id):
+    if request.method == 'POST':
+        try:
+
+            CardArchive.rehydrate({"id": 16}, 209)
+            return JsonResponse({"success": 'true'}, status=200)
+        except Exception as e:
+            traceback.print_exc()
+            return JsonResponse({'error': str(e)}, status=400)
 
 # Card-related views
 @csrf_exempt
 def card_test(request):
     if request.method == 'POST':
         try:
-            cards = Card.objects.filter(id__gt=4102).filter(id__lt=4119).delete()
-            #card = CardArchive.rehydrate(9, 117)
-            
-            #card.save()
-            '''if not hasattr(card, 'listed_card_info'):
-                li = ListedInfo.create_from_card(card)
-                li.save()
+            card_ids = request.POST.getlist('card_ids[]')
+            if len(card_ids):
+                print("lenny", len(card_ids))
+                card_list = Card.objects.filter(id__in=card_ids).order_by('id')
             else:
-                li = card.listed_card_info
-
-            if card.active_search_results() and card.active_search_results().overall_status == StatusBase.LISTED:
-                li.update_from_csr(card.active_search_results())
-                li.list_price = card.active_search_results().list_price
-                li.save()
-            card.save()'''
+                print("no cards", len(card_ids))
+                card_list = list(collection.cards.order_by('id'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': "no cards"}, status=400)
             
+        print(card_list)
+        for card in card_list:
+            card.re_sku()
+            card.save()
 
-            return JsonResponse({"success": 'true'}, status=200)
-        except Exception as e:
-            traceback.print_exc()
-            return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({"success": 'true'}, status=200)
+            
 
 # Card-related views
 @csrf_exempt
@@ -625,7 +644,7 @@ def bulk_status_update(request, status_value):
         card_list = []
         
     for card in card_list:
-        perform_status_update(card.active_search_results().id, status_value)
+        card.active_search_results().perform_status_update(status_value)
 
     return JsonResponse({"success": True, "error": ""})
 

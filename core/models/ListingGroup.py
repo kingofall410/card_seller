@@ -131,7 +131,7 @@ class ListingGroup(models.Model):
         if len(data) < 4:  # Statistical filtering requires a decent sample size
             return -1, 99999
 
-        data.sort()
+        data = sorted(data)
 
         # Calculate Quartiles
         q1, _, q3 = statistics.quantiles(data, n=4)
@@ -155,7 +155,7 @@ class ListingGroup(models.Model):
             
             # 2. Extract date strings using the function
             date_strings = [l.display_date for l in listing_list if l.display_date]
-            
+            print(date_strings)
             if date_strings:
                 # Since listing_list is sorted, min is index 0, max is index -1
                 min_dt_str = date_strings[0]
@@ -165,7 +165,7 @@ class ListingGroup(models.Model):
                 self.max_date = datetime.fromisoformat(max_dt_str.replace("Z", "+00:00")).date()
                 
                 six_months_ago = self.max_date - relativedelta(months=6)
-                self.recent_date = six_months_ago
+                self.recent_date = max(self.min_date, six_months_ago)
                 total_days = (self.max_date - self.min_date).days or 1
 
                 # 3. Segregate Data while MAINTAINING ORDER
@@ -187,11 +187,12 @@ class ListingGroup(models.Model):
 
                 # Extract recent prices from the recent_listings (which are still sorted)
                 float_prices_recent = [float(l.ebay_price) for l in recent_listings]
-
+                print("float", float_prices_all)
                 # 4. Filter Outliers (Maintains relative order)
                 clean_prices_all = self.filter_outliers(float_prices_all)
                 clean_prices_recent = self.filter_outliers(float_prices_recent)
-
+                
+                print("clean", clean_prices_all)
                 if clean_prices_all:
                     self.min_price = min(float_prices_all)
                     self.max_price = max(float_prices_all)

@@ -23,9 +23,9 @@ def hello_world(request):
 
 def test_view(request):
 
-    lgs = ListingGroup.objects.filter(search_result__parent_card__collection_id=209)
-    for lg in lgs:
-        lg.save()
+    tasks = ListingTask.objects.filter(status=StatusBase.FAILED).filter(csr__full_name__icontains="Griffey").delete()
+    tasks = ListingTask.objects.filter(status=StatusBase.PENDING).filter(csr__full_name__icontains="Griffey").delete()
+    
     return JsonResponse({"success": True, "message": "Completed successfully"})
 
 
