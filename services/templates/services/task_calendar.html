@@ -7,130 +7,269 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Monitor Calendar</title>
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <style>
         :root {
-            --grid-border: #eee;
-            --today-bg: #fff9db;
-            --status-success: #2ecc71;
-            --status-pending: #f1c40f;
-            --status-error: #e74c3c;
-            --text-main: #333;
+            --grid-border: #e0e0e0;
+            --today-bg: #fffde6;
+            --text-main: #2c3e50;
         }
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: #f4f7f6; 
+            background: #f8f9fa; 
             padding: 20px; 
             color: var(--text-main); 
         }
 
-        /* VIEW CONTROLS */
+        /* NAVIGATION BAR */
         .controls-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
             background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 15px 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
-        .view-switch { display: flex; gap: 5px; background: #eee; padding: 4px; border-radius: 6px; }
-        .view-btn { 
-            padding: 6px 15px; border: none; background: transparent; cursor: pointer; 
-            border-radius: 4px; font-weight: 600; font-size: 13px; transition: 0.2s;
+        .nav-links a { 
+            text-decoration: none; 
+            color: #007bff; 
+            font-weight: bold; 
+            font-size: 14px;
         }
-        .view-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: #007bff; }
+        
+        .current-title {
+            font-size: 1.2rem; 
+            font-weight: bold;
+        }
 
-        .nav-links a { text-decoration: none; color: #666; font-weight: bold; padding: 0 10px; }
-
-        /* CALENDAR GRID */
-        .calendar {
+        /* 7-DAY WEEK GRID */
+        .calendar-week {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
-            background-color: var(--grid-border);
+            gap: 10px;
+        }
+
+        .day-column {
+            background: white;
             border: 1px solid var(--grid-border);
-            border-radius: 8px;
-            overflow: hidden;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            min-height: 450px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .day-column.today { 
+            background-color: var(--today-bg); 
+            border-color: #ffe066;
         }
 
         .day-header {
-            background: #f8f9fa;
-            padding: 12px;
+            background: #f1f3f5;
+            padding: 10px;
             text-align: center;
-            font-weight: bold;
+            border-bottom: 1px solid var(--grid-border);
+        }
+
+        .day-name {
             font-size: 11px;
             text-transform: uppercase;
-            color: #888;
+            font-weight: bold;
+            color: #868e96;
+            margin-bottom: 2px;
         }
-        /* Day Summary Header */
-        .day-summary {
+
+        .day-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        /* DAY SUMMARY PILLS */
+        .day-summary-bar {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 12px;
-            font-weight: 700;
+            gap: 4px;
+            padding: 8px 10px 4px 10px;
+            flex-wrap: wrap;
         }
 
         .summary-badge {
+            font-size: 10px;
+            font-weight: bold;
             padding: 2px 6px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            border-radius: 4px;
+        }
+        .summary-success { background: #d4edda; color: #155724; }
+        .summary-pending { background: #fff3cd; color: #856404; }
+        .summary-failed { background: #f8d7da; color: #721c24; }
+
+        /* TASK LIST CONTAINER */
+        .task-list-wrapper { 
+            padding: 10px;
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+            overflow-y: auto;
+            flex-grow: 1;
         }
 
-        .summary-success { background: #d4edda; color: #000; }
-        .summary-failed { background: #f8d7da; color: #000; }
-        .summary-pending { background: #f4dd834b; color: #000; }
-
-        .day-cell { background: #fff; padding: 10px; display: flex; flex-direction: column; }
-        .day-cell.today { background-color: var(--today-bg); }
-        .day-number { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #bbb; }
-
-        /* TASK ITEM STYLING */
-        .task-list-wrapper { display: flex; flex-direction: column; gap: 6px; }
+        /* Core Component Layout Styles Hooks */
         .task-item {
             border-radius: 4px;
             border: 1px solid rgba(0,0,0,0.05);
             border-left-width: 4px !important;
-            transition: all 0.2s;
+            padding: 3px 5px; /* Tightened padding around card context */
         }
-
-        /* Status colors */
-        .status-listed { background-color: #00aaff !important; color: #000 !important; border-left: 4px solid #0088cc !important; }
-        .status-identified { background-color: #ff6666 !important; color: #fff !important; border-left: 4px solid #cc4444 !important; }
+        .status-listed { background-color: #00aaff20 !important; color: #000 !important; border-left: 4px solid #0088cc !important; }
+        .status-identified { background-color: #ff666620 !important; color: #000 !important; border-left: 4px solid #cc4444 !important; }
         .status-pending { background-color: #ffcc0020 !important; color: #000 !important; border-left: 4px solid #ffcc00 !important; }
         .status-failed { background-color: #ff333320 !important; color: #000 !important; border-left: 4px solid #ff3333 !important; }
         .status-success, .status-completed { background-color: #33cc3320 !important; color: #000 !important; border-left: 4px solid #33cc33 !important; }
         .status-none { background-color: #96969620 !important; color: #000 !important; border-left: 4px solid #969696 !important; }
 
-        /* VIEW TOGGLES */
-        .calendar.month-view .day-cell { min-height: 140px; }
-        .calendar.month-view .detail-1 { display: none !important; }
-        .calendar.week-view .day-cell { min-height: 300px; height: auto; }
-        .calendar.week-view .day-cell:not(.is-current-week) { display: none; }
-        .calendar.week-view .day-header:not(.is-current-week-header) { display: none; }
-        .calendar.week-view .detail-0 { display: none !important; }
-
-        #list-view-container { display: none; background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .list-row { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; gap: 15px; }
-        .list-row .date-label { font-size: 11px; font-weight: bold; color: #999; width: 80px; }
-
-        @keyframes status-pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.02); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
+        /* --- Floating Hover Tooltip Elements Rules --- */
+        #task-hover-tooltip {
+            position: fixed;
+            z-index: 999999;
+            pointer-events: none;
+            background: rgba(17, 24, 39, 0.95); 
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            transition: opacity 0.1s ease;
+            opacity: 0;
+            max-width: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        .is-updating { animation: status-pulse 0.6s ease-in-out; }
-        #queue-table-body tr { border-bottom: 1px solid #eee; transition: background 0.1s; }
-#queue-table-body tr:hover { background-color: #fcfcfc; }
-.queue-date { font-family: monospace; font-weight: bold; color: #555; }
-.status-success { background: #d4edda; color: #155724; border-left: 3px solid #28a745 !important; }
-.status-failed  { background: #f8d7da; color: #721c24; border-left: 3px solid #dc3545 !important; }
-.status-pending { background: #fff3cd; color: #856404; border-left: 3px solid #ffc107 !important; }
+
+        /* --- Action Menu Dropdown Configuration Rules --- */
+        .task-action-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-trigger-btn {
+            background: transparent;
+            border: none;
+            color: #666;
+            padding: 2px 4px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .dropdown-trigger-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: #000;
+        }
+        .task-action-dropdown:hover .dropdown-menu-pane {
+            display: block;
+        }
+        .dropdown-menu-pane {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            min-width: 130px;
+            z-index: 10000;
+            padding: 4px 0;
+        }
+        .menu-item-btn {
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 6px 12px;
+            text-align: left;
+            font-size: 11px;
+            color: #444;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .menu-item-btn:hover { background: #f5f5f5; color: #000; }
+        .menu-item-btn.text-danger { color: #d9534f; }
+        .menu-item-btn.text-danger:hover { background: #fdf2f2; }
+
+        /* --- Modal Layouts Overlay Sheet --- */
+        .reschedule-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 9999999;
+            justify-content: center;
+            align-items: center;
+        }
+        .reschedule-modal-overlay.active { display: flex; }
+        .reschedule-dialog-box {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 15px;
+            width: 260px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .reschedule-dialog-box h4 { margin: 0 0 12px 0; font-size: 13px; color: #333; font-weight: bold;}
+        .dialog-options-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .dialog-opt-btn { width: 100%; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; text-align: left; font-size: 11px; }
+        .dialog-opt-btn:hover { background: #f5f5f5; }
+        .dialog-input-row { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+        .dialog-input-row label { min-width: 60px; color: #666; }
+        .dialog-input-row input { flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 4px; width: 60px; font-size: 11px; }
+        .dialog-submit-inline { padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .dialog-close-btn { width: 100%; border: none; background: transparent; padding: 6px; color: #888; font-size: 11px; cursor: pointer; }
+
+        /* --- Action Layout Footer --- */
+        .task-container-day-footer {
+            padding: 12px 8px 14px 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: transparent;
+            width: 100%;
+            box-sizing: border-box;
+            border-top: 1px dashed #f1f3f5;
+        }
+        .retry-all-failed-btn {
+            background: #ffffff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            padding: 5px 14px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        .retry-all-failed-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+            color: #111827;
+        }
+        .retry-all-failed-btn .btn-alert-dot {
+            width: 6px;
+            height: 6px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -139,247 +278,241 @@
 
 <div class="controls-bar">
     <div class="nav-links">
-        <a href="?month={{ prev_month }}">&laquo; Prev</a>
-        <span style="font-size: 1.2em; font-weight: bold;">{{ current_month|date:"F Y" }}</span>
-        <a href="?month={{ next_month }}">Next &raquo;</a>
+        <a href="?week={{ prev_week }}">&laquo; Previous Week</a>
     </div>
-
-    <div id="queue-range-controls" style="display: none; gap: 10px; align-items: center;">
-        <input type="date" id="queue-start" class="view-btn" style="background: #f8f9fa; border: 1px solid #ddd;">
-        <span style="color: #999;">to</span>
-        <input type="date" id="queue-end" class="view-btn" style="background: #f8f9fa; border: 1px solid #ddd;">
-        <button onclick="fetchQueueData()" class="view-btn" style="background: #007bff; color: white;">Run Query</button>
+    
+    <div class="current-title">
+        Week of {{ week_start|date:"F d, Y" }}
     </div>
-
-    <div class="view-switch">
-        <button id="btn-month" class="view-btn active" onclick="switchView('month')">Month</button>
-        <button id="btn-week" class="view-btn" onclick="switchView('week')">Week</button>
-        <button id="btn-queue" class="view-btn" onclick="switchView('queue')">Queue Query</button>
+    
+    <div class="nav-links">
+        <a href="?week={{ next_week }}">Next Week &raquo;</a>
     </div>
 </div>
-<div id="queue-view-container" style="display: none; background: white; border-radius: 8px; padding: 15px;">
-    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-        <thead>
-            <tr style="text-align: left; border-bottom: 2px solid #eee; color: #666; font-size: 0.75rem;">
-                <th style="padding: 10px;">TIME</th>
-                <th style="padding: 10px;">TASK NAME</th>
-                <th style="padding: 10px;">STATUS</th>
-                <th style="padding: 10px;">OCR DATA</th>
-                <th style="padding: 10px;">EBAY $</th>
-                <th style="padding: 10px;">ERROR/WHY</th>
-                <th style="padding: 10px; text-align: right;">ACTIONS</th>
-            </tr>
-        </thead>
-        <tbody id="queue-table-body">
-            </tbody>
-    </table>
-    <div id="queue-empty-msg" style="padding: 40px; text-align: center; color: #bbb; display: none;">
-        No tasks found for this range.
-    </div>
-</div>
-<div class="calendar month-view" id="calendar-grid">
-    {% for day_name in weekday_headers %}
-        <div class="day-header">{{ day_name }}</div>
-    {% endfor %}
 
+<div class="calendar-week">
     {% for day in day_objects %}
-        <div class="day-cell {% if day.is_today %}today{% endif %} {% if day.summary.is_busy %}is-busy{% endif %}" 
-            data-date="{{ day.date|date:'Y-m-d' }}"
-            data-col="{% cycle '0' '1' '2' '3' '4' '5' '6' %}">
+        <div class="day-column {% if day.is_today %}today{% endif %}" data-day="{{ day.date|date:'Y-m-d' }}">
             
-            <div class="day-number">{{ day.date.day }}</div>
+            <div class="day-header">
+                <div class="day-name">{{ day.date|date:"l" }}</div>
+                <div class="day-number">{{ day.date.day }}</div>
+            </div>
 
             {% if day.summary %}
-                <div class="day-summary">
+                <div class="day-summary-bar">
                     {% if day.summary.success > 0 %}
-                        <span class="summary-badge summary-success"> {{ day.summary.success }} / ${{ day.summary.success_val|floatformat:0 }}  </span>
+                        <span class="summary-badge summary-success">✓ {{ day.summary.success }} (${{ day.summary.success_val|floatformat:0 }})</span>
                     {% endif %}
                     {% if day.summary.pending > 0 %}
-                        <span class="summary-badge summary-pending"> {{ day.summary.pending }} / ${{ day.summary.pending_val|floatformat:0 }}  </span>
+                        <span class="summary-badge summary-pending">⏳ {{ day.summary.pending }} (${{ day.summary.pending_val|floatformat:0 }})</span>
                     {% endif %}
                     {% if day.summary.failed > 0 %}
-                        <span class="summary-badge summary-failed"> {{ day.summary.failed }} / ${{ day.summary.failed_val|floatformat:0 }}  </span>
+                        <span class="summary-badge summary-failed">✗ {{ day.summary.failed }} (${{ day.summary.failed_val|floatformat:0 }})</span>
                     {% endif %}
                 </div>
             {% endif %}
+
             <div class="task-list-wrapper">
                 {% for task in day.tasks %}
-                    <div id="task-{{ task.id }}" data-task-type="{{ task.task_type }}">
-                        <div class="detail-0">{% include "components/task.html" with task=task detail_level=0 %}</div>
-                        <div class="detail-1">{% include "components/task.html" with task=task detail_level=1 %}</div>
-                    </div>
+                    {% include "components/task.html" with task=task detail_level=0 %}
+                {% empty %}
+                    <div style="font-size: 11px; color: #adb5bd; text-align: center; margin-top: 20px;">No tasks</div>
                 {% endfor %}
             </div>
+
+            <!-- Dashboard action button template block hooks onto layout edge -->
+            {% if day.summary.failed > 0 %}
+            <div class="task-container-day-footer">
+                <button type="button" class="retry-all-failed-btn" onclick="retryAllFailedInGroup(event, this)">
+                    <span class="btn-alert-dot"></span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span>Retry All Failed</span>
+                </button>
+            </div>
+            {% endif %}
+
         </div>
     {% endfor %}
 </div>
 
-<div id="list-view-container">
-    <div id="dynamic-task-list"></div>
-</div>
+<!-- Singleton Popover Frame Container -->
+<div id="task-hover-tooltip"></div>
 
-<script src="{% static 'js/task_monitor.js' %}"></script>
+<!-- 
+  ======================================================================
+  BATCH PROCESSING & ENGINE SCRIPT LAYER
+  ======================================================================
+-->
 <script>
-    /**
-     * VIEW SWITCHING LOGIC
-     */
-    function buildListView() {
-        const listTarget = document.getElementById('dynamic-task-list');
-        listTarget.innerHTML = '';
-        
-        const dayCells = Array.from(document.querySelectorAll('.day-cell'));
-        dayCells.forEach(cell => {
-            const taskContainers = cell.querySelectorAll('[id^="task-"]');
-            if (taskContainers.length > 0) {
-                const dateStr = cell.getAttribute('data-date');
-                taskContainers.forEach(container => {
-                    const detail1 = container.querySelector('.detail-1');
-                    const row = document.createElement('div');
-                    row.className = 'list-row';
-                    row.innerHTML = `
-                        <div class="date-label">${dateStr}</div>
-                        <div class="list-task-content">
-                            ${detail1.innerHTML}
-                        </div>`;
-                    listTarget.appendChild(row);
-                });
-            }
-        });
+// --- Global Action Batch Orchestrator ---
+function retryAllFailedInGroup(event, buttonEl) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    
+    const $containerColumn = $(buttonEl).closest('.day-column');
+    const dayGroupKey = $containerColumn.attr('data-day') || 'Selected Day';
+    
+    const $failedTasks = $containerColumn.find('.task-item.status-failed, .task-item.status-error');
+    
+    if ($failedTasks.length === 0) {
+        alert("No failed tasks found in this column area.");
+        return;
     }
 
-    function switchView(viewType) {
-        const grid = document.getElementById('calendar-grid');
-        const queueContainer = document.getElementById('queue-view-container');
-        const rangeControls = document.getElementById('queue-range-controls');
-        const buttons = document.querySelectorAll('.view-btn');
-        
-        buttons.forEach(b => b.classList.remove('active'));
-        document.getElementById(`btn-${viewType}`).classList.add('active');
+    if (!confirm(`Retry all ${$failedTasks.length} failed tasks for ${dayGroupKey}?`)) return;
 
-        if (viewType === 'queue') {
-            grid.style.display = 'none';
-            rangeControls.style.display = 'flex';
-            queueContainer.style.display = 'block';
-            
-            // Default dates to today if empty
-            const today = new Date().toISOString().split('T')[0];
-            if(!document.getElementById('queue-start').value) document.getElementById('queue-start').value = today;
-            if(!document.getElementById('queue-end').value) document.getElementById('queue-end').value = today;
+    let completedRequests = 0;
+    const totalRequests = $failedTasks.length;
 
-        } else {
-            grid.style.display = 'grid';
-            rangeControls.style.display = 'none';
-            queueContainer.style.display = 'none';
-            
-            grid.classList.remove('month-view', 'week-view');
-            grid.classList.add(`${viewType}-view`);
-            
-            // Re-run current week logic if needed
-            if (viewType === 'week') {
-                const visibleDays = document.querySelectorAll('.day-cell.is-current-week');
-                const activeCols = new Set();
-                visibleDays.forEach(d => activeCols.add(d.getAttribute('data-col')));
-                document.querySelectorAll('.day-header').forEach((h, idx) => {
-                    h.classList.toggle('is-current-week-header', activeCols.has(idx.toString()));
-                });
-            }
-        }
-    }
+    $(buttonEl).prop('disabled', true).text('Processing Batch...');
 
-    async function fetchQueueData() {
-        const start = document.getElementById('queue-start').value;
-        const end = document.getElementById('queue-end').value;
-        const container = document.getElementById('queue-table-body');
-        const emptyMsg = document.getElementById('queue-empty-msg');
+    $failedTasks.each(function() {
+        const taskId = $(this).attr('data-task-id');
+        if (!taskId) return;
 
-        container.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">Querying...</td></tr>';
-        emptyMsg.style.display = 'none';
-
-        try {
-            const response = await fetch(`/services/task_monitor_data/?start=${start}&end=${end}`);
-            const result = await response.json();
-            const tasks = result.data || [];
-
-            container.innerHTML = '';
-
-            if (tasks.length === 0) {
-                emptyMsg.style.display = 'block';
-                return;
-            }
-
-            tasks.forEach(task => {
-                const row = document.createElement('tr');
-                
-                // Highlight failed rows
-                if (task.status === 'failed') row.style.backgroundColor = '#fff5f5';
-
-                row.innerHTML = `
-                    <td style="padding: 8px; font-family: monospace; font-size: 0.85rem;">${task.scheduled_for}</td>
-                    <td style="padding: 8px; font-weight: bold;">${task.name}</td>
-                    <td style="padding: 8px;">
-                        <span style="
-                            padding: 2px 6px; 
-                            border-radius: 4px; 
-                            font-size: 0.75rem; 
-                            font-weight: bold;
-                            background: ${task.status === 'success' ? '#d4edda' : task.status === 'failed' ? '#f8d7da' : '#eee'};
-                            color: ${task.status === 'success' ? '#155724' : task.status === 'failed' ? '#721c24' : '#333'};
-                        ">
-                            ${task.status.toUpperCase()}
-                        </span>
-                    </td>
-                    <td style="padding: 8px; font-family: monospace; font-size: 0.8rem;">${task.meta_data.ocr_text || '-'}</td>
-                    <td style="padding: 8px; font-family: monospace; font-size: 0.8rem;">${task.meta_data.ebay_match ? '$'+task.meta_data.ebay_match : '-'}</td>
-                    <td style="padding: 8px; font-size: 0.8rem; color: #c00; font-family: monospace;">
-                        ${task.status === 'failed' ? task.logs : ''}
-                    </td>
-                    <td style="padding: 8px; text-align: right;">
-                        <button onclick="rerunTask(${task.id})" style="cursor:pointer; font-size: 10px;">RERUN</button>
-                    </td>
-                `;
-                container.appendChild(row);
-            });
-
-        } catch (err) {
-            container.innerHTML = `<tr><td colspan="7" style="color:red; text-align:center; padding:20px;">Fetch Failed: ${err.message}</td></tr>`;
-            console.error("DEBUG:", err);
-        }
-    }
-
-    /**
-     * TASK MONITOR INTEGRATION
-     */
-    document.addEventListener('DOMContentLoaded', () => {
-        const monitor = window.StatelessTaskMonitor.getInstance();
-        monitor.onUpdate((taskId, taskData, isNew) => {
-            const newStatus = taskData.status.toLowerCase();
-            const targetClass = `status-${newStatus}`;
-            
-            // Update Status in all views
-            const containers = document.querySelectorAll(`[id="task-${taskId}"]`);
-            containers.forEach(container => {
-                const item = container.querySelector('.task-item');
-                if (item) {
-                    item.className = item.className.split(' ').filter(c => !c.startsWith('status-')).join(' ');
-                    item.classList.add(targetClass, 'is-updating');
-                    setTimeout(() => item.classList.remove('is-updating'), 1000);
-                }
-            });
-
-            // Handle New Tasks
-            if (isNew && taskData.html) {
-                const taskDate = taskData.scheduled.split(' ')[0]; 
-                const calendarWrapper = document.querySelector(`.day-cell[data-date="${taskDate}"] .task-list-wrapper`);
-                if (calendarWrapper) {
-                    const wrapper = document.createElement('div');
-                    wrapper.id = `task-${taskId}`;
-                    wrapper.setAttribute('data-task-type', taskData.type || 'listingtask');
-                    wrapper.innerHTML = taskData.html;
-                    calendarWrapper.appendChild(wrapper);
+        $.ajax({
+            url: `/services/retry_task/${taskId}/`,
+            method: "POST",
+            headers: { 'X-CSRFToken': getTemplateCsrfToken() },
+            data: { 'when': 'None' },
+            complete: function() {
+                completedRequests++;
+                if (completedRequests === totalRequests) {
+                    location.reload();
                 }
             }
         });
     });
+}
+
+// --- Single Task Operations Execution Proxies ---
+function executeTaskAction(event, taskId, whenValue, buttonEl) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    $.ajax({
+        url: `/services/retry_task/${taskId}/`,
+        method: "POST",
+        headers: { 'X-CSRFToken': getTemplateCsrfToken() },
+        data: { 'when': whenValue },
+        success: function() { location.reload(); },
+        error: function() { alert('Failed execution proxy action handler.'); }
+    });
+}
+
+function deleteTask(event, taskId) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    if (!confirm("Are you sure you want to delete this task?")) return;
+    $.ajax({
+        url: `/services/delete_task/${taskId}/`,
+        method: "POST",
+        headers: { 'X-CSRFToken': getTemplateCsrfToken() },
+        success: function() { location.reload(); },
+        error: function() { alert('Error occurred processing deletion request.'); }
+    });
+}
+
+// --- Inline Modal Rescheduling Sub-System Routines ---
+function openRescheduleModal(event, taskId) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    $(`#reschedule-modal-${taskId}`).addClass('active');
+}
+
+function closeRescheduleModal(event, taskId) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    $(`#reschedule-modal-${taskId}`).removeClass('active');
+}
+
+function processReschedule(taskId, mode) {
+    let rawValue = '';
+    if (mode === 'offset') {
+        rawValue = $(`#offset-${taskId}`).val();
+        if(!rawValue) return alert("Please specify target days count offset value.");
+    } else if (mode === 'explicit') {
+        rawValue = $(`#explicit-${taskId}`).val();
+        if(!rawValue) return alert("Please select a target destination date.");
+    }
+
+    $.ajax({
+        url: `/services/reschedule_task/${taskId}/`,
+        method: "POST",
+        headers: { 'X-CSRFToken': getTemplateCsrfToken() },
+        data: { 'mode': mode, 'value': rawValue },
+        success: function() { location.reload(); },
+        error: function() { alert("Could not update task parameters context."); }
+    });
+}
+
+// --- Singleton Unified Hover Popover System Handler Logic ---
+$(document).ready(function() {
+    const $tooltip = $('#task-hover-tooltip');
+
+    $(document).on('mouseenter', '.task-item', function(e) {
+        // If mouse hits or enters via the action dropdown block target area, suppress tooltip creation
+        if ($(e.target).closest('.task-action-dropdown').length) {
+            $tooltip.css('opacity', '0');
+            return;
+        }
+
+        const $el = $(this);
+        
+        let imgHtml = '';
+        if ($el.data('thumb')) {
+            imgHtml = `<img src="${$el.data('thumb')}" style="max-width:120px; max-height:160px; object-fit:contain; border-radius:4px; margin-bottom:8px; display:block;" />`;
+        }
+        
+        let errHtml = '';
+        if ($el.data('error')) {
+            errHtml = `<div style="color:#ff6b6b; font-weight:bold; font-size:11px; margin-top:6px; border-top:1px solid #444; padding-top:4px; word-break:break-word;">Error: ${$el.data('error')}</div>`;
+        }
+
+        const tooltipContent = `
+            ${imgHtml}
+            <div style="font-weight:bold; text-align:center; margin-bottom:4px;">${$el.data('title') || 'Task Detail'}</div>
+            <div style="font-size:11px; color:#ccc; width:100%;">
+                <div><b>Price:</b> $${$el.data('price') || '0.00'}</div>
+                <div><b>Scheduled:</b> ${$el.data('scheduled-date') || 'N/A'}</div>
+                <div><b>Executed:</b> ${$el.data('executed-date') || 'N/A'}</div>
+                <div><b>Completed:</b> ${$el.data('completed-date') || 'N/A'}</div>
+            </div>
+            ${errHtml}
+        `;
+        
+        $tooltip.html(tooltipContent).css('opacity', '1');
+    });
+
+    $(document).on('mousemove', '.task-item', function(e) {
+        // Kill tooltip visibility immediately if cursor drifts into the menu context trigger area
+        if ($(e.target).closest('.task-action-dropdown').length) {
+            $tooltip.css('opacity', '0');
+            return;
+        }
+
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+        const width = $tooltip.outerWidth();
+        const height = $tooltip.outerHeight();
+
+        let posX = mouseX + 15;
+        let posY = mouseY + 15;
+
+        if (posX + width > $(window).width()) { posX = mouseX - width - 15; }
+        if (posY + height > $(window).height()) { posY = $(window).height() - height - 15; }
+
+        $tooltip.css({ left: posX + 'px', top: posY + 'px', opacity: '1' });
+    });
+
+    $(document).on('mouseleave', '.task-item', function() {
+        $tooltip.css('opacity', '0').html('');
+    });
+});
+
+function getTemplateCsrfToken() {
+    const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (tokenInput) return tokenInput.value;
+    return document.cookie.split('; ').find(row => row.trim().startsWith('csrftoken='))?.split('=')[1] || null;
+}
 </script>
+
 </body>
 </html>

@@ -12,4 +12,5 @@ urlpatterns = [
     path('start_queue/', views.start_queue, name='start_queue'),
     path('stop_queue/', views.stop_queue, name='stop_queue'),
     path('reset_queue/', views.reset_queue, name='reset_queue'),
+    path('retry_task/<int:task_id>/', views.retry_task, name='retry_task'),
 ]

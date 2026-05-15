@@ -1,7 +1,5 @@
 {% load custom_tags %}
 
-
-
 <style>
     /* The Footer Container */
     .card-status-footer {
@@ -43,7 +41,7 @@
         <div class="card-meta"><strong>{{ display_name|default:"Unknown Card" }}</strong></div>
         <div class="card-meta">{{ asr.overall_status }}</div>
         <div class="card-meta">{{ display_year }} {{ display_brand }} {{ display_subset }}</div>
-        <div class="card-meta">${{ card.value|floatformat:2 }}</div>
+        <div class="card-meta">${{ card.value|floatformat:2 }} {% if asr.overall_status == StatusBase.SOLD %} // ${{ card.listed_card_info.get_sold_price|floatformat:2 }} {% endif %} </div>
         
         <div class="image-wrapper" onmouseenter="loadReverse(this)">
             <img src="{{ card.safe_front_thumbnail_url }}" 
@@ -55,9 +53,10 @@
                 onerror="this.onerror=null;this.src='/static/images/missing_reverse.png';">
         </div>
     </a>
-
     <div class="card-meta" style="color:#000; font-size:10px;">SKU: {{ display_sku }}</div>
-
+    
+    {% include "components/pricing_badge.html" with min_offer=1 max_offer=2 avg_low=3 avg_high=4 average=5   %}
+{% comment %}
     <div class="card-status-footer">
         <div class="status-column">
             {% include "components/status_badge.html" with task=card.latest_id_task %}
@@ -69,6 +68,7 @@
             {% include "components/status_badge.html" with task=card.latest_listing_task %}
         </div>
     </div>
+    {% endcomment %}
 </div>
 
 {% endwith %}

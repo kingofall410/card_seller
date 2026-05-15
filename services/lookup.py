@@ -4,6 +4,7 @@ from core.models.Card import Card
 from core.models.ListingGroup import ListingGroup
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
+from core.models.ListedInfo import ListedInfo
 
 def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay"], refine=False, scrape_sold_data=False, retry_limit=5, result_count_max=5, csr=None):
     print("SIL")
@@ -87,12 +88,14 @@ def retokenize(card):
 
 #helper function for tasks, could be cleaned up better
 def price_only_card(card_id, settings_id, ss=None):
-    csr_id = Card.objects.get(id=card_id).active_search_results().id
+    csr_id = Card.objects.get(id=card_id).active_search_results.id
     price_only(csr_id, settings_id, ss)
     return True
 
 def refresh_listing_groups(listing_groups=None, lg_ids=None):
-    keyword_strings = []
+    avail_keyword_strings = []
+    sold_keyword_strings = []
+    matches_map = {}
     print("refresh", listing_groups, lg_ids)
     #IDs take precedence over objects passed in
     if lg_ids:
@@ -100,14 +103,25 @@ def refresh_listing_groups(listing_groups=None, lg_ids=None):
     
     csr = listing_groups[0].search_result
     id_string = csr.build_search_string()
-    for listing_group in listing_groups:
-        keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
-        
-    nr_pages = 1
 
-    #matches map is keyword_string --> (listing variable, [listings])
-    matches_map = ebay.scrape_with_profile(keyword_strings, limit=50)
-    csr.update_listings(matches_map)
+    for listing_group in listing_groups:
+        if listing_group.is_img:
+            #handle is_img right away just go do it as we only have one
+            listing_matches = ebay.image_search(csr.parent_card.get_lookup_image(), limit=50, page=1, settings=Settings.get_default())
+            csr.update_listings({"": (listing_group, listing_matches)})
+        elif listing_group.is_sold:
+            sold_keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
+        else:
+            avail_keyword_strings.insert(0, (listing_group.get_search_string(id_string), listing_group))
+            
+    if sold_keyword_strings:
+        #matches map is keyword_string --> (listing variable, [listings])
+        matches_map = ebay.scrape_with_profile(sold_keyword_strings, limit=50)
+        csr.update_listings(matches_map)
+
+    if avail_keyword_strings:
+        matches_map = ebay.text_search(avail_keyword_strings, limit=50, settings=Settings.get_default())
+        csr.update_listings(matches_map)
         
     return matches_map
 
@@ -120,12 +134,44 @@ def price_only(csr_id, settings_id, ss=None):
     csr.reset_listing_groups()
     csr.save()
 
-    listing_groups = csr.listing_groups.filter(is_sold=True)
+    listing_groups = csr.listing_groups.filter(is_img=False)
     matches_map = refresh_listing_groups(listing_groups=listing_groups)   
     psa_count = sum(group[0].listings.count() for group in matches_map.values() if 'PSA' in group[0].label)
-    print(psa_count)
-    csr.update_listings(matches_map)
-    
+     
     csr.overall_status = StatusBase.PRICED
     csr.save()
+
+def bulk_order_update(card_list, listing_ids, settings=None):
+    for card in card_list:
+        csr = card.active_search_results
+        
+        if hasattr(card, "listed_card_info"):
+            listing_info = card.listed_card_info
+        else:
+            listing_info = ListedInfo.create_from_csr(csr)
+        
+        offer_id = listing_info.offer_id
+        token = None
+        if offer_id:
+            listing_status, token = ebay.get_offer_status(offer_id, settings, listing_info, token)
+        
+    
+    ebay.bulk_order_update(listing_ids, settings or Settings.get_default())
+
+    for card in card_list:
+        card.active_search_results.save()
+
+'''def update_from_listing(card_list, settings):
+    for card in card_list:
+        csr = card.active_search_results
+        offer_id = csr.parent_card.listed_card_info.offer_id
+        listing_info = card.listed_subcard_info
+
+        listing_status, token = ebay.get_offer_status(offer_id, settings, listing_info)    
+    #ebay.get_inventory_item(csr.parent_card.listed_card_info.sku, settings)
+    listing_status, token = ebay.get_offer_status(offer_id, settings, listing_info)
+    if (listing_status.listing_status == StatusBase.SOLD):
+        ebay.get_sale_details(listing_info.listing_id, settings, listing_status, token)
+    csr.save()'''
+
     

@@ -17,14 +17,23 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_POST
 import re, json
 from django.forms.models import model_to_dict
+import django.utils.timezone as timezone
 
 def hello_world(request):
     return render(request, "success.html")
 
 def test_view(request):
 
-    tasks = ListingTask.objects.filter(status=StatusBase.FAILED).filter(csr__full_name__icontains="Griffey").delete()
-    tasks = ListingTask.objects.filter(status=StatusBase.PENDING).filter(csr__full_name__icontains="Griffey").delete()
+    tasks = ListingTask.objects.filter(scheduled_for__gt=timezone.now())
+    new_group = ProductGroup.objects.get(id="90")
+    #tasks = ListingTask.objects.filter(csr_id=3655)
+    for task in tasks:
+        if task.params()["group_key"] == "77" or task.params()["group_key"] == "90":
+            task.update_params("group_key", "90")
+            task.csr.ebay_product_group = new_group
+            task.csr.save()
+            task.save()
+            
     
     return JsonResponse({"success": True, "message": "Completed successfully"})
 

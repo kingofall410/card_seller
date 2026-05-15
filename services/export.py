@@ -88,6 +88,7 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
     
     inventory_group_data = group.export_to_ebay_variation_group(new_csrs=csrs)
     
+    listing_id = None
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
             listing_id = ebay.publish_inventory_group(group.group_key, access_token)
@@ -229,17 +230,19 @@ def export_to_ebay(csr_id, publish=False, group_key=None):
                 #"Error response from ebay"
                 listed_info.listing_id = ""
             
-            if group_key:
+            if group_key and not group_key == "-1":
                 listed_info.listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
             elif publish:
                 listed_info.listing_id = ebay.publish_offer(offer_id, access_token)
 
+            retval = listed_info.listing_id != None                
             csr.save()
             listed_info.save()
         else:
             ebay.get_inventory_group(group_key, settings, access_token)
-
-        return True, listed_info.offer_id, listed_info.listing_id
+            retval = True
+        
+        return retval, listed_info.offer_id, listed_info.listing_id
     
         #print("asking for token ")
         #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)

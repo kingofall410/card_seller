@@ -91,10 +91,18 @@
                 <button type="button" title="Re-SKU" class="btn-resku" onclick="handleResku(event, '{{ card_id }}')">
                     <i class="fas fa-sync"></i> 🏷️
                 </button>
+                <button type="button" title="Refresh Listing Status" class="btn-refresh" onclick="handleRefresh(event, '{{ card_id }}')">
+                    <i class="fas fa-sync"></i> 🔄
+                </button>
+                <button type="button" title="Crop" class="btn-crop" onclick="handleCrop(event, '{{ card_id }}')">
+                    <i class="fas fa-sync"></i> ✂
+                </button>
                 <button type="button" title="Test" class="btn-single-test" onclick="handleTest(event, '{{ card_id }}')">
                     <i class="fas fa-sync"></i> 🧪
                 </button>
             </div>
+            
+            {% include "components/pricing_badge.html" with min_offer=search_result.min_offer max_offer=search_result.max_offer avg_low=search_result.min_avg avg_high=search_result.max_avg average=search_result.parent_card.value scale_max=search_result.scale_max sold_clusters=search_result.get_pricing_groups.0.clusters offered_clusters=search_result.get_avail_groups.0.clusters%}
         </div>
     </div>
 </div>

@@ -1,0 +1,237 @@
+<style>
+.ebay-auth-component * {
+    box-sizing: border-box;
+}
+.ebay-auth-component.auth-card {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #111827; /* Dark slate background */
+    padding: 16px;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #ffffff;
+    border: 1px solid #374151;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.ebay-auth-component .auth-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ebay-auth-component .ebay-logo-mock {
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: -1px;
+}
+.ebay-auth-component .ebay-logo-mock span:nth-child(1) { color: #e53238; }
+.ebay-auth-component .ebay-logo-mock span:nth-child(2) { color: #0064d2; }
+.ebay-auth-component .ebay-logo-mock span:nth-child(3) { color: #f5af02; }
+.ebay-auth-component .ebay-logo-mock span:nth-child(4) { color: #86b817; }
+
+.ebay-auth-component .auth-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #f3f4f6;
+}
+
+.ebay-auth-component .auth-status {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.4;
+}
+
+.ebay-auth-component .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444; /* Disconnected default */
+    margin-right: 4px;
+}
+.ebay-auth-component.is-connected .status-dot {
+    background: #10b981; /* Connected green */
+    box-shadow: 0 0 6px #10b981;
+}
+
+.ebay-auth-component .auth-btn {
+    width: 100%;
+    background: #3b82f6;
+    color: #ffffff;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+}
+.ebay-auth-component .auth-btn:hover {
+    background: #2563eb;
+}
+.ebay-auth-component .auth-btn:disabled {
+    background: #4b5563;
+    cursor: not-allowed;
+}
+
+/* Spinner Utilities */
+.ebay-auth-component .spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: auth-spin 0.8s linear infinite;
+}
+@keyframes auth-spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+
+<div id="ebay-auth-panel" class="ebay-auth-component auth-card">
+    <div class="auth-header">
+        <div class="ebay-logo-mock">
+            <span>e</span><span>b</span><span>a</span><span>y</span>
+        </div>
+        <div class="auth-title">API Integration</div>
+    </div>
+    
+    <div class="auth-status">
+        <span class="status-dot"></span>
+        <span id="ebay-status-text">Account Disconnected</span>
+    </div>
+
+    <button id="ebay-auth-action-btn" class="auth-btn" onclick="initiateEbayAuth()">
+        <div class="spinner" id="ebay-auth-spinner"></div>
+        <span id="ebay-btn-text">Connect eBay Account</span>
+    </button>
+</div>
+
+<script>
+// Configurations Injection (Rendered dynamically via backend context or global JS config)
+CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
+CLIENT_SECRET = 'PRD-113ecf9c5fd1-5956-4012-a05a-9770'
+RUNAME = "Daniel_Crown-DanielCr-Latest-obqqa"
+IMG_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search_by_image"
+TXT_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+SELL_URL="https://api.ebay.com/oauth/api_scope/sell.inventory"
+USER_AUTH_URL = f"https://auth.ebay.com/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={RUNAME}&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory&%20https://api.ebay.com/oauth/api_scope/sell.fulfillment"
+https://api.ebay.com/oauth/api_scope/buy.inventory&%20https://api.ebay.com/oauth/api_scope/sell.fulfillment" https://api.ebay.com/oauth/api_scope/sell.inventory&%20https://api.ebay.com/oauth/api_scope/sell.fulfillment"
+const EBAY_AUTH_CONFIG = {
+    clientId: "DanielCr-LatestSa-PRD-d11490c6b-277c9c6f",
+    ruName: "Daniel_Crown-DanielCr-Latest-obqqa",
+    scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory",
+    // Base eBay OAuth environments URLs
+    // Production: https://auth.ebay.com/oauth2/authorize
+    // Sandbox: https://auth.sandbox.ebay.com/oauth2/authorize
+    authEndpoint: "https://auth.ebay.com/oauth2/authorize" 
+};
+
+function initiateEbayAuth() {
+    const btn = document.getElementById('ebay-auth-action-btn');
+    const spinner = document.getElementById('ebay-auth-spinner');
+    const btnText = document.getElementById('ebay-btn-text');
+
+    // 1. Enter UI Loading State
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Opening Secure Portal...';
+
+    // 2. Build the eBay OAuth Request URL Parameters
+    const authUrl = `${EBAY_AUTH_CONFIG.authEndpoint}?` + 
+        `client_id=${encodeURIComponent(EBAY_AUTH_CONFIG.clientId)}&` +
+        `redirect_uri=${encodeURIComponent(EBAY_AUTH_CONFIG.ruName)}&` +
+        `response_type=code&` +
+        `scope=${encodeURIComponent(EBAY_AUTH_CONFIG.scope)}&` +
+        `prompt=login`;
+
+    // 3. Open OAuth portal via standard pop-up window target assignment
+    const width = 600, height = 700;
+    const left = (window.innerWidth / 2) - (width / 2);
+    const top = (window.innerHeight / 2) - (height / 2);
+    
+    const authWindow = window.open(
+        authUrl, 
+        'eBayAPIAuthenticationPortal', 
+        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
+    );
+
+    // 4. Set up an interval monitor checking if user completed login or abandoned the popup
+    const checkWindowLoop = setInterval(() => {
+        if (!authWindow || authWindow.closed) {
+            clearInterval(checkWindowLoop);
+            resetAuthButton();
+            
+            // Check cookie, localStorage, or hit backend endpoint to confirm if verification completed
+            checkLocalConnectionState();
+        }
+    }, 1000);
+}
+
+function resetAuthButton() {
+    const btn = document.getElementById('ebay-auth-action-btn');
+    const spinner = document.getElementById('ebay-auth-spinner');
+    const btnText = document.getElementById('ebay-btn-text');
+    
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = 'Connect eBay Account';
+}
+
+function checkLocalConnectionState() {
+    // Add logic checking connection cache state. If your server received the callback signal:
+    // document.getElementById('ebay-auth-panel').classList.add('is-connected');
+    // document.getElementById('ebay-status-text').textContent = 'Connected as: [MerchantName]';
+}
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const authorizationCode = urlParams.get('code');
+
+        if (authorizationCode) {
+            // Forward authorization code token payload immediately to your server setup views
+            fetch('/api/ebay/exchange-token/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') // Django native validation token checks
+                },
+                body: JSON.stringify({ code: authorizationCode })
+            })
+            .then(res => {
+                if(res.ok) {
+                    // Close authentication interface layer window safely
+                    window.close();
+                }
+            });
+        } else {
+            window.close();
+        }
+    });
+
+    // Helper method to retrieve standard django security token strings from headers
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>

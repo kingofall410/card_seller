@@ -1,0 +1,183 @@
+<style>
+.card-item {
+    position: relative; /* Essential for absolute positioning of the icon */
+}
+
+.exclude-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ff4444;
+    border: 1px solid #ddd;
+    transition: all 0.2s;
+}
+
+.exclude-btn:hover {
+    background: #ff4444;
+    color: #fff;
+    border-color: #ff4444;
+    transform: scale(1.1);
+}
+
+/* Visual cue for excluded cards (optional) */
+.card-item.is-excluded {
+    opacity: 0.4;
+    filter: grayscale(1);
+}
+
+#header-info-mount {
+    line-height: 1.2;
+    min-height: 40px; /* Prevents layout jump when exclusions appear */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Make our custom "Unhide" link look like a real link */
+#header-info-mount a:hover {
+    text-decoration: underline !important;
+}
+</style>
+
+<script>
+    function toggleExclusion(cardId) {
+        console.group(`=== Exclude & Sync: Card ID ${cardId} ===`);
+        
+        const table = $('#card-data-engine').DataTable();
+        const stringId = cardId.toString().trim();
+        
+        // Fetch active exclusions list from session storage
+        let exclusions = JSON.parse(sessionStorage.getItem('exclusions') || "[]");
+
+        if (exclusions.includes(stringId)) {
+            // --- UNDO EXCLUSION (RESTORE CARD) ---
+            console.log(`Action: Restoring card ${stringId}`);
+            
+            const cachedRowData = window.excludedRowsCache[stringId];
+            
+            if (cachedRowData) {
+                // 1. Add the row back into the DataTable memory
+                table.row.add(cachedRowData);
+                delete window.excludedRowsCache[stringId];
+                
+                // 2. Remove from exclusions list
+                exclusions = exclusions.filter(id => id !== stringId);
+                sessionStorage.setItem('exclusions', JSON.stringify(exclusions));
+                
+                console.log(`Card ${stringId} added back to DataTable memory.`);
+            } else {
+                console.warn(`Could not find cached row data for Card ${stringId}. Was the page reloaded?`);
+            }
+
+        } else {
+            // --- APPLY EXCLUSION (REMOVE CARD) ---
+            console.log(`Action: Excluding card ${stringId}`);
+            
+            // 1. Locate the row in the DataTable memory (ID is in Column 8)
+            const row = table.row((idx, data) => data[8].toString().trim() === stringId);
+
+            if (row.any()) {
+                // 2. Cache the raw row data so we can rebuild it on Undo
+                window.excludedRowsCache[stringId] = row.data();
+                
+                // 3. Delete the row from the DataTable engine completely
+                row.remove();
+                
+                // 4. Save to session storage
+                exclusions.push(stringId);
+                sessionStorage.setItem('exclusions', JSON.stringify(exclusions));
+                
+                console.log(`Card ${stringId} purged from active memory & cached.`);
+            } else {
+                console.error(`Card row with ID ${stringId} not found in DataTable.`);
+            }
+        }
+
+        // 3. REDRAW THE TABLE
+        // This updates the grid and physical "Showing X of Y" layout
+        console.log("Redrawing Table...");
+        table.draw(false); 
+
+        // 4. FORCE REBUILD PANES
+        // Now that the data has been physically removed from table memory,
+        // SearchPanes is forced to decrement its counts because the card literally doesn't exist anymore.
+        console.log("Rebuilding SearchPanes...");
+        table.searchPanes.rebuildPane(undefined, true);
+
+        console.groupEnd();
+    }
+    function clearExclusions() {
+        console.log("Restoring all excluded cards to baseline...");
+        const table = $('#card-data-engine').DataTable();
+        
+        // 1. Grab all cached card objects
+        const cachedIds = Object.keys(window.excludedRowsCache || {});
+        
+        if (cachedIds.length > 0) {
+            cachedIds.forEach(id => {
+                const rowData = window.excludedRowsCache[id];
+                table.row.add(rowData); // Inject back into DT memory
+            });
+            
+            // Clear local memory cache
+            window.excludedRowsCache = {};
+        }
+        
+        // 2. Clear Session Storage
+        sessionStorage.removeItem('exclusions');
+        
+        // 3. FORCE SearchPanes to flush selections & wipe its cache
+        if (table.searchPanes && typeof table.searchPanes.clearSelections === 'function') {
+            table.searchPanes.clearSelections(); 
+        }
+        
+        // 4. Redraw the table first to populate all rows in memory
+        table.draw(false);
+        
+        // 5. Rebuild the panes from the fresh, complete memory state
+        // Passing (undefined, false) forces the panes to abandon any cached states
+        table.searchPanes.rebuildPane(undefined, false);
+        
+        console.log("Collection fully rebaselined and pane counts reset! 🔄");
+    }
+</script>
+<div id="card-{{ card.id }}" 
+     class="card-item status-{{ card.overall_status|lower }}" 
+     data-id="{{ card.id }}" 
+     data-year="{{ card.year }}" 
+     data-brand="{{ card.brand }}" 
+     data-value="{{ card.value }}" 
+     data-overall_status="{{ card.overall_status }}">
+
+    <div class="exclude-btn" onclick="toggleExclusion('{{ card.id }}')" title="Exclude from sequence">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </div>
+    <div class="card-checkbox">
+        <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
+    </div>
+
+    <a href="/card/{{ card.id }}/" target="_blank" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
+        <div class="card-meta"><strong>{{ card.name|default:"Unknown Card" }}</strong></div>
+        <div class="card-meta">{{ card.overall_status }}</div>
+        <div class="card-meta">
+            {{ card.year }} {{ card.brand }} {{ card.subset }}
+        </div>
+        <div class="card-meta">${{ card.value|floatformat:2 }}</div>
+        
+        <div class="image-wrapper" onmouseenter="loadReverse(this)">
+            <img src="{{ card.front_url }}" class="thumbnail default" loading="lazy">
+            <img data-src="{{ card.reverse_url }}" class="thumbnail hover">
+        </div>
+    </a>
+    {% include "components/pricing_badge_small.html" with min_offer=card.min_offer max_offer=card.max_offer avg_low=card.min_avg avg_high=card.max_avg average=card.value scale_max=card.scale_max  %}
+    <div class="card-meta" style="color:#000; font-size:10px;">{% if card.sku %} {{ card.sku }} {% else %} {{ card.collection_id }}-{{ card.id }}-{{ card.csr_id }} {% endif %}</div>
+</div>

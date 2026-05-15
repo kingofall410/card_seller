@@ -71,55 +71,64 @@
         font-weight: bold;
         cursor: pointer;
     }
-    /* Custom Task Badges */
-.task-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 12px;
-    border-radius: 50px; /* This makes it a "pill" */
-    font-size: 0.85rem;
-    font-weight: bold;
-    color: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
 
-.bg-pending { background-color: #0d6efd; } /* Blue */
-.bg-staged  { background-color: #ffc107; color: #333; } /* Yellow */
-.bg-failed  { background-color: #dc3545; } /* Red */
+    /* Minimalist Inline Card Monitor Container (Centered) */
+    .monitor-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 900; /* Heavy Font Weight */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 20px;
+        background: #262626; /* Dark slate shell container */
+        padding: 6px 14px;
+        border-radius: 6px;
+        letter-spacing: 0.3px;
+        margin: 0 auto; /* Centering */
+    }
 
-/* Flex container for the badges */
-#task-heartbeat-monitor {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
+    .monitor-slash {
+        color: #ffffffff;
+        font-weight: 300;
+        margin: 0 2px;
+    }
 
-/* Simple CSS Spinner (Since you aren't using Bootstrap Icons) */
-.spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 1s linear infinite;
-    margin-right: 6px;
-    display: inline-block;
-}
-.bg-success { background-color: #198754; } /* Green */
+    /* Card Monitor Specific Heavy Colors */
+    .clr-pre { color: #ffe58f; }       /* Yellow / Light */
+    .clr-priced { color: #007b1be6; }  /* Green */
+    .clr-reviewed { color: #db38d8bc; }/* Pinkish-Purple */
+    .clr-listed { color: #91d5ff; }    /* Light Blue */
 
-/* Ensure the badges don't wrap and look tight in the nav */
-#task-heartbeat-monitor {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    background: #444; /* Slight contrast from nav */
-    padding: 4px 12px;
-    border-radius: 8px;
-}
+    /* Original Pill Badges for Task Monitor */
+    .monitor-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .bg-pending { background-color: #0d6efd; } /* Blue */
+    .bg-success { background-color: #198754; } /* Green */
+    .bg-failed  { background-color: #dc3545; } /* Red */
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+    /* Simple CSS Spinner */
+    .spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s linear infinite;
+        margin-right: 6px;
+        display: inline-block;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
 </style>
 
 <nav class="custom-navbar">
@@ -160,33 +169,43 @@
         </div>
     </div>
 
-    <a href="{% url 'listing_view' %}" class="navbar-link">💲 LISTINGS</a>
-    <a href="{% url 'admin:index' %}" class="navbar-link">🛠️ ADMIN</a>
+    <a href="{% url 'admin:index' %}" target="_blank" class="navbar-link">🛠️ ADMIN</a>
     <a href="{% url 'test_view' %}" class="navbar-link">🧪 TEST</a>
     <button class="add-button" onclick="document.getElementById('cardFileInput_0').click()">➕ CARD</button>
 
-    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
-    <button id="monitor-toggle" onclick="TaskMonitor.toggle()" 
-        style="background: #555; color: white; border: 1px solid #777; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">
-        OFF
-    </button>
-
-    <div id="task-heartbeat-monitor" style="opacity: 0.4; transition: opacity 0.3s ease;">
-        <span class="task-badge bg-pending">
-            <span id="task-spinner" class="spinner" style="display:none;"></span>
-            Pending: <span id="count-pending">0</span>
-        </span>
-        <span class="task-badge bg-success">
-            Success: <span id="count-success">0</span>
-        </span>
-        <span class="task-badge bg-failed">
-            Failed: <span id="count-failed">0</span>
-        </span>
+    <div id="card-monitor-container" class="monitor-group">
+        <span id="card-spinner" class="spinner" style="display:none; margin-right: 4px;"></span>
+        
+        <span class="clr-pre" title="Pre-Listing"><span id="card-pre-listing-count">0</span></span>
+        <span class="monitor-slash">/</span>
+        <span class="clr-priced" title="Priced"><span id="card-priced-count">0</span></span>
+        <span class="clr-reviewed" title="Reviewed"><span id="card-reviewed-count">0</span></span>
+        <span class="monitor-slash">/</span>
+        <span class="clr-listed" title="Listed / Staged"><span id="card-listed-count">0</span></span>
     </div>
-</div>
+
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 15px;">
+        
+        <button id="monitor-toggle" onclick="MonitorController.toggle()" 
+            style="background: #555; color: white; border: 1px solid #777; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">
+            MONITOR: OFF
+        </button>
+
+        <div id="task-monitor-container" style="display: flex; gap: 8px; align-items: center; opacity: 0.4; transition: opacity 0.3s ease;">
+            <span class="monitor-badge bg-pending">
+                <span id="task-spinner" class="spinner" style="display:none;"></span>
+                Pending: <span id="task-pending-count">0</span>
+            </span>
+            <span class="monitor-badge bg-success">
+                Success: <span id="task-success-count">0</span>
+            </span>
+            <span class="monitor-badge bg-failed">
+                Failed: <span id="task-failed-count">0</span>
+            </span>
+        </div>
+    </div>
 
     <a href="{% url 'settings' %}" class="navbar-link">⚙️</a>
-
     <input type="file" id="cardFileInput_0" style="display:none;" accept="image/*" onchange="uploadImage(0, this.files)" multiple>
 </nav>
 
@@ -206,75 +225,122 @@
         currentMenu.style.display = currentMenu.style.display === "block" ? "none" : "block";
     });
 
-    // --- Task Heartbeat Logic ---
-    const TaskMonitor = {
-        isActive: false, // Default to OFF
+    // --- Dual Engine Monitoring System ---
+    const MonitorController = {
+        isActive: false,
+        taskIntervalId: null,
+        cardIntervalId: null,
+        
         elements: {
-            pending: document.getElementById('count-pending'),
-            success: document.getElementById('count-success'),
-            failed:  document.getElementById('count-failed'),
-            spinner: document.getElementById('task-spinner'),
-            container: document.getElementById('task-heartbeat-monitor'),
-            toggleBtn: document.getElementById('monitor-toggle')
+            toggleBtn: document.getElementById('monitor-toggle'),
+            cardContainer: document.getElementById('card-monitor-container'),
+            taskContainer: document.getElementById('task-monitor-container'),
+            
+            // Card elements
+            cardPreListing: document.getElementById('card-pre-listing-count'),
+            cardPriced: document.getElementById('card-priced-count'),
+            cardReviewed: document.getElementById('card-reviewed-count'),
+            cardListed: document.getElementById('card-listed-count'),
+            cardSpinner: document.getElementById('card-spinner'),
+            
+            // Task elements
+            taskPending: document.getElementById('task-pending-count'),
+            taskSuccess: document.getElementById('task-success-count'),
+            taskFailed: document.getElementById('task-failed-count'),
+            taskSpinner: document.getElementById('task-spinner')
         },
 
         toggle() {
             this.isActive = !this.isActive;
             
             if (this.isActive) {
-                this.elements.toggleBtn.innerText = "ON";
+                this.elements.toggleBtn.innerText = "MONITOR: ON";
                 this.elements.toggleBtn.style.background = "#198754"; // Green
-                this.elements.container.style.opacity = "1";
-                this.refresh(); // Immediate refresh when turned on
+                this.elements.taskContainer.style.opacity = "1";
+                
+                this.fetchTaskStatuses();
+                this.taskIntervalId = setInterval(() => this.fetchTaskStatuses(), 60000);
             } else {
-                this.elements.toggleBtn.innerText = "OFF";
+                this.elements.toggleBtn.innerText = "MONITOR: OFF";
                 this.elements.toggleBtn.style.background = "#555"; // Gray
-                this.elements.container.style.opacity = "0.4";
-                this.elements.spinner.style.display = 'none'; // Stop spinner immediately
+                this.elements.taskContainer.style.opacity = "0.4";
+                this.elements.taskSpinner.style.display = 'none';
+                
+                if (this.taskIntervalId) {
+                    clearInterval(this.taskIntervalId);
+                    this.taskIntervalId = null;
+                }
             }
         },
 
-        async refresh() {
-            // --- CRITICAL: Exit if the monitor is toggled off ---
-            if (!this.isActive) return;
-
+        // Always running Card Status fetch (Safe & Independent)
+        async fetchCardStatuses() {
             try {
+                this.elements.cardSpinner.style.display = 'inline-block';
+                
+                const response = await fetch('/card_status_monitor/');
+                const result = await response.json();
+                
+                if (result.success && result.counts) {
+                    this.elements.cardPreListing.innerText = result.counts['pre-listing'] || 0;
+                    this.elements.cardPriced.innerText     = result.counts['priced'] || 0;
+                    this.elements.cardReviewed.innerText   = result.counts['reviewed'] || 0;
+                    this.elements.cardListed.innerText     = result.counts['listed'] || 0;
+                }
+                this.elements.cardSpinner.style.display = 'none';
+            } catch (err) {
+                console.error("Card monitor fetch failed:", err);
+                this.elements.cardSpinner.style.display = 'none';
+            }
+        },
+
+        // Task Queue fetch (tied to toggle)
+        async fetchTaskStatuses() {
+            try {
+                this.elements.taskSpinner.style.display = 'inline-block';
                 const today = new Date().toISOString().split('T')[0];
+                
                 const response = await fetch(`/services/task_monitor_data/?start_date=${today}&end_date=${today}`);
                 const result = await response.json();
                 const tasks = result.data || [];
 
                 const counts = { pending: 0, success: 0, failed: 0 };
-                let showSpinner = false;
+                let isTaskRunning = false;
                 const now = new Date();
 
                 tasks.forEach(t => {
                     if (counts.hasOwnProperty(t.status)) counts[t.status]++;
 
                     if (t.status === 'running') {
-                        showSpinner = true;
+                        isTaskRunning = true;
                     } else if (t.status === 'pending' && t.scheduled_for) {
                         const diffMins = (new Date(t.scheduled_for) - now) / 1000 / 60;
-                        if (diffMins > 0 && diffMins <= 10) showSpinner = true;
+                        if (diffMins > 0 && diffMins <= 10) isTaskRunning = true;
                     }
                 });
 
-                this.elements.pending.innerText = counts.pending;
-                this.elements.success.innerText = counts.success;
-                this.elements.failed.innerText  = counts.failed;
-                this.elements.spinner.style.display = showSpinner ? 'inline-block' : 'none';
-
+                this.elements.taskPending.innerText = counts.pending;
+                this.elements.taskSuccess.innerText = counts.success;
+                this.elements.taskFailed.innerText  = counts.failed;
+                this.elements.taskSpinner.style.display = isTaskRunning ? 'inline-block' : 'none';
             } catch (err) {
-                console.error("Heartbeat failed:", err);
+                console.error("Task monitor fetch failed:", err);
+                this.elements.taskSpinner.style.display = 'none';
             }
         },
 
         init() {
-            // Don't call refresh() immediately here since it's default OFF
-            setInterval(() => this.refresh(), 30000);
+            // Trigger always-on Card monitoring
+            this.fetchCardStatuses();
+            this.cardIntervalId = setInterval(() => this.fetchCardStatuses(), 60000);
+
+            if (this.taskIntervalId) {
+                clearInterval(this.taskIntervalId);
+            }
         }
     };
-    document.addEventListener('DOMContentLoaded', () => TaskMonitor.init());
+    
+    document.addEventListener('DOMContentLoaded', () => MonitorController.init());
 
     // --- Upload Logic ---
     function uploadImage(colId, files) {

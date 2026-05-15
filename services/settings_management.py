@@ -107,7 +107,21 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     elif field_key == "condition":
         new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "parallel":
-        new_obj = Parallel.create(value=value, settings=user_settings, field=field_key)
+        
+        brand = subset = None
+        if "brand" in all_field_data:
+            brand_name = all_field_data["brand"]
+            brand = Brand.objects.get(raw_value=brand_name, disabled_date__isnull=True)
+        if "subset" in all_field_data:
+            subset_name = all_field_data["subset"]
+            subset = Subset.objects.get(raw_value=subset_name, disabled_date__isnull=True)
+            
+        if "year" in all_field_data:
+            year_name = all_field_data["year"]
+            season = Season.objects.filter(raw_value=year_name, disabled_date__isnull=True).last()
+
+        print("brand and subset", season, brand, subset)
+        new_obj = Parallel.create(value=value, settings=user_settings, field=field_key, brand=brand, subset=subset, year=season)
     elif field_key == "card_name":
         new_obj = CardName.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "year" or field_key =="season":

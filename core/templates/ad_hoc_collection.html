@@ -229,19 +229,22 @@ function handleBulkList() {
     }
 
     /* Card Backgrounds based on status */
-    .card-item.status-unexecuted, .card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+    .card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
     .card-item.status-pending { background-color: #fffbe6; border-color: #ffe58f; }
     .card-item.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
-    .card-item.status-priced { background-color: #007b1b22; border-color: #007b1be6; }
-    .card-item.status-held { background-color: #ffcc6ddf; border-color: #d78c01df; }
-    .card-item.status-auto_priced { background-color: #007b1b22; border-color: #007b1be6; }
-    .card-item.status-listed { background-color: #e6f7ff; border-color: #91d5ff; }
-    .card-item.status-staged { background-color: #e6f7ff; border-color: #91d5ff; }
+
+    .card-item.status-priced, .card-item.status-auto_priced { background-color: #007b1b22; border-color: #007b1be6; }
+    .card-item.status-held { background-color: #999; border-color: #777; }
+
+    .card-item.status-listed, .card-item.status-staged { background-color: #e6f7ff; border-color: #91d5ff; }
+    .card-item.status-sold { background-color: #c9bc008b; border-color: #c9bc00ff; }
+    .card-item.status-reviewed { background-color: #df04db37; border-color: #df04dbbc; }
+    /*intentionally omitted  .card-item.status-unexecuted, .card-item.status-imported, .card-item.status-reyhdrated { background-color: inherit; border-color: #91d5ff; }*/
 
     /* Badge Colors */
     .status-listed { background: #00aaff; color: #000; }
     .status-identified { background: #ff6666; }
-    .status-pending { background: #ffcc0020; color: #000; }
+    .status-pending { background: #ffcc0031; color: #000; }
     .status-failed { background: #ff333320; color: #000; }
     .status-success { background: #33cc3320; color: #000; }
 

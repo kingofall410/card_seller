@@ -40,14 +40,14 @@ class Collection(models.Model):
         return Collection.objects.get(name="Default")
 
     def get_default_exports(self):
-        return (card.active_search_results() for card in self.cards.all())
+        return (card.active_search_results for card in self.cards.all())
     
     @property
     def status_counts(self):
         status_counts = {}
         cards = self.cards.all()
         for card in cards:
-            status = card.active_search_results().overall_status
+            status = card.active_search_results.overall_status
             if status in status_counts:
                 status_counts[status] += 1
             else:
@@ -64,7 +64,7 @@ class Collection(models.Model):
         listed = pending = failed = other = 0
 
         for card in self.cards.all():
-            csr = card.active_search_results()
+            csr = card.active_search_results
             if not csr:
                 continue
 
@@ -173,14 +173,14 @@ class Card(models.Model):
         if info and info.sku:
             info.sku += "_2"
         elif info:
-            info.sku = f"{self.collection_id}-{self.id}-{self.active_search_results().id}_2"
+            info.sku = f"{self.collection_id}-{self.id}-{self.active_search_results.id}_2"
         else:
-            info = ListedInfo.create_from_csr(self.active_search_results())
+            info = ListedInfo.create_from_csr(self.active_search_results)
         info.save()
 
     @property
     def display_sku(self):
-        asr = self.active_search_results()
+        asr = self.active_search_results
         if asr.overall_status == StatusBase.LISTED:
             info = getattr(self, 'listed_card_info', None)
             if info and info.list_price > 0.0:
@@ -188,8 +188,10 @@ class Card(models.Model):
             else:
                 return asr.sku
             return ""
-        else:
+        elif asr:
             return f"{self.collection_id}-{self.id}-{asr.id}"
+        else:
+            return ""
             
     def update_mod_date(self):
         self.modification_date = now() 
@@ -200,7 +202,7 @@ class Card(models.Model):
         print("Card save", self.id if self.pk else None)
         try:
             info = getattr(self, 'listed_card_info', None)
-            asr = self.active_search_results()
+            asr = self.active_search_results
 
             if info and float(info.list_price) > 0.0:
                 print("if")
@@ -220,7 +222,7 @@ class Card(models.Model):
             traceback.print_exc()
     
     def successful_id(self):
-        return self.active_search_results().successful_id()
+        return self.active_search_results.successful_id()
     
     @property
     def next(self):
@@ -249,19 +251,21 @@ class Card(models.Model):
             return self.cropped_image.img
         
     def get_crop_params(self, card_id=None):
-        return self.active_search_results().get_crop_params(card_id)
+        return self.active_search_results.get_crop_params(card_id)
 
-    def active_search_results(self, cleared=False):
-        csr = None
-        if self.pk:
-            csr = self.search_results.last()
-            if cleared:
-                csr.listings.all().delete()                
-        return csr
+    @property
+    def active_search_results(self):
+        # Check if 'search_results' has been prefetched already
+        if hasattr(self, '_prefetched_objects_cache') and 'search_results' in self._prefetched_objects_cache:
+            results = self.search_results.all()
+            return results[len(results)-1] if results else None
+        
+        # Fallback if not prefetched (the slow way)
+        return self.search_results.last()
 
     @property
     def listing_title(self):
-        return self.active_search_results().display_title_to_be
+        return self.active_search_results.display_title_to_be
 
     @property
     def latest_id_task(self):
@@ -283,11 +287,11 @@ class Card(models.Model):
         
     @property
     def listing_group(self):
-        return self.active_search_results().ebay_product_group.name
+        return self.active_search_results.ebay_product_group.name
 
     @property
     def listing_price(self):
-        return self.active_search_results().list_price
+        return self.active_search_results.list_price
 
     @property
     def search_count(self):
@@ -317,7 +321,7 @@ class Card(models.Model):
         
     def clear_listed_info(self):
         self.listed_card_info.clear()
-        csr = self.active_search_results()
+        csr = self.active_search_results
         csr.ebay_product_group = None
         csr.save()
         self.save()        
@@ -1289,7 +1293,7 @@ class Card(models.Model):
         square_rotation = square_rotation%360
         print(f"Squared rotation: {square_rotation}, {remainder_rotation} degrees")
         
-        last_csr = self.active_search_results()
+        last_csr = self.active_search_results
 
         if is_reverse:
             crop_params = last_csr.reverse_crop_params

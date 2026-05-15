@@ -349,84 +349,28 @@
 }
 </style>
 
+{% load static %}
+{% load custom_tags %}
+{% get_collections as collections %}
+<script src="{% static 'js/collection_node.js' %}"></script>
+
 <div id="collection-{{ collection.id }}" class="collection">
-    <div class="collection-node" data-id="{{ collection.id }}">
+    <div class="collection-node">
         
-        {# Extracted Header Component #}
         {% include "components/collection_tools.html" with collection=collection %}
         
-        <div class="container">      
-            {% include "components/status_filter.html" %}          
-        </div>
+        <div id="panes-container" class="container mt-3"></div>
 
-        {% regroup collection.cards.all by overall_status as StatusBase.choices %}
-
-        <div class="status-counts-bar" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-            <div class="status-pill all" style="padding: 4px 12px; background: #eee; border-radius: 20px; font-size: 13px; font-weight: bold;">
-                All: {{ collection.cards.count }}
-            </div>
-            
-            {% for status in StatusBase.choices %}
-                <div class="status-pill" 
-                    style="padding: 4px 12px; background: #f1f3f5; border: 1px solid #ddd; border-radius: 20px; font-size: 13px;">
-                    {# Use your StatusBase labels if possible, otherwise use the raw status value #}
-                    <b>{{ status.grouper|title }}:</b> {{ status.list|length }}
-                </div>
-            {% endfor %}
-        </div>
-        <div class="card-list">
-            {# Individual Cards #}
-            {% for card in collection.cards.all %}
-                {% include "components/card_item.html" with card=card %}
-            {% empty %}
-                <p>No cards found in this collection.</p>
-            {% endfor %}
-
-            {# Subcollections / Folders #}
+        <div id="visual-card-grid" class="card-list">
+            {# Folder items can live here or inside the SearchPanes logic #}
             {% for subcollection in collection.subcollections.all %}
-            <div class="card-item folder">
-                <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ subcollection.id }}</div>
-                <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
-                <div class="image-wrapper">
-                    <img src="/static/images/missing_collection.png" class="thumbnail">
-                </div>
-            </div>
+                <div class="card-item folder">...</div>
             {% endfor %}
             
             {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
         </div>
-    </div>
-</div>
-<div id="collection-{{ collection.id }}" class="collection">
-    <div class="collection-node" data-id="{{ collection.id }}">
-        
-        {# Extracted Header Component #}
-        {% include "components/collection_tools.html" with collection=collection %}
-        
-        <div class="container">      
-            {% include "components/status_filter.html" %}          
-        </div>
 
-        <div class="card-list">
-            {# Individual Cards #}
-            {% for card in collection.cards.all %}
-                {% include "components/card_item.html" with card=card %}
-            {% empty %}
-                <p>No cards found in this collection.</p>
-            {% endfor %}
+        {% include "components/search_panes.html" with cards=collection.cards.all grid_id="#visual-card-grid" %}
 
-            {# Subcollections / Folders #}
-            {% for subcollection in collection.subcollections.all %}
-            <div class="card-item folder">
-                <div class="card-meta" style="color:#888; font-size:9px;">ID: {{ subcollection.id }}</div>
-                <div class="card-meta"><strong>{{ subcollection.name }}</strong></div>
-                <div class="image-wrapper">
-                    <img src="/static/images/missing_collection.png" class="thumbnail">
-                </div>
-            </div>
-            {% endfor %}
-            
-            {% include "components/drop_zone_2.0.html" with collection_id=collection.id %}
-        </div>
     </div>
 </div>

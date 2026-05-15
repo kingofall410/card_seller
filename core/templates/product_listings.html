@@ -34,11 +34,14 @@
 
   <div class="image-grid scroll-row" id="grid-{{ listing_group.id }}">
     {% for listing in listing_group.listings.all %}
+      <!-- Added data-bids and data-format attributes here -->
       <div class="listing" 
            data-id="{{ listing.id }}" 
            data-price="{{ listing.ebay_price|default:0 }}" 
            data-date="{{ listing.pretty_display_date|date:'c' }}" 
-           data-title="{{ listing.title }}">
+           data-title="{{ listing.title }}"
+           data-bids="{{ listing.bids|default:0 }}"
+           data-format="{{ listing.format|default:'' }}">
         <a href="{{ listing.img_url }}" target="_blank">
           <img src="{{ listing.thumb_url }}" class="listing-thumb" alt="" title="{{ listing.title }}">
         </a>
@@ -50,8 +53,41 @@
 </div>
 
 <style>
-  .listing-group.one-liner .image-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding-bottom: 10px; }
-  .listing-group.one-liner .listing { flex: 0 0 auto; width: 100px; }
+  .listing-group.one-liner .image-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding: 4px 4px 10px 4px; }
+  
+  /* Restored default layout style with clean drop shadow */
+  .listing-group.one-liner .listing { 
+    flex: 0 0 auto; 
+    width: 100px; 
+    background-color: #fff;
+    padding: 4px;
+    border: 2px solid transparent; /* Structural placeholder matching red alert thickness */
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .listing-group.one-liner .listing:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  }
+  
+  /* Thin border around the image thumbnail itself */
+  .listing-group.one-liner .listing-thumb {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+  }
+
+  /* Red alert border for low-bid auctions */
+  .listing-group.one-liner .listing.low-bid-auction { 
+    border-color: #dc3545;
+  }
+  
   .sort-link { cursor: pointer; margin-right: 10px; font-size: 0.85em; color: #0d6efd; }
   .sort-link.active { font-weight: bold; text-decoration: underline; color: #212529; }
   .refresh-lg-btn { background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 0.8rem; color: #666; transition: all 0.2s; }
@@ -69,11 +105,18 @@
     const sortBtns = groupEl.querySelectorAll(".sort-link");
     const refreshBtn = groupEl.querySelector(".refresh-lg-btn");
 
-    // 1. Data Prep: Cache values for fast sorting
+    // 1. Data Prep: Cache values for fast sorting & evaluation
     listingNodes.forEach(l => {
         l._sortDate = new Date(l.dataset.date).getTime() || 0;
         l._sortTitle = (l.dataset.title || "").toLowerCase();
         l._sortPrice = parseFloat(l.dataset.price) || 0;
+        
+        // Check for auction format and 0 or 1 bids
+        const bids = parseInt(l.dataset.bids, 10) || 0;
+        const format = l.dataset.format;
+        if (format === 'Auction' && bids <= 1) {
+            l.classList.add('low-bid-auction');
+        }
     });
 
     // 2. Sorting Engine

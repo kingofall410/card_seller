@@ -115,6 +115,9 @@
       {% for listing_group in card_tuple.2.get_pricing_groups %}
         {% include "product_listings.html" with listing_group=listing_group %}
       {% endfor %}
+      {% for listing_group in card_tuple.2.get_avail_groups %}
+        {% include "product_listings.html" with listing_group=listing_group %}
+      {% endfor %}
       {% for listing_group in card_tuple.2.get_img_groups %}
         {% include "product_listings.html" with listing_group=listing_group %}
       {% endfor %}

@@ -1,88 +1,86 @@
 {% load custom_tags %}
-<a href="/card/{{ task.listingtask.card.id }}/" 
-   style="text-decoration:none; color:inherit;" 
-   id="task-{{ task.id }}">
+
+<!-- 
+  ======================================================================
+  TASK COMPONENT LAYER (Tightened padding layout)
+  ======================================================================
+-->
+<a href="/card/{{ task.listingtask.card.id }}/" style="text-decoration:none; color:inherit;" id="task-{{ task.id }}">
     <div class="task-item status-{{ task.status|slugify }} detail-level-{{ detail_level }}" 
          data-card-id="{{ task.card_id }}"
-         data-task-type="{{ task|model_name }}"
-         {# TOOLTIP LOGIC START #}
-         title="{% if task.status|slugify == 'failed' %}{{ task.error_str }}{% else %}{{ task.listingtask.csr.display_title_to_be }}{% endif %}">
-         {# TOOLTIP LOGIC END #}
+         data-task-id="{{ task.id }}"
+         data-title="{{ task.listingtask.csr.display_title_to_be }}"
+         data-scheduled-date="{{ task.listingtask.scheduled_for }}"
+         data-executed-date="{{ task.listingtask.executed_at }}"
+         data-completed-date="{{ task.listingtask.completed_at }}"
+         data-price="{{ task.listingtask.card.listed_card_info.list_price }}"
+         data-thumb="{{ task.listingtask.card.cropped_image.thumbnail.url }}"
+         data-error="{{ task.error_str|default:'' }}">
         
         <table style="width:100%; border-collapse:collapse;">
-            
-            {% if detail_level == 0 %}
             <tr>
-                <td style="vertical-align:middle; padding: 2px 0;">
-                    <div style="display:flex; align-items:center; gap:4px; font-size: 10px;">
-                        <span>{{ task.status_icon }}</span>
-                        <small>{% if task.listingtask.group_key %}{% else %}⭐{% endif %}</small>
-                        <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">
-                            {{ task.listingtask.csr.display_full_name|default:task.name }}
-                        </b>
-                    </div>
-                </td>
-            </tr>
-
-            {% else %}
-            <tr>
-                <td colspan="{% if detail_level == 2 %}3{% else %}2{% endif %}" style="padding-bottom: 4px;">
-                    <div class="csr-title" style="font-size: 11px; line-height: 1.2; display: flex; align-items: center; gap: 4px;">
-                        {% if task.listingtask.group_key %}
-                            <span title="Group Listing"></span>
-                            <b>Group: {{ task.listingtask.group_key }}</b>
-                        {% else %}
-                            <span title="Single Listing">⭐</span>
-                            <b>{{ task.listingtask.csr.display_full_name|truncatechars:25 }}</b>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-
-            <tr>
-                <td style="width:45px; vertical-align:top; padding-right:8px;">
-                    <img src="{% if task.listingtask.card.cropped_image %}{{ task.listingtask.card.cropped_image.url }}{% else %}{{ task.img }}{% endif %}"
-                         style="height:45px; width:45px; object-fit: cover; border-radius: 4px; background: #eee; border: 1px solid rgba(0,0,0,0.1);">
-                </td>
-
-                <td style="vertical-align:top;">
-                    <div style="display:flex; flex-direction:column; gap:1px; font-size: 10px; color: #555;">
-                        <div style="color: #000; font-weight: bold;">
-                            {{ task.listingtask.scheduled_for|time:"g:i A" }}
+                <td style="vertical-align: middle; padding: 1px 0;"> <!-- Reduced vertical cell padding -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;"> 
+                        
+                        <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; min-width: 0;">
+                            <small>{% if task.listingtask.group_key %}{% else %}⭐{% endif %}</small>
+                            <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" title="{{ task.listingtask.csr.display_full_name|default:task.name }}">
+                                {{ task.listingtask.csr.display_full_name|default:task.name }} ({{task.id}})
+                            </b>
                         </div>
-                        <div>ID: {{ task.listingtask.card.id }}-{{ task.listingtask.csr.id }}</div>
-                        <div style="color: #2d7a12; font-weight: bold;">
-                            ${{ task.listingtask.card.listed_card_info.list_price }}
-                        </div>
-                    </div>
-                </td>
-                
-                <td style="vertical-align:top; text-align:right;">
-                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
-                        <div class="status-icon-big" style="font-size: 14px;">{{ task.status_icon }}</div>
-                        {% if detail_level == 2 and task.error_str %}
-                            <div style="color:#d9534f; font-size:9px; max-width: 70px; word-wrap: break-word; font-style: italic; line-height: 1;">
-                                {{ task.error_str|truncatechars:35 }}
+
+                        <!-- Action Dropdown Trigger Menu -->
+                        <div class="task-action-dropdown" onclick="event.preventDefault(); event.stopPropagation();">
+                            <button class="dropdown-trigger-btn" aria-label="Actions">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                </svg>
+                            </button>
+                            <div class="dropdown-menu-pane">
+                                <button type="button" class="menu-item-btn" onclick="executeTaskAction(event, '{{ task.id }}', 'None', this)">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    <span>Retry</span>
+                                </button>
+                                <button type="button" class="menu-item-btn" onclick="openRescheduleModal(event, '{{ task.id }}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    <span>Reschedule</span>
+                                </button>
+                                <button type="button" class="menu-item-btn text-danger" onclick="deleteTask(event, '{{ task.id }}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                    <span>Delete</span>
+                                </button>
                             </div>
-                        {% endif %}
+                        </div>
+
                     </div>
                 </td>
             </tr>
-            {% endif %}
-
-            {% if detail_level == 2 %}
-            <tr>
-                <td colspan="3" style="padding-top: 6px;">
-                    <button type="button"
-                            class="reset-btn"
-                            onclick="event.preventDefault(); openResetModal('{{ task.id }}', event)"
-                            style="width:100%; padding:3px; font-size:9px; cursor:pointer; background:#fff; border:1px solid #ddd; border-radius:3px;">
-                        Reset
-                    </button>
-                </td>
-            </tr>
-            {% endif %}
-
         </table>
     </div>
 </a>
+
+<!-- Inline Hidden Reschedule Modals Structure Wrapper -->
+<div class="reschedule-modal-overlay" id="reschedule-modal-{{ task.id }}" onclick="closeRescheduleModal(event, '{{ task.id }}')">
+    <div class="reschedule-dialog-box" onclick="event.stopPropagation();">
+        <h4>Reschedule Task</h4>
+        <div class="dialog-options-stack">
+            <button type="button" class="dialog-opt-btn" onclick="processReschedule('{{ task.id }}', 'today')">Today</button>
+            <button type="button" class="dialog-opt-btn" onclick="processReschedule('{{ task.id }}', 'tomorrow')">Tomorrow</button>
+            
+            <div class="dialog-input-row">
+                <label for="offset-{{ task.id }}">Add Days:</label>
+                <input type="number" id="offset-{{ task.id }}" min="1" max="90" placeholder="e.g. 3">
+                <button type="button" class="dialog-submit-inline" onclick="processReschedule('{{ task.id }}', 'offset')">Go</button>
+            </div>
+
+            <div class="dialog-input-row">
+                <label for="explicit-{{ task.id }}">Pick Date:</label>
+                <input type="date" id="explicit-{{ task.id }}">
+                <button type="button" class="dialog-submit-inline" onclick="processReschedule('{{ task.id }}', 'explicit')">Go</button>
+            </div>
+        </div>
+        <button type="button" class="dialog-close-btn" onclick="closeRescheduleModal(event, '{{ task.id }}')">Cancel</button>
+    </div>
+</div>

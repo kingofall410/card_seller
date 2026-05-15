@@ -28,8 +28,65 @@ from django.db.models.functions import Concat
 from django.conf import settings as app_settings
 import operator
 from django.core.exceptions import FieldError
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Count
 import traceback
+import shlex
+
+
+def card_status_monitor(request):
+    """
+    Returns aggregated counts of the LATEST CardSearchResult (CSR) for each card,
+    grouped by: Pre-Listing, Priced, Reviewed, Listed, and Sold/Hold.
+    """
+    # 1. Subquery to find the primary key of the newest CSR for each unique card
+    newest_csr_subquery = CardSearchResult.objects.filter(
+        parent_card_id=OuterRef('parent_card_id')
+    ).order_by('-id').values('id')[:1]  # Assumes 'created_at' tracks chronological order
+
+    # 2. Filter down to only these latest CSR records
+    latest_csrs = CardSearchResult.objects.filter(
+        id=Subquery(newest_csr_subquery)
+    )
+
+    # 3. Group and count those latest records by status
+    status_counts = latest_csrs.values('overall_status').annotate(total=Count('id'))
+    
+    # Initialize your new custom counters
+    counts_dict = {
+        'pre-listing': 0,
+        'priced': 0,
+        'reviewed': 0,
+        'listed': 0,
+        'sold-hold': 0
+    }
+
+    # 4. Map DB statuses to your workflow groups
+    for item in status_counts:
+        raw_status = item['overall_status']
+        status = raw_status.lower().replace('_', '-').strip() if raw_status else 'pre-listing'
+        total = item['total']
+        
+        # --- Grouping Logic ---
+        if status in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.STAGED]:
+            counts_dict['listed'] += total
+            
+        elif status in [StatusBase.PRICED, StatusBase.AUTO_PRICED]:
+            counts_dict['priced'] += total
+            
+        elif status in [StatusBase.REVIEWED]:
+            counts_dict['reviewed'] += total
+            
+        elif status in [StatusBase.SOLD, StatusBase.HELD]:
+            counts_dict['sold-hold'] += total
+            
+        else:
+            # Everything else (pending, identified, error, searching) maps to Pre-Listing
+            counts_dict['pre-listing'] += total
+
+    return JsonResponse({
+        'success': True,
+        'counts': counts_dict
+    })
 
 def build_q_from_filters(filters_json):
     if not filters_json:
@@ -87,7 +144,7 @@ def bulk_archive(request):
 def archive(request, card_id):
     ca = CardArchive.archive(card_id)
     #card = Card.objects.get(id=card_id)
-    #card.active_search_results().collapse_token_maps()
+    #card.active_search_results.collapse_token_maps()
     return JsonResponse({"success": 'true'}, status=200)
 
 @csrf_exempt
@@ -104,8 +161,14 @@ def re_sku(request, card_id):
 def single_card_test(request, card_id):
     if request.method == 'POST':
         try:
-
-            CardArchive.rehydrate({"id": 16}, 209)
+            csr = Card.objects.get(id=card_id).active_search_results
+            if not hasattr(csr.parent_card, "listed_card_info"):
+                ListedInfo.create_from_csr(csr)
+            for listing_group in csr.listing_groups.all():
+                listing_group.save()
+                csr.save()
+            
+            #CardArchive.rehydrate({"id": 16}, 209)
             return JsonResponse({"success": 'true'}, status=200)
         except Exception as e:
             traceback.print_exc()
@@ -127,10 +190,10 @@ def card_test(request):
             return JsonResponse({'error': "no cards"}, status=400)
             
         print(card_list)
-        for card in card_list:
-            card.re_sku()
-            card.save()
 
+        for card in card_list:
+            single_card_test(request, card.id)
+            card.save()
         return JsonResponse({"success": 'true'}, status=200)
             
 
@@ -174,7 +237,7 @@ def view_card(request, card_id):
 
     #above is neutered for now until paging is re-implemented
 
-    cc_asr = first_card.active_search_results()
+    cc_asr = first_card.active_search_results
 
     #print(cc_asr.id)
     dataset_configs = []
@@ -226,6 +289,14 @@ def crop_review(request, collection_id):
     card_tuples = [(card, id_) for card in card_list for id_ in (card.id, card.reverse_id) ]
     print("CR", card_tuples)
     return render(request, "crop_review.html", {"card_tuples": card_tuples})
+
+@csrf_exempt
+def crop(request, card_id):
+    # Standard POST retrieval
+    
+    card = Card.objects.get(id=card_id)
+    return render(request, "crop_review.html", {"card_tuples": [(card, card_id), (card, card.reverse_id)]})
+
 
 def save_and_next(request, card_id):
     if request.method == "POST":
@@ -284,6 +355,98 @@ def get_spreadsheet_data(request):
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=400)
+
+def card_search_simple_ajax(request):
+    search_term = request.GET.get('searchTerm', '').strip()
+    timeframe = request.GET.get('timeframe', '0')
+    
+    # 1. Retrieve 'status' as a list of values (e.g. ['Priced', 'Reviewed'])
+    # If no status parameters are passed, or it contains only ['0'], we treat it as unfiltered
+    status_list = request.GET.getlist('status')
+    collection_id = request.GET.getlist('cid')
+    grp_id = request.GET.getlist('grp')
+    if '0' in status_list:
+        status_list.remove('0')
+
+    
+    if collection_id:
+        # Start with base queryset
+        qs = Card.objects.filter(collection_id=collection_id)
+    elif grp_id:
+        qs = Card.objects.filter(search_results__listing__ebay_product_group_key=grp_id)
+    elif timeframe != '0':
+        start_date = timezone.now() - timedelta(days=int(timeframe))
+        qs = qs.filter(modification_date__gte=start_date)        
+
+    # Apply Status Filter (Using list of statuses)
+    if status_list:
+        qs = qs.filter(search_results__overall_status__in=status_list)
+
+    # 2. Split search term into individual words, respecting quotes
+    if search_term:
+        try:
+            # shlex.split('Topps "Ken Griffey Jr" 1989') -> ['Topps', 'Ken Griffey Jr', '1989']
+            parsed_terms = shlex.split(search_term)
+        except ValueError:
+            # Fallback if quotes are unclosed/invalid (e.g., user is still typing: "Ken Griffey)
+            parsed_terms = search_term.split()
+
+        # Build an AND query: every term/phrase must be found in the full name
+        search_query = Q()
+        for term in parsed_terms:
+            if term.strip():
+                search_query &= Q(search_results__full_name__icontains=term.strip())
+        
+        qs = qs.filter(search_query)
+
+    # Call the core logic (limiting to 50 results)
+    card_list = collection_views.flatten_collection(qs, limit=50)
+
+    return JsonResponse({
+        "draw": int(request.GET.get('draw', 1)),
+        "recordsTotal": Card.objects.count(),
+        "recordsFiltered": len(card_list), # Simplified for this context
+        "data": card_list,
+    })
+
+def extract_card_list(request, collection_id=None):
+    card_ids = request.POST.getlist('card_ids[]')
+
+    if len(card_ids):
+        print("lenny", len(card_ids))
+        return Card.objects.filter(id__in=card_ids).order_by('id')
+    elif collection_id:
+        print("collection", collection_id)
+        return Card.objects.filter(collection_id__in=card_ids).order_by('id')  
+
+    return
+
+
+@csrf_exempt
+def get_flat_cards(request, card_id=None):
+    cards = extract_card_list(request)
+    if cards:
+        updated_flat_cards = collection_views.flatten_collection(cards)
+        return JsonResponse({"success": True, "data":updated_flat_cards})
+    else:
+        return JsonResponse({"success": True, "data":[]})
+
+@csrf_exempt
+def refresh_listing_status(request, card_id=None):
+    
+    if card_id:
+        cards = Card.objects.filter(id=card_id)
+        card = cards[0]
+        listing_ids = [card.listed_card_info.listing_id]
+    else:
+        cards = extract_card_list(request)
+        listing_ids = [card.listed_card_info.listing_id for card in cards if hasattr(card, "listed_card_info")]
+    
+    
+    lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
+    updated_flat_cards = collection_views.flatten_collection(cards)
+    return JsonResponse({"success": True, "data":updated_flat_cards})
+    
 
 def card_search_ajax(request):
     query = request.GET.get('q', '').strip()
@@ -354,7 +517,7 @@ def card_search_ajax(request):
         has_next = False
         next_page = None
     else:
-        paginator = Paginator(cards_list, 50)
+        paginator = Paginator(cards_list, 10)
         page_num = request.GET.get('page', 1)
         page_obj = paginator.get_page(page_num)
         cards_to_render = page_obj
@@ -495,7 +658,7 @@ def update_li_fields(request):
         setattr(listed_info, fieldname, fieldvalue)
         listed_info.save()
         card = listed_info.card
-        asr = card.active_search_results()
+        asr = card.active_search_results
         if asr.overall_status == StatusBase.PRICED:
             asr.perform_status_update(StatusBase.REVIEWED)
         card.save()
@@ -623,7 +786,7 @@ def bulk_hold(request, collection_id):
     print(card_list)
 
     for card in card_list:
-        perform_status_update(card.active_search_results().id, StatusBase.HELD)
+        perform_status_update(card.active_search_results.id, StatusBase.HELD)
 
     return JsonResponse({"success": True, "error": ""})
 
@@ -644,7 +807,7 @@ def bulk_status_update(request, status_value):
         card_list = []
         
     for card in card_list:
-        card.active_search_results().perform_status_update(status_value)
+        card.active_search_results.perform_status_update(status_value)
 
     return JsonResponse({"success": True, "error": ""})
 

@@ -72,25 +72,7 @@ function submitCollection(url) {
       },
       success: function(response) {
         console.log("Response received:", response);
-
-        // 1. In JS, use .length, not len()
-        // 2. response is already an object, don't call .json()
-        if (response && response.length > 0) {
-            
-            // If your Django view returns list(records), 
-            // then 'response' IS the array of data.
-            const tableData = response; 
-            
-            // Since you're sending a flat list from Django, 
-            // we can generate headers from the first object keys
-            const colHeaders = Object.keys(tableData[0]);
-
-            if (typeof updateSpreadsheet === 'function') {
-                updateSpreadsheet(tableData, colHeaders);
-            }
-        } else {
-            console.warn("No data returned or empty array");
-        }
+        patchCardUpdates(response["data"])
     },
       error: function(xhr) {
           // Since you got a 500 error, this block will now catch it

@@ -53,7 +53,7 @@ def perform_upload(uploaded_files, collection=None, is_slab=False):
             else:
                 
                 source_card, _ = Card.from_filename(collection, absolute_path, crop=True, match_back=True, is_slab=False)
-                csr = source_card.active_search_results()
+                csr = source_card.active_search_results
                 
                 id_task = core_config.queue.schedule_id_task(name=f"ID image {filename}", callback=perform_id, params={"card_id":source_card.id}, card=source_card)
                 core_config.queue.schedule_pricing_task(name=f"auto-price card {source_card.id}", csr=csr, card=source_card, callback=lookup.price_only_card, params={"card_id": source_card.id, "settings_id":2}, predecessor=id_task, on_success_status=StatusBase.AUTO_PRICED)

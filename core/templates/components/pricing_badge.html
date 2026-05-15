@@ -1,0 +1,309 @@
+<style>
+/* --- Core Structural Shield --- */
+.pricing-badge-embed * {
+    box-sizing: border-box;
+}
+.pricing-badge-embed.pricing-badge-horizontal {
+    display: inline-flex;
+    flex-direction: column;
+    background: #111827; /* Solid Dark Slate Card */
+    padding: 14px 16px; 
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #ffffff;
+    border: 1px solid #374151;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* --- Dynamic Scale Coordinate System --- */
+.pricing-badge-embed .stacked-bars-container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Breathing room between upper and lower tracks */
+    
+    /* Dynamically computed fallback spread constraint */
+    --spread: calc(var(--global-max) - var(--global-min));
+}
+
+/* Shared Track styling properties */
+.pricing-badge-embed .bar-track {
+    position: relative;
+    height: 16px; 
+    width: 100%;
+    background: rgba(255, 255, 255, 0.15); /* Clean desaturated track background line */
+    border-radius: 4px;
+    
+    /* 🛡️ THE BULLETPROOF SHIELD AGAINST GRADIENT BLEEDING: */
+    overflow: hidden; 
+    isolation: isolate; /* Force mix-blend-mode to evaluate exclusively INSIDE this pill */
+    clip-path: inset(0 0 0 0 round 4px); /* Hardware-accelerated clip that browsers cannot bypass */
+}
+
+/* --- TOP TRACK: Base Offer Spectrum Background Line --- */
+.pricing-badge-embed .offers-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 4px;
+    background: rgba(255, 123, 0, 0.25); /* Subtle transparent orange backing range */
+    left: calc(((var(--min) - var(--global-min)) / var(--spread)) * 100%);
+    width: calc(((var(--max) - var(--min)) / var(--spread)) * 100%);
+    min-width: 4px;
+    z-index: 1;
+}
+
+/* --- BOTTOM TRACK: Base Average Spectrum Background Line --- */
+.pricing-badge-embed .averages-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 4px;
+    background: rgba(0, 161, 108, 0.25); /* Subtle transparent green backing range */
+    left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
+    width: calc(((var(--avg-high) - var(--avg-low)) / var(--spread)) * 100%);
+    min-width: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%); 
+    z-index: 1;
+}
+
+/* --- MASTER TICKS LAYER --- */
+.pricing-badge-embed .global-ticks-layer {
+    position: absolute;
+    top: 22px; 
+    height: 46px;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 4; 
+    background-image: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent calc(20% - 1px),
+        rgba(17, 24, 39, 0.6) calc(20% - 1px), 
+        rgba(255, 255, 255, 0.25) 20%
+    );
+    background-size: 100% 100%;
+}
+
+/* --- DYNAMIC GRADIENT CLUSTER BARS STYLE --- */
+.pricing-badge-embed .cluster-gradient-inline {
+    position: absolute;
+    height: 100%; 
+    top: 0; /* Reset back to 0 since containment takes care of scaling now */
+    transform: translateX(-50%); 
+    z-index: 3; 
+    mix-blend-mode: screen; 
+    pointer-events: none;
+}
+
+/* Extended Pin Needle */
+.pricing-badge-embed .bar-avg-pin {
+    position: absolute;
+    top: 20px; 
+    height: 50px;
+    width: 3px;
+    background-color: #ffffff;
+    box-shadow: 0 0 8px #ffffff;
+    z-index: 10;
+    border-radius: 1px;
+    pointer-events: none;
+    left: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%);
+}
+
+/* --- Label Axes Structure --- */
+.pricing-badge-embed .price-labels-top,
+.pricing-badge-embed .price-labels-bottom {
+    position: relative;
+    width: 100%;
+    height: 14px;
+}
+
+.pricing-badge-embed .price-labels-top {
+    margin-bottom: 4px;
+}
+
+.pricing-badge-embed .price-labels-bottom {
+    margin-top: 4px;
+}
+
+.pricing-badge-embed .price-lbl-h {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+/* --- TOP ROW COORDINATES (Orange System) --- */
+.pricing-badge-embed .lbl-min-offer {
+    left: calc(((var(--min) - var(--global-min)) / var(--spread)) * 100%);
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.pricing-badge-embed .lbl-max-offer {
+    left: calc(((var(--max) - var(--global-min)) / var(--spread)) * 100%);
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+/* --- BOTTOM ROW COORDINATES (Green, White, & Gray System) --- */
+.pricing-badge-embed .lbl-avg-low {
+    left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.pricing-badge-embed .lbl-average { 
+    left: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%); 
+    transform: translateX(-50%);
+    text-align: center; 
+    z-index: 6; 
+    color: #ffffff; 
+}
+
+.pricing-badge-embed .lbl-avg-high {
+    left: calc(((var(--avg-high) - var(--global-min)) / var(--spread)) * 100%);
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.pricing-badge-embed .lbl-max { 
+    right: 0; 
+    text-align: right; 
+    color: #9ca3af;
+}
+
+/* Theming typography overrides */
+.pricing-badge-embed .orange-lbl { color: #ffb066; }
+.pricing-badge-embed .green-lbl { color: #10b981; }
+.pricing-badge-embed .lbl-average span { 
+    background: #111827; 
+    padding: 0 4px; 
+    border-radius: 2px; 
+    text-decoration: underline; 
+    text-underline-offset: 2px; 
+}
+/* --- TOP TRACK: Solid Offer Spectrum --- */
+.pricing-badge-embed .offers-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 4px;
+    background: rgba(255, 123, 0, 0.25); /* Kept slightly translucent so heat maps pop */
+    left: calc(((var(--min) - var(--global-min)) / var(--spread)) * 100%);
+    width: calc(((var(--max) - var(--min)) / var(--spread)) * 100%);
+    min-width: 4px;
+    z-index: 1;
+    
+    /* 🛡️ CLIP TO OFFERS PILL ONLY */
+    overflow: hidden;
+    isolation: isolate;
+}
+
+/* --- BOTTOM TRACK: Solid Average Spectrum --- */
+.pricing-badge-embed .averages-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 4px;
+    background: rgba(0, 161, 108, 0.25);
+    left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
+    width: calc(((var(--avg-high) - var(--avg-low)) / var(--spread)) * 100%);
+    min-width: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%); 
+    z-index: 1;
+    
+    /* 🛡️ CLIP TO SOLDS/AVERAGES PILL ONLY */
+    overflow: hidden;
+    isolation: isolate;
+}
+
+/* --- GRADIENT INNER STYLE --- */
+.pricing-badge-embed .cluster-gradient-inline {
+    position: absolute;
+    height: 100%; 
+    top: 0;
+    z-index: 3; 
+    mix-blend-mode: screen; 
+    pointer-events: none;
+    
+    /* 📐 KEEP THE ORIGINAL CENTER MATH WORKING */
+    transform: translateX(-50%); 
+}
+</style>
+<div class="pricing-badge-embed pricing-badge-horizontal">
+    
+    <div class="stacked-bars-container" style="
+        --global-min: 0;
+        --global-max: {{ scale_max|default:10 }};
+        --min: {{ min_offer|default:0 }};
+        --max: {{ max_offer|default:0 }};
+        --avg-low: {{ avg_low|default:0 }};
+        --avg-high: {{ avg_high|default:0 }};
+        --avg: {{ average|default:0 }};
+    ">
+        
+        <div class="price-labels-top">
+            <div class="price-lbl-h lbl-min-offer orange-lbl">
+                <span>${{ min_offer|floatformat:2 }}</span>
+            </div>
+            <div class="price-lbl-h lbl-max-offer orange-lbl">
+                <span>${{ max_offer|floatformat:0 }}</span>
+            </div>
+        </div>
+        
+        <div class="bar-track">
+            <div class="offers-bar" style="--bar-width: calc(var(--max) - var(--min));">
+                
+                {% for cluster in offered_clusters %}
+                <div class="cluster-gradient-inline" 
+                     style="left: calc((( {{ cluster.center }} - var(--min)) / var(--bar-width)) * 100%); 
+                            width: max(20px, {{ cluster.size }}%);
+                            background: linear-gradient(90deg, rgba(255,123,0,0) 0%, rgba(255,123,0,1) 50%, rgba(255,123,0,0) 100%);"
+                     title="Offered Price Cluster: ${{ cluster.center }} ({{ cluster.size }}% volume)"></div>
+                {% endfor %}
+                
+            </div>
+        </div>
+
+        <div class="bar-track">
+            <div class="averages-bar" style="--bar-width: calc(var(--avg-high) - var(--avg-low));">
+                
+                {% for cluster in sold_clusters %}
+                <div class="cluster-gradient-inline" 
+                     style="left: calc((( {{ cluster.center }} - var(--avg-low)) / var(--bar-width)) * 100%); 
+                            width: max(20px, {{ cluster.size }}%);
+                            background: linear-gradient(90deg, rgba(0,161,108,0) 0%, rgba(0,161,108,1) 50%, rgba(0,161,108,0) 100%);"
+                     title="Sold Price Cluster: ${{ cluster.center }} ({{ cluster.size }}% volume)"></div>
+                {% endfor %}
+                
+            </div>
+        </div>
+
+        <div class="global-ticks-layer"></div>
+        <div class="bar-avg-pin"></div>
+
+        <div class="price-labels-bottom">
+            <div class="price-lbl-h lbl-avg-low green-lbl">
+                <span>${{ avg_low|floatformat:0 }}</span>
+            </div>
+
+            <div class="price-lbl-h lbl-average">
+                <span>${{ average|floatformat:2 }}</span>
+            </div>
+
+            <div class="price-lbl-h lbl-avg-high green-lbl">
+                <span>${{ avg_high|floatformat:2 }}</span>
+            </div>
+
+            <div class="price-lbl-h lbl-max">
+                <span>${{ scale_max|default:10|floatformat:0 }}</span>
+            </div>
+        </div>
+
+    </div>
+</div>

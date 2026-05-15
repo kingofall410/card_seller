@@ -57,7 +57,7 @@ class Settings(models.Model):
 
 class SettingsToken(models.Model):
     field_key = models.CharField(max_length=500, blank=False, default="None") 
-    raw_value = models.CharField(max_length=500, blank=False, default="")
+    raw_value = models.CharField(max_length=500, blank=True, null=True, default="")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, default=1)
     match_source_formatting = models.BooleanField(default=False, null=True, blank=True)
     primary_attrib = models.CharField(max_length=500, blank=True, default="")#TODO: remove in favor of primary_token
@@ -262,7 +262,7 @@ class Subset(SettingsToken):
     parent_brand = models.ForeignKey(Brand, on_delete=models.CASCADE, null=True, related_name="subsets")
 
     def __str__(self):
-        return f"{self.parent_brand.raw_value} {self.raw_value}"
+        return f"{self.raw_value}"
     
     @classmethod
     def create(cls, value, settings, field):
@@ -384,10 +384,45 @@ class Condition(SettingsToken):
 class Parallel(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="parallel")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="parallel", default=1)
+
+    year = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="parallels", null=True, blank=True)
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="parallels", null=True, blank=True)
+    subset = models.ForeignKey(Subset, on_delete=models.CASCADE, related_name="parallels", null=True, blank=True)
+    filter_terms = models.CharField(max_length=500, blank=True, null=True)
     
     class Meta:
-        unique_together = ("raw_value", "parent_settings", "field_key")
+        unique_together = ("raw_value", "parent_settings", "field_key", "year", "brand", "subset")
 
+    
+    @classmethod
+    def create(cls, value, settings, field, primary_attrib="", brand=None, subset=None, year=None):
+        #print("here")
+        parallel_obj, _ = Parallel.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, brand=brand, subset=subset, year=year)
+        
+        #print(condition_obj)
+        #set this second since it could point to self
+        if not primary_attrib or primary_attrib=="" or primary_attrib == value:
+            parallel_obj.primary_token = parallel_obj
+        else:
+            parallel_obj.primary_token = Parallel.objects.get(raw_value=primary_attrib)
+        parallel_obj.brand = brand
+        parallel_obj.subset = subset
+        parallel_obj.year = year
+        parallel_obj.save()
+        return parallel_obj
+
+    def save(self, *args, **kwargs):
+        # Only set the slug if it hasn't been set yet
+        if not self.filter_terms:
+            self.filter_terms = ""
+        
+        # Call the "real" save() method
+        super().save(*args, **kwargs)
+
+    def update_filter_terms(self, filter_string):
+        self.filter_terms = filter_string
+        self.save()
+        
 class CardName(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="card_name")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="card_name", default=1)

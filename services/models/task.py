@@ -10,9 +10,12 @@ from core.models.Status import StatusBase
 
 class Task(models.Model):
     name = models.CharField(max_length=200)
-    scheduled_for = models.DateTimeField()
+    scheduled_for = models.DateTimeField(null=True)
+    executed_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
     callback_path = models.CharField(max_length=300)
     params_json = models.TextField(default="{}")
+    priority = models.IntegerField(default=0)
 
     predecessor = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="successor")
     
@@ -40,6 +43,12 @@ class Task(models.Model):
 
     def params(self):
         return json.loads(self.params_json)
+
+    def update_params(self, field_name, field_value):
+        params = self.params()
+        params[field_name] = field_value
+        self.params_json = json.dumps(params)
+        self.save()
 
     @property
     def status_meta(self):

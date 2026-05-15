@@ -54,20 +54,53 @@ def task_monitor_data(request):
 
     return JsonResponse({"data": data})
 
-# views.py
 def retry_task(request, task_id):
-    if request.method == "POST":
-        task = get_object_or_404(Task, id=task_id)
-        task.status = "pending"
-        task.error_str = ""
-        task.save()
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
         
-        # Also tell the Singleton Queue to re-add it if it's not there
-        from core.apps import CoreConfig
-        # Check if it's already in memory; if not, reload
-        # Or simply call Queue().reset() to sync memory with DB
+    task = get_object_or_404(Task, id=task_id)
+    when = request.POST.get('when', 'None')
+    
+    # Base configuration: if None, pass None to preserve task baseline time config
+    scheduled_time = None 
+    
+    if when != 'None':
+        # 1. Grab the existing task's clock time to merge with the new date
+        # Fallback to current time if the relation fields are empty
+        current_schedule = getattr(task.listingtask, 'scheduled_for', None) or timezone.now()
+        existing_time = current_schedule.time()
         
-        return JsonResponse({"success": True})
+        # 2. Compute the new target date anchor
+        today_date = timezone.now().date()
+        
+        if when == 'today':
+            target_date = today_date
+        elif when == 'tomorrow':
+            target_date = today_date + timedelta(days=1)
+        elif when.startswith('offset:'):
+            try:
+                days_count = int(when.split(':')[1])
+                target_date = today_date + timedelta(days=days_count)
+            except (ValueError, IndexError):
+                return JsonResponse({"error": "Invalid day offset format"}, status=400)
+        else:
+            # Explicit ISO Date string choice: "YYYY-MM-DD"
+            try:
+                target_date = datetime.strptime(when, "%Y-%m-%d").date()
+            except ValueError:
+                return JsonResponse({"error": "Invalid explicit date format"}, status=400)
+                
+        # 3. Combine the computed date with the task's original clock time
+        naive_dt = datetime.combine(target_date, existing_time)
+        scheduled_time = timezone.make_aware(naive_dt, timezone.get_current_timezone())
+
+    # 4. Hand over the evaluation directly to your core config engine
+    try:
+        core_config = apps.get_app_config("core")
+        core_config.queue.reschedule_task(task, scheduled_time)
+        return JsonResponse({"status": "success", "message": f"Task scheduled for {scheduled_time or 'Task Default'}"})
+    except Exception as e:
+        return JsonResponse({"error": f"Queue transaction failed: {str(e)}"}, status=500)
 
 def delete_task_json(request, task_id):
     if request.method == "POST":
@@ -104,49 +137,47 @@ def reset_queue(request):
     return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
 
 def task_calendar(request):
-    month_param = request.GET.get("month")
     today = date.today()
+    week_param = request.GET.get("week")
 
-    if month_param:
+    # 1. Determine the Start of the Week (Sunday)
+    if week_param:
         try:
-            year, month = map(int, month_param.split("-"))
-            current = date(year, month, 1)
+            # Parse the requested week start date (e.g., "2026-05-11")
+            week_start = date.fromisoformat(week_param)
+            # Ensure it falls on a Sunday to keep our layout clean
+            days_since_sun = (week_start.weekday() + 1) % 7
+            week_start = week_start - timedelta(days=days_since_sun)
         except ValueError:
-            current = date(today.year, today.month, 1)
+            # Fallback if the date format is corrupted
+            days_since_sun = (today.weekday() + 1) % 7
+            week_start = today - timedelta(days=days_since_sun)
     else:
-        current = date(today.year, today.month, 1)
+        # Default to the current week containing "today"
+        days_since_sun = (today.weekday() + 1) % 7
+        week_start = today - timedelta(days=days_since_sun)
 
-    # 1. Calendar Setup (Sunday Start)
-    cal = calendar.Calendar(firstweekday=6)
-    # itermonthdates gives us the full grid (including padding days from prev/next month)
-    month_days = list(cal.itermonthdates(current.year, current.month))
+    # A week is exactly 7 days from Sunday to Saturday
+    week_days = [week_start + timedelta(days=i) for i in range(7)]
+    start_range = week_days[0]
+    end_range = week_days[-1]
 
-    # 2. Optimized Task Fetching
-    # Filter by the range of dates visible on the calendar to avoid loading the whole DB
-    start_range = month_days[0]
-    end_range = month_days[-1]
-    
-    listingtasks = ListingTask.objects.filter(scheduled_for__date__range=(start_range, end_range)).select_related('card', 'csr').order_by('id')
-    
+    # 2. Optimized Task Fetching for this specific week range
+    listingtasks = ListingTask.objects.filter(
+        scheduled_for__date__range=(start_range, end_range)
+    ).select_related('card', 'csr').order_by('id')
 
     day_map = {}
     for task in listingtasks:
         d = task.scheduled_for.date()
         day_map.setdefault(d, []).append(task)
 
-    # 3. Determine Current Week (for the "Week View" toggle)
-    # Since your calendar is Sunday start, find the most recent Sunday
-    days_since_sun = (today.weekday() + 1) % 7 
-    week_start = today - timedelta(days=days_since_sun)
-    week_end = week_start + timedelta(days=6)
-
-    # 4. Build Unified Day Objects
+    # 3. Build Day Objects for the 7 Days
     day_objects = []
-    for d in month_days:
-        # Fetch and sort tasks by ID
+    for d in week_days:
         tasks = sorted(day_map.get(d, []), key=lambda t: t.id)
         
-        # Build the Day Summary
+        # Build simple summaries
         summary = {
             "total_tasks": len(tasks),
             "success": sum(1 for task in tasks if task.status == StatusBase.SUCCESS),
@@ -155,29 +186,26 @@ def task_calendar(request):
             "failed_val": sum(task.listingtask.card.listed_card_info.list_price for task in tasks if task.status == StatusBase.FAILED),
             "pending": sum(1 for task in tasks if task.status == StatusBase.PENDING),
             "pending_val": sum(task.listingtask.card.listed_card_info.list_price for task in tasks if task.status == StatusBase.PENDING)
-            # Add any other logic like checking for specific task statuses here
         }
-
-        in_current_month = (d.month == current.month)
-        in_current_week = (week_start <= d <= week_end)
 
         day_objects.append(SimpleNamespace(
             date=d,
-            tasks=[task for task in tasks if in_current_week or task.status != StatusBase.SUCCESS],
-            summary=summary, # <--- The new summary object
-            is_today=(d == today),
-            in_current_month=in_current_month,
-            in_current_week=in_current_week
+            tasks=tasks,
+            summary=summary,
+            is_today=(d == today)
         ))
+
+    # 4. Calculate Navigation Offsets
+    prev_week_start = week_start - timedelta(days=7)
+    next_week_start = week_start + timedelta(days=7)
 
     context = {
         "day_objects": day_objects,
-        "current_month": current,
-        "weekday_headers": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+        "week_start": week_start,
         "today": today,
-        # Navigation
-        "prev_month": (current.replace(day=1) - timedelta(days=1)).strftime("%Y-%m"),
-        "next_month": (current.replace(day=28) + timedelta(days=5)).replace(day=1).strftime("%Y-%m"),
+        # Navigation parameters
+        "prev_week": prev_week_start.strftime("%Y-%m-%d"),
+        "next_week": next_week_start.strftime("%Y-%m-%d"),
     }
 
     return render(request, "services/task_calendar.html", context)

@@ -26,7 +26,7 @@ def export_card(request, csr_id):
         return JsonResponse({'error': 'Need auth', 'url':settings.ebay_user_auth_consent}, status=404)
     return success
 
-def perform_list(csr_id, publish, group_key, publish_dt=None, price=None, qty=None):
+def perform_list(csr_id, publish, group_key, publish_dt=None, price=None, qty=None, priority=0):
     csr = CardSearchResult.objects.get(id=csr_id)
     print("csr", csr, group_key)
     group = ProductGroup.objects.filter(group_key=group_key).first()
@@ -42,7 +42,7 @@ def perform_list(csr_id, publish, group_key, publish_dt=None, price=None, qty=No
     listed_info.save()
     
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_listing_task(name=f"list csr {csr_id}", card=csr.parent_card, csr=csr, when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key})
+    core_config.queue.schedule_listing_task(name=f"list csr {csr_id}", card=csr.parent_card, csr=csr, when=publish_dt, callback=export_handler.export_to_ebay, params={"csr_id": csr_id, "publish":publish, "group_key":group_key}, priority=priority)
     csr.overall_status = StatusBase.STAGED if csr.overall_status == StatusBase.PENDING else csr.overall_status
     csr.save()
     if group and csr.overall_status == StatusBase.STAGED: 
@@ -64,7 +64,7 @@ def list_card(request, csr_id):
     if not csr_id or csr_id == 'undefined':
         return JsonResponse({'error': 'CSR ID is required'}, status=400)
         
-    perform_list(csr_id, publish, group_key, publish_dt, price, qty)
+    perform_list(csr_id, publish, group_key, publish_dt, price, qty, priority=1)
     
     success = True
     #else:
@@ -77,7 +77,7 @@ def list_card(request, csr_id):
 @csrf_exempt
 def bulk_list(request, group_key):
     print("key", group_key)
-    group = ProductGroup.objects.get(group_key=group_key)
+    group = ProductGroup.objects.filter(group_key=group_key).last()
 
     try:
         card_ids = request.POST.getlist('card_ids[]') 
@@ -90,12 +90,12 @@ def bulk_list(request, group_key):
     
     print(card_list)
     
-    start_dt = max(group.next_listing_datetime, timezone.now())
+    start_dt = max(group.next_listing_datetime, timezone.now()) if group else timezone.now()
     print("start publish_dt:", start_dt)
     
     core_config = apps.get_app_config("core")
     for card in card_list:
-        perform_list(card.active_search_results().id, False, group_key, publish_dt=start_dt)
+        perform_list(card.active_search_results.id, True, group_key, publish_dt=start_dt)
         start_dt += timedelta(days=1)
 
     return JsonResponse({"success": True, "error": ""})

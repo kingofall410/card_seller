@@ -104,7 +104,31 @@ class ListedInfo(models.Model):
 
     def save(self, *args, **kwargs):
         if self.card:
-            csr = self.card.active_search_results()
+            csr = self.card.active_search_results
             self.listing_detail_text = csr.title_to_be if csr else ""
             self.card.update_mod_date()
+        if not self.listing_id:
+            self.listing_id = ""
         super().save(*args, **kwargs)
+
+    @property
+    def get_sold_price(self):
+        last = self.listing_statuses.last()
+        return last.sold_value if last else None
+
+
+class ListingStatus(models.Model):
+    listing_info = models.ForeignKey(ListedInfo, on_delete=models.CASCADE, related_name='listing_statuses')
+
+    listing_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.LISTED)
+    is_published = models.BooleanField(default=True)
+    sold_qty = models.IntegerField(default=0)
+    sold_value = models.FloatField(default=0)
+    sold_date = models.DateTimeField(null=True)
+    available_qty = models.IntegerField(default=0)
+    create_date = models.DateTimeField(auto_now_add=True)
+    
+    @classmethod
+    #created upon request being made, not before
+    def create(cls, listed_info, avail_qty, status, sold_qty, published):
+        return cls.objects.create(listing_info=listed_info, available_qty=avail_qty, listing_status=status, sold_qty=sold_qty, is_published=published)        

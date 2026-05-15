@@ -23,6 +23,7 @@ class MemoryTask:
     successor_id: Any = field(compare=False, default=None)
     status: str = field(compare=False, default=StatusBase.PENDING)
     on_success_status: str = field(compare=False, default=StatusBase.SUCCESS)
+    priority: int = field(compare=False, default=0)
 
     def run(self):
         try:
@@ -112,14 +113,14 @@ class Queue:
             now = timezone.now()
             
             # 1. Identify what can run RIGHT NOW
-            ready = [t for t in self.tasks if t.scheduled_for <= now and t.status == StatusBase.PENDING]
+            ready = sorted((t for t in self.tasks if t.scheduled_for <= now and t.status == StatusBase.PENDING), key=lambda x:-x.priority)
             
             if ready:
                 print(f"[LOOP] {len(ready)} tasks ready to execute.")
 
             for task in ready:
 
-                if self._stop.is_set():
+                if self._stop.is_set() and not task.priority:
                     break
                 # Re-verify status in case another thread or predecessor logic changed it
                 if task.status != StatusBase.PENDING:
@@ -134,8 +135,9 @@ class Queue:
                     task.status = StatusBase.RUNNING # Update memory too
                     db_task.save(update_fields=["status"])
 
-                    
+                    db_task.executed_at = timezone.now()
                     if task.run():
+                        
                         print(f"[SUCCESS] {task.name} succeeded. Triggering successor: {task.successor_id}")
                         task.status = StatusBase.SUCCESS
                         db_task.status = StatusBase.SUCCESS
@@ -157,6 +159,7 @@ class Queue:
                         if csr and csr.overall_status not in [StatusBase.LISTED, StatusBase.STAGED, StatusBase.HELD]:
                             csr.overall_status = StatusBase.FAILED
                         task.status = StatusBase.FAILED
+                        task.error_str = "logical fail"
                         db_task.status = StatusBase.FAILED
 
                 except Exception as e:
@@ -165,8 +168,11 @@ class Queue:
                         csr.overall_status = StatusBase.FAILED
                     task.status = StatusBase.FAILED
                     db_task.status = StatusBase.FAILED
+                    task.error_str = e
                 
                 finally:
+                    
+                    db_task.completed_at = timezone.now()
                     db_task.save(update_fields=["status", "error_str"])
                     if csr:
                         csr.save(update_fields=["overall_status"])
@@ -184,13 +190,56 @@ class Queue:
                 print("[QUEUE] Stop signal received during interval. Exiting loop.")
                 break
 
-    def schedule_listing_task(self, name, card, csr, when, callback, params, on_success_status=StatusBase.LISTED):
+    def reschedule_task(self, t, when=None):
+        """
+        Re-queues an existing ListingTask into MemoryTask and resets its associated 
+        CSR and Card Info statuses to PENDING.
+        """
+        # 2. Update the database task state itself
+        t.scheduled_for = when or t.scheduled_for
+        t.status = StatusBase.PENDING
+        t.save(update_fields=['scheduled_for', 'status'])
+
+        # 3. Resolve the callback function from the stored path
+        # (This matches the behavior of how your memory loop reconstructs callbacks)
+        import importlib
+        module_path, class_or_func_name = t.callback_path.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        callback_func = getattr(module, class_or_func_name)
+
+        # 4. Parse the parameters back out of JSON
+        params = json.loads(t.params_json) if t.params_json else {}
+
+        # 5. Push the active execution model to your in-memory queue
+        self.add(MemoryTask(
+            scheduled_for=t.scheduled_for, 
+            name=t.name, 
+            callback=callback_func, 
+            params=params, 
+            db_id=t.id
+        ))
+
+        # 6. Safely update the related CSR and Card Info tracking models if they exist
+        csr = t.listingtask.csr
+        if csr:
+            csr.overall_status = StatusBase.PENDING
+            csr.save(update_fields=['overall_status'])
+            
+            # Check if card details exist before attempting to save dates
+            if hasattr(csr, 'parent_card') and hasattr(csr.parent_card, 'listed_card_info') and csr.parent_card.listed_card_info:
+                listed_info = csr.parent_card.listed_card_info
+                listed_info.listing_datetime = when
+                listed_info.save(update_fields=['listing_datetime'])
+
+        return t
+    
+    def schedule_listing_task(self, name, card, csr, when, callback, params, on_success_status=StatusBase.LISTED, priority=0):
         t = ListingTask.objects.create(
             name=name, scheduled_for=when, card=card, csr=csr, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=StatusBase.PENDING, on_success_status=on_success_status
+            params_json=json.dumps(params), status=StatusBase.PENDING, on_success_status=on_success_status, priority=priority
         )
-        self.add(MemoryTask(scheduled_for=when, name=name, callback=callback, params=params, db_id=t.id))
+        self.add(MemoryTask(scheduled_for=when, name=name, callback=callback, params=params, db_id=t.id, priority=priority))
         if csr:
             csr.overall_status = StatusBase.PENDING
             csr.parent_card.listed_card_info.listing_datetime = when
@@ -198,19 +247,19 @@ class Queue:
             csr.parent_card.listed_card_info.save()
         return t
 
-    def schedule_pricing_task(self, name, card, csr, callback, params, predecessor=None, on_success_status=StatusBase.PRICED):
+    def schedule_pricing_task(self, name, card, csr, callback, params, predecessor=None, on_success_status=StatusBase.PRICED, priority=0):
         now = timezone.now()
         starting_status = StatusBase.STAGED if predecessor else StatusBase.PENDING
         
         db_task = PricingTask.objects.create(
             name=name, scheduled_for=now, card=card, csr=csr, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=starting_status, predecessor=predecessor
+            params_json=json.dumps(params), status=starting_status, predecessor=predecessor, priority=priority
         )
 
         mem_task = MemoryTask(
             scheduled_for=now, name=name, callback=callback, params=params, 
-            db_id=db_task.id, status=starting_status
+            db_id=db_task.id, status=starting_status, priority=priority
         )
         
         # Link successor logic in memory BEFORE adding to list
@@ -228,22 +277,22 @@ class Queue:
         
         return db_task
 
-    def schedule_id_task(self, name, callback, params, card):
+    def schedule_id_task(self, name, callback, params, card, priority=0):
         now = timezone.now()
         t = IDTask.objects.create(
             name=name, scheduled_for=now, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=StatusBase.PENDING, card=card
+            params_json=json.dumps(params), status=StatusBase.PENDING, card=card, priority=priority
         )
-        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))
+        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id, priority=priority))
         return t
 
-    def schedule_upload_task(self, name, callback, params):
+    def schedule_upload_task(self, name, callback, params, priority=0):
         now = timezone.now()
         t = UploadTask.objects.create(
             name=name, scheduled_for=now, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=StatusBase.PENDING
+            params_json=json.dumps(params), status=StatusBase.PENDING, priority=priority
         )
-        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id))
+        self.add(MemoryTask(scheduled_for=now, name=name, callback=callback, params=params, db_id=t.id, priority=priority))
         return t

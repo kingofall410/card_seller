@@ -6,7 +6,8 @@ import time
 from datetime import datetime, timedelta
 from requests.exceptions import Timeout, RequestException
 from urllib.parse import quote, quote_plus, urlencode
-
+from core.models.Status import StatusBase
+from core.models.ListedInfo import ListingStatus, ListedInfo
 import fcntl
 from playwright.sync_api import sync_playwright
 
@@ -17,7 +18,9 @@ RUNAME = "Daniel_Crown-DanielCr-Latest-obqqa"
 IMG_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search_by_image"
 TXT_SEARCH_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search"
 SELL_URL="https://api.ebay.com/oauth/api_scope/sell.inventory"
-USER_AUTH_URL = f"https://auth.ebay.com/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={RUNAME}&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory"
+USER_AUTH_URL = f"https://auth.ebay.com/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={RUNAME}&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory&%20https://api.ebay.com/oauth/api_scope/sell.fulfillment"
+
+#f"https://auth.ebay.com/oauth2/authorize?client_id=DanielCr-LatestSa-PRD-d11490c6b-277c9c6f&redirect_uri=Daniel_Crown-DanielCr-Latest-obqqa&response_type=code&scope=https://api.ebay.com/oauth/api_scope/sell.inventory%20https://api.ebay.com/oauth/api_scope/sell.fulfillment"
 
 #business
 SHIPPING_POLICY_STANDARD_ENVELOPE = "296581163011"
@@ -168,16 +171,16 @@ def get_access_token(settings, user_auth_code=None):
             data = {'grant_type': 'refresh_token', 'refresh_token':settings.ebay_refresh_token}
         else:
             print("Trading user auth code...")
-            data = {'grant_type': 'authorization_code', "code":user_auth_code, "redirect_uri":RUNAME}
-    #else:#user-less request
-        #print("user-less")
-        #data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
+            data = {'grant_type': 'authorization_code', "code":"'v^1.1#i^1#I^3#f^0#p^3#r^1#t^Ul41XzQ6NkEwMUU4NEQ0QjNBQkIwM0VGQzk5OTkyOTFBQkQ5OEJfMl8xI0VeMjYw", "redirect_uri":RUNAME}
+    else:#user-less request
+        print("user-less")
+        data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
        
     url = 'https://api.ebay.com/identity/v1/oauth2/token'
     headers = {"Content-Type": "application/x-www-form-urlencoded"}    
 
     
-    print("*"+base64.b64decode("RGFuaWVsQ3ItTGF0ZXN0U2EtUFJELWQxMTQ5MGM2Yi0yNzdjOWM2ZjpQUkQtMTEzZWNmOWM1ZmQxLTU5NTYtNDAxMi1hMDVhLTk3NzA=").decode()+"*")
+    #print("*"+base64.b64decode("RGFuaWVsQ3ItTGF0ZXN0U2EtUFJELWQxMTQ5MGM2Yi0yNzdjOWM2ZjpQUkQtMTEzZWNmOWM1ZmQxLTU5NTYtNDAxMi1hMDVhLTk3NzA=").decode()+"*")
 
     response = requests.post(url, headers=headers, data=data, auth=HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET))
     
@@ -203,7 +206,7 @@ def get_access_token(settings, user_auth_code=None):
 
         settings.save()
         print(f"✅ Access token received successfully.") 
-
+        
     else:
         raise Exception(f"❌ Token request failed with status code {response.status_code}.")
     
@@ -218,12 +221,12 @@ def build_query_params(search_string, limit, offset, category_id, sort="price"):
         f"sort={sort}"
     ]
 
-def text_search(keyword_strings, settings, limit=50, page=1):
+def text_search(keyword_strings, settings, limit=50, page=3):
     print("text_search: ", keyword_strings)
 
     result_data = {}
     if has_user_consent(settings):
-        access_token = get_access_token(settings, settings.ebay_user_auth_code)
+        access_token = get_access_token(settings, None)
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -275,7 +278,7 @@ def image_search(loaded_img, limit=10, page=1, settings=None):
     print("image_search: ", loaded_img.name)
     #if not auth_token:
     if has_user_consent(settings):
-        access_token = get_access_token(settings, settings.ebay_user_auth_code)
+        access_token = get_access_token(settings, None)
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
@@ -384,11 +387,14 @@ def create_inventory_group(group_id, group_data, access_token):
     print("Inventory Group response: ", response, response.text)
     if response.status_code == 200 or response.status_code == 204:
         return True
-    elif response.json()["errors"][0]["errorId"] == 25711:
+    elif response.json()["errors"][0]["errorId"] == 25703 or response.json()["errors"][0]["errorId"] == 25711:
         #missing a previous variant SKU from the group
         error_message = response.json()["errors"][0]["message"] + ": " + "; ".join(group_data["variantSKUs"])
         raise Exception(error_message)
-
+    else:
+        error_message = response.json()["errors"][0]["message"]
+        raise Exception(error_message)
+        
 def delete_inventory_group(group_id, settings, access_token=None):
     #get_user_auth()
     access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
@@ -427,6 +433,196 @@ def get_inventory_group(group_id, settings, access_token=None):
     else:
         raise Exception(response.json()["errors"][0]["message"])
 
+
+def get_inventory_item(sku, settings, access_token=None):
+    #get_user_auth()
+    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+    
+    url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{sku}"
+    response = requests.get(url, headers=headers)
+    print("Item get request:", sku)
+    print("Item Get response: ", response, response.text)
+    if response.status_code == 200 or response.status_code == 204:
+        return True
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
+
+
+def backfill_order_by_id(order_ids, settings):
+    access_token = get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    # URL for a single specific order
+    url = f"https://api.ebay.com/sell/fulfillment/v1/order/{order_id}"
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        order_data = response.json()
+        # Reuse your existing logic to map this to ListedInfo/ListingStatus
+        # (Pass order_data into a version of your update logic)
+        return order_data
+    else:
+        print(f"Failed to fetch {order_id}: {response.text}")
+        return None
+
+def bulk_order_update(listing_ids, settings):
+    access_token = get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    start_date = (datetime.utcnow() - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    
+    # Filter by creation date range
+    url = f"https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[{start_date}..]"
+    
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    #print(response)
+    if response.status_code == 200:
+        orders = data.get("orders", [])
+        
+        # 1. Map by SKU for variations and Listing ID for singles
+        # Fetch all records that match the provided listing IDs
+        infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
+        
+        # Create two maps: one for direct ID lookup and one for SKU lookup
+        listing_id_map = {str(info.listing_id): info for info in infos}
+        sku_map = {str(info.sku): info for info in infos if info.sku}
+        
+        updated_count = 0
+
+        for order in orders:
+            for item in order.get("lineItems", []):
+                legacy_id = str(item.get("legacyItemId"))
+                # Variation SKU usually lives inside the 'sku' field of the line item directly
+                # or sometimes nested in 'variation'
+                sku = item.get("sku") 
+                
+                # 2. MATCHING LOGIC
+                parent_info = None
+                
+                # Priority 1: Match by SKU (Variation)
+                if sku and sku in sku_map:
+                    parent_info = sku_map[sku]
+                # Priority 2: Match by Legacy ID (Single Listing)
+                elif legacy_id in listing_id_map:
+                    parent_info = listing_id_map[legacy_id]
+                else:
+                    print(f"Can't find listing info: {sku or legacy_id}")
+                if parent_info:
+                    # 3. Get latest status or create new
+                    obj = ListingStatus.objects.filter(listing_info=parent_info).order_by('-id').first()
+
+                    if not obj:
+                        obj = ListingStatus(
+                            listing_info=parent_info, 
+                            available_qty=0, 
+                            listing_status=StatusBase.SOLD, 
+                            sold_qty=1, 
+                            is_published=True
+                        )
+                        print(f"Creating new ListingStatus for SKU: {sku or legacy_id}")
+
+                    # 4. Update the fields
+                    obj.order_id = order["orderId"]
+                    obj.status = order["orderFulfillmentStatus"]
+
+                    # Use the 'total' field of the line item. 
+                    # This is CRITICAL for variations so you don't get the whole order total.
+                    line_item_price = item.get("lineItemCost", {}).get("value")
+                    summary_total = order.get("pricingSummary", {}).get("priceSubtotal", {}).get("value")
+                    obj.sold_value = line_item_price or summary_total
+
+                    obj.sold_date = order["creationDate"]
+                    obj.save()
+                    parent_info.card.active_search_results.save()
+                    updated_count += 1
+                    print(f"Synced {parent_info}: Sold for {obj.sold_value}")
+
+        return access_token
+    else:
+        raise Exception(data.get("errors")[0].get("message"))
+
+def get_sale_details(listing_id, settings, listing_status_obj, access_token=None):
+    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    start_date = (datetime.utcnow() - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    
+    # Filter by creation date range
+    url = f"https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[{start_date}..]"
+    
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    #print(response)
+    if response.status_code == 200:
+        orders = data.get("orders", [])
+        #print(orders)
+        # Manually find the order that contains our listing_id
+        target_order = None
+        for order in orders:
+            print("ORDER", order)
+            for item in order.get("lineItems", []):
+                if str(item.get("legacyItemId")) == str(listing_id):
+                    target_order = order
+                    break
+            if target_order: break
+
+        if not target_order:
+            print(f"No orders found for listing {listing_id} in the last 30 days.")
+            return None
+
+        # Process the found order
+        order_id = target_order["orderId"]
+        status = target_order["orderFulfillmentStatus"]
+        listing_status_obj.sold_value = target_order["pricingSummary"]["priceSubtotal"]["value"]
+        listing_status_obj.sold_date = target_order["creationDate"]
+        listing_status_obj.save()
+        return access_token
+    else:
+        raise Exception(data.get("errors")[0].get("message"))
+
+
+def get_offer_status(offer_id, settings, info, access_token=None):
+    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}"
+    response = requests.get(url, headers=headers)
+    data = response.json()
+    if response.status_code == 200:
+        avail_qty = data["availableQuantity"]
+        print(data)
+        if "listing" in data:
+            list_status = StatusBase.SOLD if data["listing"]["listingStatus"] == "OUT_OF_STOCK" else StatusBase.CONFIRMED
+            sold_qty = data["listing"]["soldQuantity"]
+            published = data["status"] == "PUBLISHED"
+        else:
+            list_status = StatusBase.UNLISTED
+            sold_qty = 0
+            published = False
+        print(avail_qty, list_status, sold_qty, published)
+        return ListingStatus.create(info, avail_qty, list_status, sold_qty, published), access_token        
+    else:
+        print(response)
+        raise Exception(response.json()["errors"][0]["message"])    
+    
 
 def get_or_create_offer(offer_data, access_token, sku=None):
 
@@ -685,6 +881,7 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=1095):
                             "sold_date": cells[7],
                             "shipping": get_split_part_text(cells[3], 0, 0),
                             "qty": cells[4],
+                            "bids": cells[6],
                             "itemWebUrl": row_data["imgUrl"]
                         })
                         

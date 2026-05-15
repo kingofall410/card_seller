@@ -13,7 +13,8 @@ class StatusBase(models.TextChoices):
     UNLISTED = "unlisted", "Unlisted"
     REHYDRATED = "rehydrated", "Rehydrated"
     REVIEWED = "reviewed", "Reviewed"
-    SOLD = "sold", "Sold"
+    SOLD = "sold", "Sold",
+    CONFIRMED = "confirmed", "Confirmed"
     #pending, failed
 
     #task
@@ -51,4 +52,5 @@ class StatusBase(models.TextChoices):
             cls.UNLISTED: {"icon": "✋", "color": "#fff1f0"},
             cls.REVIEWED: {"icon": "✔️", "color": "#fff1f0"},
             cls.SOLD: {"icon": "💲💲💲", "color": "#fff1f0"},
+            cls.CONFIRMED: {"icon": "💲💲💲", "color": "#fff1f0"},
         }.get(value, {"icon": "❓", "color": "#ffe6e6"})

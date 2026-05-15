@@ -26,8 +26,8 @@ class ListingGroup(models.Model):
     is_img = models.BooleanField(default=False, blank=True, null=True)
     label = models.CharField(max_length=500, blank=True, null=True)  # e.g. "Sold Refined Wide"
     search_string = models.CharField(max_length=500, blank=True, null=True)
-    filter_terms = models.CharField(max_length=250, blank=True, null=True)
-    id_string = models.CharField(max_length=250, blank=True, null=True)
+    filter_terms = models.CharField(max_length=500, blank=True, null=True)
+    id_string = models.CharField(max_length=500, blank=True, null=True)
 
     color = models.CharField(max_length=100, default="rgba(204, 153, 0, 0.8)")
     border_width = models.IntegerField(default=2)
@@ -36,6 +36,8 @@ class ListingGroup(models.Model):
 
     min_price = models.FloatField(default=0.0)
     max_price = models.FloatField(default=0.0)
+    last_5_min_price = models.FloatField(default=0.0)
+    last_5_max_price = models.FloatField(default=0.0)
     avg_price = models.FloatField(default=0.0)
     price_spread = models.FloatField(default=0.0)
     recent_avg_price = models.FloatField(default=0.0)
@@ -54,6 +56,7 @@ class ListingGroup(models.Model):
     unfiltered_end_price = models.FloatField(default=0.0)
     
     recent_trend_start_price = models.FloatField(default=0.0)
+    clusters = models.JSONField(default=dict, blank=True)
 
     class Meta:
         unique_together = ("search_result", "label")
@@ -62,16 +65,64 @@ class ListingGroup(models.Model):
         if id_string:
             self.id_string = id_string
             self.save()
-        ss = " ".join([id_string, (self.filter_terms or ""), (self.search_result.display_filter_terms or "")])
-        return " ".join(ss.split())
-
-
-    
+        ss = " ".join([id_string, (self.filter_terms or ""), (self.search_result.display_filter_terms or ""), (self.search_result.display_parallel_filter_terms or "")])
+        return " ".join(ss.split())    
 
     @property
     def modified_avg(self):
         return 0        
 
+    def build_clusters(self, clean_prices, distance_threshold=None):
+        """
+        Calculates cluster center (price) and size (% weight of total listings) 
+        from the clean prices list, and caches the dict array on self.clusters.
+        """
+        if not clean_prices:
+            self.clusters = []
+            return
+
+        # 1. Elements must be sorted for single-linkage clustering
+        sorted_prices = sorted(clean_prices)
+        total_listings_count = len(sorted_prices)  # Base denominator for size %
+        cluster_groups = []
+        
+        if total_listings_count < 2:
+            cluster_groups.append(sorted_prices)
+        else:
+            if distance_threshold is None:
+                try:
+                    stdev = statistics.stdev(sorted_prices)
+                    distance_threshold = max(1.0, stdev * 0.25)
+                except statistics.StatisticsError:
+                    distance_threshold = 1.0
+
+            current_cluster = [sorted_prices[0]]
+
+            for price in sorted_prices[1:]:
+                if price - current_cluster[-1] <= distance_threshold:
+                    current_cluster.append(price)
+                else:
+                    cluster_groups.append(current_cluster)
+                    current_cluster = [price]
+            
+            if current_cluster:
+                cluster_groups.append(current_cluster)
+
+        # 2. Compute payload metrics with size as a percentage
+        cluster_payload = []
+        for group in cluster_groups:
+            center_price = statistics.median(group)
+            
+            # Calculate what percentage of total clean sales belong to this cluster
+            size_percentage = (len(group) / total_listings_count) * 100.0
+            
+            cluster_payload.append({
+                "center": round(center_price, 2),
+                "size": round(size_percentage, 2)  # Represented as a clean percentage (e.g., 25.00)
+            })
+
+        # 3. Direct assignment to the property
+        self.clusters = cluster_payload
 
     @property
     def display_state(self):
@@ -174,7 +225,7 @@ class ListingGroup(models.Model):
                 float_prices_all = []
                 
                 for l in listing_list:
-                    if l.ebay_price is not None:
+                    if l.ebay_price is not None and (l.format != 'Auction' or l.bids > 1):
                         price = float(l.ebay_price)
                         float_prices_all.append(price)
                         
@@ -197,6 +248,8 @@ class ListingGroup(models.Model):
                     self.min_price = min(float_prices_all)
                     self.max_price = max(float_prices_all)
                     self.avg_price = sum(float_prices_all) / len(float_prices_all)
+
+                    self.build_clusters(clean_prices_all)
 
                     # --- 1. TREND UNFILTERED (First 5% Avg to Last 5%) ---
                     if len(float_prices_all) >= 2:
@@ -231,7 +284,10 @@ class ListingGroup(models.Model):
 
                         # 3. End point: Average of the LAST 5% 
                         # FIXED SLICE: [-buffer_size:] gets the end of the list
-                        last_5_percent_avg = sum(clean_prices_all[-buffer_size:]) / buffer_size
+                        last_5_pct = clean_prices_all[-buffer_size:]
+                        last_5_percent_avg = sum(last_5_pct) / buffer_size
+                        self.last_5_min_price = min(last_5_pct)
+                        self.last_5_max_price = max(last_5_pct)
                         print("bs", buffer_size, first_5_percent_avg, last_5_percent_avg)
                         
                         # 4. Calculate ftrend
@@ -245,6 +301,8 @@ class ListingGroup(models.Model):
                         self.overall_end_price = last_5_percent_avg
                         #this will be the RRP
                         self.recent_avg_price = self.overall_end_price
+                        self.last_5_min_price
+                        self.last_5_max_price
 
                     # --- 2. TREND RECENT (Branching off the Overall Trend) ---
                     if len(clean_prices_recent) >= 2:
@@ -306,11 +364,12 @@ class ProductListing(models.Model):
     item_id = models.CharField(max_length=500, blank=True)
     listing_date = models.DateTimeField(blank=False, null=True)
     sold_date = models.DateTimeField(blank=False, null=True)
-    img_url = models.CharField(max_length=250, null=True, blank=True)
-    thumb_url = models.CharField(max_length=250, blank=False)    #title is declared below
+    img_url = models.CharField(max_length=500, null=True, blank=True)
+    thumb_url = models.CharField(max_length=500, blank=False)    #title is declared below
     ebay_price = models.FloatField(default=0.0)
     format = models.CharField(max_length=500, blank=True)
     qty = models.IntegerField(default=1)
+    bids = models.IntegerField(default=0)
     
     #legacy
     search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, default=1, related_name="listings")    
@@ -360,7 +419,7 @@ class ProductListing(models.Model):
             listing.img_url = img_url
         else:
             listing.img_url = "http:"+img_url
-
+        #print("item", item)
         listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", listing.img_url)
         price = item.get("price", [{}])
         if isinstance(price, str):
@@ -368,7 +427,10 @@ class ProductListing(models.Model):
         else:
             listing.ebay_price = price.get("value","0")
 
-        listing.format = item.get("format", "N/A")
+        listing.format = item.get("format", None)
+        listing.bids = item.get("bids", "0").replace("-","0")
+        if not listing.format:
+            listing.format = item.get("buyingOptions", [""])[0]
         listing.qty = item.get("qty", "1").replace(",","")
         listing.search_result = parent_csr
         listing.save()

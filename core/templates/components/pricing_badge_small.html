@@ -1,0 +1,90 @@
+<style>
+  /* Keep your layout rules clean and global */
+  .pricing-badge-mini-wrap {
+      display: inline-flex;
+      width: 100%;
+      max-width: 140px; 
+      padding: 6px 8px; 
+      vertical-align: middle;
+      box-sizing: border-box;
+      background: #111827; 
+      border: 1px solid #374151;
+      border-radius: 6px;
+  }
+  .pricing-badge-mini-wrap .mini-stacked-container {
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+  }
+  .pricing-badge-mini-wrap .mini-bar-track {
+      position: relative;
+      height: 6px; 
+      width: 100%;
+      background: rgba(255, 255, 255, 0.12); 
+      border-radius: 2px;
+      overflow: visible;
+  }
+  .pricing-badge-mini-wrap .mini-offers-bar {
+      position: absolute;
+      top: 0; bottom: 0;
+      background: #ff7b00; 
+      border-radius: 2px;
+      min-width: 2px;
+      z-index: 1;
+  }
+  .pricing-badge-mini-wrap .mini-averages-bar {
+      position: absolute;
+      top: 0; bottom: 0;
+      background: #00a16c; 
+      border-radius: 2px;
+      min-width: 2px;
+      z-index: 1;
+  }
+  .pricing-badge-mini-wrap .mini-bar-avg-pin {
+      position: absolute;
+      top: -3px; 
+      height: 12px;
+      width: 2px;
+      background-color: #ffffff;
+      box-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+      z-index: 5;
+  }
+</style>
+
+<div class="pricing-badge-mini-wrap">
+    <!-- Define the core mathematical properties right here on the container scope -->
+    <div class="mini-stacked-container" style="
+        --global-min: 0;
+        --global-max: {{ scale_max|default:10 }};
+        --spread: calc(var(--global-max) - var(--global-min));
+        --min: {{ min_offer|default:0 }};
+        --max: {{ max_offer|default:1 }};
+        --avg-low: {{ avg_low|default:0 }};
+        --avg-high: {{ avg_high|default:0 }};
+        --avg: {{ average|default:0 }};
+    ">
+        
+        <div class="mini-bar-track mini-offers-bar-container">
+            <!-- 🛠️ FIXED: Apply the calc directly to this specific bar element inline -->
+            <div class="mini-offers-bar" style="
+                left: calc(((var(--min) - var(--global-min)) / var(--spread)) * 100%);
+                width: calc(((var(--max) - var(--min)) / var(--spread)) * 100%);
+            "></div>
+        </div>
+
+        <div class="mini-bar-track has-overflow mini-averages-bar-container">
+            <!-- 🛠️ FIXED: Apply the calc directly to this specific average bar element inline -->
+            <div class="mini-averages-bar" style="
+                left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
+                width: calc(((var(--avg-high) - var(--avg-low)) / var(--spread)) * 100%);
+            "></div>
+            <!-- 🛠️ FIXED: Apply the calc directly to this specific pin element inline -->
+            <div class="mini-bar-avg-pin" style="
+                left: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%);
+            "></div>
+        </div>
+
+    </div>
+</div>

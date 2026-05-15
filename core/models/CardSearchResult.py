@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import Avg
 from django.utils import timezone
 from scipy.stats import trim_mean
-import re, requests, random
+import re, requests, random, math
 from core.models.Cropping import CropParams
 from core.models.Status import *
 from core.models.Group import *
@@ -64,7 +64,8 @@ class OverrideableFieldsMixin(models.Model):
         is_manual_fieldname = f"{field}_is_manual"
 
         # Validate fields exist
-        model_fields = [f.name for f in self._meta.fields]
+        model_fields = [f.name for f in self._meta.get_fields()]
+        print(model_fields)
         if field_to_set not in model_fields:
             print(f"⚠️ Field '{field_to_set}' does not exist on model.")
             return
@@ -92,6 +93,15 @@ class OverrideableFieldsMixin(models.Model):
         #remove this hardcode
         if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
+        
+        #write through the parallel filter terms if updated
+        if field == "parallel_filter_terms":
+            if is_manual:
+                #if is manual edit, push back to server
+                self.parallel_selected_token.update_filter_terms(new_field_value)
+            else:
+                #otherwise pull
+                self.parallel_filter_terms = self.parallel_selected_token.filter_terms
 
         #if field in self.set_definition_fields:
             #self.check_update_set_token(field, new_field_value)
@@ -211,6 +221,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     filter_terms = models.CharField(max_length=250, blank=True, null=True)
     filter_terms_m = models.CharField(max_length=250, blank=True, null=True)
     filter_terms_is_manual = models.BooleanField(default=False, null=True, blank=True)
+    
+    parallel_filter_terms = models.CharField(max_length=250, blank=True, null=True, default="")
+    parallel_filter_terms_m = models.CharField(max_length=250, blank=True, null=True, default="")
+    parallel_filter_terms_is_manual = models.BooleanField(default=False, null=True, blank=True)
 
     attributes = models.TextField(blank=True)
     unknown_words = models.TextField(blank=True)   
@@ -235,6 +249,10 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     ebay_offer_id = models.CharField(max_length=100, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
+    min_avg = models.FloatField(default=0.0)
+    max_avg = models.FloatField(default=0.0)
+    min_offer = models.FloatField(default=0.0)
+    max_offer = models.FloatField(default=0.0)
 
     ebay_msrp = models.FloatField(default=0.0, null=True)
     ebay_product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="products")
@@ -251,7 +269,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     overrideable_fields = [
         "full_name", "first_name", "last_name",
-        "year", "brand", "subset", "parallel",
+        "year", "brand", "subset", "parallel", "parallel_filter_terms",
         "card_number", "team", "city", "serial_number", 
         "title_to_be", "card_name", "text_search_string", 
         "sold_search_string", "filter_terms"
@@ -259,7 +277,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     #this one determines search_results.html order.  The others do fuckall?
     display_fields = [
-       "year", "brand", "subset", "card_name", "parallel", "full_name", "card_number", "city", "team", "attributes", "condition", "filter_terms", "unknown_words"
+       "year", "brand", "subset", "card_name", "parallel", "parallel_filter_terms", "full_name", "card_number", "city", "team", "attributes", "condition", "filter_terms", "unknown_words"
         #below only needed for expanded --> TBD
         # "ebay_mean_price", "ebay_median_price", "ebay_mode_price", "ebay_low_price", "ebay_high_price",  #"text_search_string", "response_count", "first_name", "last_name",
         # "unknown_words",  "text_search_string", "sold_search_string", "filter_terms", #"serial_number", "condition", "number_grade"
@@ -285,7 +303,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         "ebay_listing_id", "card_id", "id", "title_to_be", "list_price", "ebay_msrp", "sku", "ebay_offer_id", "ebay_listing_datetime", "front_image", "reverse_image"
     ]
 
-    calculated_fields = ["title_to_be", "text_search_string", "sold_search_string"]#, "filter_terms"]
+    calculated_fields = ["title_to_be", "text_search_string", "sold_search_string", "parallel_filter_terms"]#, "filter_terms"]
     
     set_definition_fields = ["year", "brand", "subset"]
 
@@ -312,31 +330,28 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def reverse_listing_groups(self):
         return self.listing_groups.all().order_by('-id')
 
-    def reset_listing_groups(self):
+    def reset_listing_groups(self, include_graded=False):
         print("reset")
-        sold = self.listing_groups.exclude(label__istartswith="ID")
+        sold = self.listing_groups.exclude(label__icontains="ID")
         if sold:
             sold.delete()
 
+        self.create_listing_group(label="Available", is_sold=False, is_img=False, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")
         self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")    
         #if there's a condition already specified, use that, otherwise do a PSA by default
         if self.condition:
             self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
-        self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
-        self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
-        self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
         
+        if include_graded:
+            self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
+            self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
+            self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
+            
         self.save()
 
     def create_listing_group(self, label, filter_terms="", id_string="", is_img=False, is_refined=False, is_wide=False, is_sold=False):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
-    def get_listing_group_labeled(self, label):
-        try:
-            return self.listing_groups.get(label=label)
-        except ListingGroup.DoesNotExist:
-            return None
-
     @property
     def get_pricing_groups(self):
         sold_groups = list(self.listing_groups.filter(is_sold=True))
@@ -345,9 +360,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     @property
     def get_img_groups(self):
-        sold_groups = list(self.listing_groups.filter(is_img=True))
-        sold_groups.sort(key=lambda x: "Sold Raw" not in (x.label or ""))
-        return sold_groups
+        img_groups = list(self.listing_groups.filter(is_img=True))
+        return img_groups
+
+    @property
+    def get_avail_groups(self):
+        avail_groups = list(self.listing_groups.filter(is_img=False).filter(is_sold=False))        
+        return avail_groups
 
     def get_listing_group(self, is_sold=False, is_wide=False, is_refined=False, is_img=False):
         try:
@@ -373,11 +392,47 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         self.title_to_be = self.build_title(condition_sensitive=True)
         self.variation_title_base = self.build_title(short=True, condition_sensitive=True)
         self.filter_terms = self.filter_terms or " -box -pack -variation -sp -ssp -lot -auto -autograph"
+        
+        if self.parallel_selected_token and not self.parallel_filter_terms_is_manual:
+            print(self.parallel_selected_token.id)
+            #self.set_ovr_attribute("parallel_filter_terms", self.parallel_selected_token.filter_terms, False)
+            self.parallel_filter_terms = self.parallel_selected_token.filter_terms
+
         self.parent_card.update_mod_date()
         
         self.sport = ""
         self.league = ""
 
+        #this is all a crutch for shitty code
+        #check to see if we have been sold
+        if hasattr(self.parent_card, "listed_card_info"):
+            listing_status = self.parent_card.listed_card_info.listing_statuses.last()
+            if listing_status:
+                if self.overall_status == StatusBase.LISTED or self.overall_status == StatusBase.CONFIRMED:
+                    if listing_status.listing_status == StatusBase.SOLD:
+                        self.overall_status = StatusBase.SOLD
+                    elif listing_status.listing_status == StatusBase.UNLISTED:
+                        self.overall_status = StatusBase.UNLISTED
+                    else:
+                        self.overall_status = StatusBase.CONFIRMED
+
+        
+        #calculate pricing badge values
+        raw_sold = self.listing_groups.filter(label__icontains="Raw").first()
+        if not raw_sold:
+            raw_sold = self.listing_groups.filter(label__icontains="Sold").first()
+
+        available = self.listing_groups.filter(label__icontains="Available").first()
+        if not available:
+            available = self.listing_groups.filter(label__icontains="ID").first()
+
+        if available:
+            self.min_offer = available.last_5_min_price
+            self.max_offer = available.last_5_max_price
+
+        if raw_sold:
+            self.min_avg = raw_sold.last_5_min_price
+            self.max_avg = raw_sold.last_5_max_price
         #if self.attribute_flags:
             #print(self.attributes)
             #print(self.attribute_flags)
@@ -536,10 +591,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     else:
                         final_value = ""
 
+                #disaster
                 if field_name in self.overrideable_fields:
                     self.set_ovr_attribute(field_name, final_value, False)
-                elif field_name != 'condition':
+                elif field_name != 'condition':#?
                     setattr(self, field_name, final_value)
+                
 
         
         self.set_ovr_attribute("title_to_be", self.build_title(condition_sensitive=True), False)
@@ -612,6 +669,20 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def clear_listings(self):
         self.listings.all().delete()
+
+    def scale_max(self):
+        max_off = float(self.max_offer or 0)
+        max_av = float(self.max_avg or 0)
+        
+        # 1. Find the highest overall value
+        highest_val = max(max_off, max_av)
+        
+        # 2. Handle the edge case where all data is 0
+        if highest_val <= 2:
+            return 2.5 # Standard default ceiling
+        else:            
+            # 3. Round up to the nearest multiple of 5
+            return math.ceil(highest_val / 5.0) * 5.0
 
     @classmethod
     def create_empty(cls, pcard):
@@ -701,13 +772,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         csr.save()
         return csr
     
-    def build_set_options(self):
-    
+    def build_explosion_options(self, fields):
         def get_field_variations(field_value):
             if not field_value or str(field_value).startswith('/'):
                 return []
             
-            words = field_value.split()
+            # Ensure we are splitting the string into a list of words
+            words = str(field_value).split()
             variations = []
             
             # Get all sub-combinations of words
@@ -716,39 +787,33 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     variations.append(" ".join(combo))
             return variations
 
-        # 1. Prepare fields and get pools
-        fields = [self.display_value("brand"), self.display_value("subset")]
-        
-        # 2. Add an empty string to each pool to represent "0 choices" from that field
-        # We filter out None/Empty values initially, then append '' to each valid list
         field_pools = []
         for val in fields:
             variations = get_field_variations(val)
             if variations:
-                # Add '' so that the product includes the option of not picking from this pool
                 field_pools.append([''] + variations)
             else:
-                # If the field itself was empty, effectively only '' is available
                 field_pools.append([''])
 
-        # 3. Generate the Cartesian Product
-        # The product will now include combinations like ('', ''), ('Brand', ''), ('', 'Subset'), etc.
+        # 1. Generate the Cartesian Product
         raw_combos = list(product(*field_pools))
         
-        # 4. Join and clean up results
-        # We strip() to remove spaces if one of the fields in the pair was empty
+        # 2. Flatten and clean results
         set_options = set()
         for combo in raw_combos:
-            joined = " ".join(combo).strip()
-            if joined:  # Only add if it's not a completely empty string
+            clean_words = [word for word in combo if word]
+            if clean_words:
+                joined = " ".join(clean_words).strip()
                 set_options.add(joined)
-                
-        # Add back the single brand-only option if desired
-        brand_only = self.display_value("brand")
-        if brand_only:
-            set_options.add(brand_only)
 
-        return sorted(list(set_options))
+        # 3. Convert to list for sorting
+        result_list = list(set_options)
+
+        # 4. Sort Longest-to-Shortest
+        # primary key: negative length (descending), secondary key: alpha (ascending)
+        result_list.sort(key=lambda x: (-len(x), x))
+                
+        return result_list
 
     def build_card_name_options(self):
         card_name_str = self.display_value("card_name")
@@ -759,28 +824,24 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def build_year_options(self):
         #don't deal with compound years just yet
         return [self.display_value("year")]
-    
-    def build_parallel_options(self):
-        parallel_str = self.display_value("parallel")
-        if parallel_str:
-            return [word for word in parallel_str.split()]
-        return []
 
     def build_search_string(self):
         
         year_opt_array = self.build_year_options()
-        parallel_opt_array = self.build_parallel_options()
+        parallel_opt_array = self.build_explosion_options([self.display_value("parallel")])
         card_name_opt_array = self.build_card_name_options()
-        set_opt_array = self.build_set_options()
+        set_opt_array = self.build_explosion_options([self.display_value("brand"), self.display_value("subset")])
+        
 
         year_opt_string = year_opt_array[0]#not needed until compound year"("+",".join([opt for opt in year_opt_array])+")" if len(year_opt_array) > 0 else ""
         
         set_opt_string ='('+','.join([opt for opt in set_opt_array])+")" if set_opt_array  else ""
-        parallel_opt_string = ""+",".join([opt for opt in parallel_opt_array])+"" if parallel_opt_array else ""
-        card_name_opt_string = "("+",".join([opt for opt in card_name_opt_array])+")" if card_name_opt_array else ""
+        parallel_opt_string = "("+",".join([opt for opt in parallel_opt_array])+")" if parallel_opt_array else ""
+        #card_name_opt_string = "("+",".join([opt for opt in card_name_opt_array])+")" if card_name_opt_array else ""
         auto_string = "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else ""
         psa_string = ""#(PSA 10,PSA 9,PSA 8,)"
-        return " ".join([(year_opt_string or ""), set_opt_string, card_name_opt_string, auto_string, parallel_opt_string, self.display_value("full_name"), (self.display_value("card_number") or""), psa_string])
+        return " ".join([(year_opt_string or ""), set_opt_string, auto_string, parallel_opt_string, \
+                        self.display_value("full_name"), (self.display_value("card_number") or""), (self.display_value("parallel_filter_terms") or ""), psa_string])
         
     #this has become a disaster and needs to be phased out
     def build_title(self, condition_sensitive=False, short=False):
@@ -875,7 +936,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         # Store results in your object if needed
         self.condition = condition
         self.number_grade = number_grade
-
+    
     #TODO:these buildable fields should be configurable
     @property
     def full_set(self):
@@ -907,8 +968,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         
         if force or not self.has_valid_sku:
             self.sku = f"{self.parent_card.collection_id}-{self.parent_card_id}-{self.id}"
-        elif not self.sku:
+        elif self.sku != self.parent_card.listed_card_info.sku:
             self.sku = self.parent_card.listed_card_info.sku
+        
+        
+        #stupid failsafe
+        if self.sku == "":
+            f"{self.parent_card.collection_id}-{self.parent_card_id}-{self.id}"
         print(self.sku)
         return self.sku
     

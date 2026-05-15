@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models.Card import Card, CardSearchResult, Collection
 from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup
 from core.models.Group import ProductGroup
-from core.models.ListedInfo import ListedInfo
+from core.models.ListedInfo import ListedInfo, ListingStatus
 from core.models.Cropping import CropParams, CroppedImage
 from core.models.Archive import CardArchive, CSRArchive, CroppedImageArchive, ListedInfoArchive
 
@@ -34,6 +34,7 @@ admin.site.register(CropParams)
 admin.site.register(CroppedImage) 
 admin.site.register(Collection)
 admin.site.register(ListedInfo)
+admin.site.register(ListingStatus)
 admin.site.register(ListedInfoArchive)
 admin.site.register(CardArchive)
 admin.site.register(CSRArchive)

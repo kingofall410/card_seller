@@ -1,0 +1,299 @@
+{% load custom_tags %}
+{% load static %}
+{% get_collections as collections %}
+<script src="{% static 'js/collection_node.js' %}"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.css">
+<script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+// --- UI Management ---
+function switchTab(tabId, event) {
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+        content.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+    const selectedTab = document.getElementById(tabId);
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+        selectedTab.classList.add('active');
+    }
+    if (event) event.currentTarget.classList.add('active');
+
+    // Use Module to refresh
+    if (tabId === 'table-view') {
+        const hot = SpreadsheetModule.getInstance();
+        if (hot) setTimeout(() => hot.render(), 50);
+    }
+}
+
+function filterSpreadsheet() {
+    console.log("filter spreadsheet")
+    const visibleCards = document.querySelectorAll('.card-item:not(.hidden-card):not(.folder)');
+    const visibleIds = Array.from(visibleCards).map(card => card.getAttribute('data-id'));
+    SpreadsheetModule.filterByCardIds(visibleIds);
+}
+
+// Called by your search result logic
+function updateSpreadsheet(tableData, colHeaders) {
+    console.log("update spreadsheet")
+    SpreadsheetModule.init('hot-spreadsheet', tableData, colHeaders);
+    filterSpreadsheet();
+}
+
+function launchSequence() {
+    // 1. Check for manually selected checkboxes first
+    const checkedBoxes = document.querySelectorAll('input[name="selected_cards"]:checked');
+    let ids = Array.from(checkedBoxes).map(cb => cb.value);
+
+    // 2. If NO checkboxes are checked, fallback to the filtered/sorted sequence
+    if (ids.length === 0) {
+        console.log("No manual selections found. Using full sequence.");
+        ids = JSON.parse(sessionStorage.getItem('card_sequence') || "[]");
+    }
+
+    // 3. Final validation
+    if (ids.length === 0) {
+        alert("No cards selected or visible!");
+        return;
+    }
+
+    // 4. Update storage for the next step in your app
+    console.log(`Launching sequence with ${ids.length} cards.`);
+    sessionStorage.setItem('card_sequence', JSON.stringify(ids)); // Keep session sync'd
+    localStorage.setItem('session_bridge', JSON.stringify(ids));
+    
+    // Redirect or trigger your sequence logic here
+}
+
+// Logic to keep Card View in sync with Spreadsheet edits
+function syncCardView(id, updatedFields) {
+    const card = document.querySelector(`.card-item[data-id="${id}"]`);
+    if (!card) return;
+
+    Object.entries(updatedFields).forEach(([field, value]) => {
+        const el = card.querySelector(`.card-${field}`);
+        if (el) el.textContent = value;
+    });
+
+    if (updatedFields.status) {
+        card.className = card.className.replace(/status-\w+/, `status-${updatedFields.status.toLowerCase()}`);
+    }
+}
+
+function handleBulkUpdate() {
+    // Get the dropdown element
+    const dropdown = document.getElementById('status-dropdown');
+    const selectedValue = dropdown.value;
+    
+    // Construct the URL dynamically
+    const url = `/bulk_status_update/${selectedValue}/`;
+    
+    // Call your existing function or perform the fetch
+    submitCollection(url);
+}
+
+function handleBulkList() {
+    // Get the dropdown element
+    const dropdown = document.getElementById('group-dropdown');
+    const selectedValue = dropdown.value;
+    
+    // Construct the URL dynamically
+    const url = `/bulk_list/${selectedValue}/`;
+    
+    // Call your existing function or perform the fetch
+    submitCollection(url);
+}
+</script>
+<style>
+    /* --- Layout & Global --- */
+    .card-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 15px;
+        align-items: flex-start;
+    }
+
+    /* --- Card Component --- */
+    .card-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 160px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        position: relative;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+
+    .card-main-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        width: 100%;
+    }
+
+    .card-meta {
+        width: 100%;
+        font-size: 16px;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #444;
+    }
+
+    /* --- Images --- */
+    .image-wrapper {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 3 / 4;
+        overflow: hidden;
+        margin: 8px 0;
+        border-radius: 4px;
+        background-color: #eee;
+    }
+
+    .thumbnail {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: opacity 0.3s ease;
+    }
+
+    .thumbnail.hover { opacity: 0; z-index: 2; }
+    .thumbnail.default { opacity: 1; z-index: 1; }
+    .image-wrapper:hover .thumbnail.hover { opacity: 1; }
+    .image-wrapper:hover .thumbnail.default { opacity: 0; }
+
+    /* --- Status Badges & States --- */
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+    }
+
+    /* Card Backgrounds based on status */
+    .card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+    .card-item.status-pending { background-color: #fffbe6; border-color: #ffe58f; }
+    .card-item.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
+
+    .card-item.status-priced, .card-item.status-auto_priced { background-color: #007b1b22; border-color: #007b1be6; }
+    .card-item.status-held { background-color: #999; border-color: #777; }
+
+    .card-item.status-listed, .card-item.status-staged, .card-item.status-confirmed { background-color: #e6f7ff; border-color: #91d5ff; }
+    .card-item.status-sold { background-color: #c9bc008b; border-color: #c9bc00ff; }
+    .card-item.status-reviewed { background-color: #df04db37; border-color: #df04dbbc; }
+    /*intentionally omitted  .card-item.status-unexecuted, .card-item.status-imported, .card-item.status-reyhdrated { background-color: inherit; border-color: #91d5ff; }*/
+
+    /* Badge Colors */
+    .status-listed { background: #00aaff; color: #000; }
+    .status-identified { background: #ff6666; }
+    .status-pending { background: #ffcc0031; color: #000; }
+    .status-failed { background: #ff333320; color: #000; }
+    .status-success { background: #33cc3320; color: #000; }
+
+    /* --- Tabs --- */
+    .tab-btn {
+        background: none;
+        border: none;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        color: #666;
+    }
+
+    .tab-btn.active {
+        color: #007bff;
+        border-bottom: 3px solid #007bff;
+    }
+
+    /* --- Dropdowns & Menus --- */
+    .move-menu {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background-color: #ffffff;
+        min-width: 180px;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+        z-index: 1001;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .move-menu a {
+        color: #333;
+        padding: 8px 12px;
+        text-decoration: none;
+        display: block;
+        font-size: 13px;
+    }
+
+    .move-menu a:hover { background-color: #f1f1f1; }
+    .handsontable td img {
+    display: block;
+    height: 250px; /* Or whatever height you want for your Mojo cards */
+    width: auto;
+}
+</style>
+{% include "header.html" %}
+{% get_product_groups as groups %}
+<div id="collection-0" class="collection">
+<div class="collection-node">
+  <div class="collection-header">
+    
+    <button onclick="submitAndGo('/crop_review/0/')">✂</button>
+    <button onclick="submitCollection('/identify_collection/0/')">🔍</button>
+    <button onclick="submitCollection('/price_collection/0/')">💲</button>
+    <button onclick="submitCollection('/bulk_hold/0/')">✋</button>
+    <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
+    <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>          
+    <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
+    <select id="status-dropdown" 
+            style="padding: 4px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-weight: bold; cursor: pointer; 
+                background-color: {{ meta.color }}; transition: background-color 0.3s;">
+        
+        {% for value, label in StatusBase.choices %}
+            {# Optional: Filter to only show Card-related statuses #}
+            <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkUpdate()">Bulk Status Update</button>
+
+    <select id="group-dropdown" class="group-select"
+              data-card-id="{{ card_id }}"
+              style="padding: 8px; border-radius: 6px; min-width: 180px;">
+        <option value="-1">No Group (Single Listing)</option>
+        <option value="__new__">➕ New Group…</option>
+
+        {% for g in groups %}
+          <option value="{{ g.key }}">{{ g.name }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkList()">Bulk List</button>
+
+  </div>
+  
+    {% block content %}
+    {% include "components/search_bar_only.html" with q=q since=since %}
+    {% include "components/search_panes.html"  with q=q since=since%}
+    {% comment %} {% include "tabbed_collection_view.html" with StatusBase=StatusBase %} {% endcomment %}
+{% endblock %}
+

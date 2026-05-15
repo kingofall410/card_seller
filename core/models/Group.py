@@ -101,8 +101,9 @@ class ProductGroup(models.Model):
         csrs = new_csrs+list(self.products.filter(overall_status=StatusBase.LISTED))
         print("csrs", csrs)
         sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
-        variant_skus = [(csr.parent_card.listed_card_info.sku) for csr in sorted_csrs]
-        variation_title_bases = [csr.variation_title_base for csr in sorted_csrs]
+        
+        variant_skus = [(csr.parent_card.listed_card_info.sku) for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]
+        variation_title_bases = [csr.variation_title_base for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]
 
         # Group SKUs by title
         title_to_skus = defaultdict(list)

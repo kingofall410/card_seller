@@ -17,7 +17,7 @@ $(document).ready(function () {
 
       const allFields = collectAllFields(cardId);
       allFields.group_key = "";
-
+      
       $.ajax({
       url: "/update_csr_fields/",
       method: "POST",
@@ -135,6 +135,25 @@ function handleResku(event, cardId) {
     });
 }
 
+function handleCrop(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    location.href = `/crop/${cardId}/`
+}
+
+function handleRefresh(event, cardId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    fetch(`/refresh_listing_status/${cardId}/`, { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {  
+      console.log(data); 
+      patchCardUpdates(data)        
+    });
+}
+
 function updateCharCount(input) {
     const maxLength = 80;
     const currentLength = input.value.length;
@@ -158,10 +177,10 @@ function collectAllFields(cardId, required_only = false) {
   //console.log("1", allFields)
   // Checkboxes
   document.querySelectorAll(`input[type='checkbox'][id$='-${cardId}']`).forEach(checkbox => {
-    console.log("checkbox loop")
+    
     let name = checkbox.name;
     const value = checkbox.checked
-
+    console.log("checkbox loop", name, value)
     if (name && name.endsWith(`_${cardId}`)) {
       name = name.slice(0, -(`_${cardId}`.length));
     }
@@ -178,11 +197,11 @@ function collectAllFields(cardId, required_only = false) {
   //console.log("2", allFields)
   // Text inputs
   document.querySelectorAll(`input[type='text'][id$='-${cardId}'], textarea[id$='-${cardId}']`).forEach(el => {
-    console.log("textbox loop")
+    
     let name = el.name;
     //console.log(el.name)
     const value = el.value;
-
+console.log("textbox loop", name, value)
     if (name && name.endsWith("_m")) {
       name = name.slice(0, -2);
     }
@@ -352,13 +371,24 @@ function handleEnterPress(fieldName, cardId, csrId) {
     }
 
     const brandInput = document.getElementById(`field_brand-${cardId}`);
+    const subsetInput = document.getElementById(`field_subset-${cardId}`);
+    const yearInput = document.getElementById(`field_year-${cardId}`);
     const cityInput = document.getElementById(`field_city-${cardId}`);
+    
+    const brandChangedInput = document.getElementById(`brand_is_manual-${cardId}`);
+    const cityChangedInput = document.getElementById(`subset_is_manual-${cardId}`);
+    const subsetChangedInput = document.getElementById(`year_is_manual-${cardId}`);
+    const yearChangedInput = document.getElementById(`city_is_manual-${cardId}`);
 
     const brand = brandInput?.value || "";
     const city = cityInput?.value || "";
+    const subset = subsetInput?.value || "";
+    const year = yearInput?.value || "";
 
-    const brandChanged = brandInput?.disabled === false;
-    const cityChanged = cityInput?.disabled === false;
+    const brandChanged = brandChangedInput.checked;
+    const cityChanged = cityChangedInput.checked;
+    const subsetChanged = subsetChangedInput.checked;
+    const yearChanged = yearChangedInput.checked;
 
     const fields = {
       [fieldName]: value,
@@ -366,9 +396,13 @@ function handleEnterPress(fieldName, cardId, csrId) {
       brand: brand,
       brand_is_manual: brandChanged,
       city: city,
-      city_is_manual: cityChanged
+      city_is_manual: cityChanged,
+      subset: subset,
+      subset_is_manual: subsetChanged,
+      year: year,
+      year_is_manual: yearChanged
     };
-
+    console.log(fields)
     $.ajax({
       url: "/update_csr_fields/",
       method: "POST",
