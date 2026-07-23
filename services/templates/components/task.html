@@ -3,19 +3,20 @@
 <!-- 
   ======================================================================
   TASK COMPONENT LAYER (Tightened padding layout)
-  ======================================================================
+  ====================================================================== 
 -->
 <a href="/card/{{ task.listingtask.card.id }}/" style="text-decoration:none; color:inherit;" id="task-{{ task.id }}">
-    <div class="task-item status-{{ task.status|slugify }} detail-level-{{ detail_level }}" 
+    <div class="task-item status-{{ task.listingtask.csr.overall_status|slugify|default:task.bulklistingtask.succ_status }} detail-level-{{ detail_level }}" 
          data-card-id="{{ task.card_id }}"
          data-task-id="{{ task.id }}"
-         data-title="{{ task.listingtask.csr.display_title_to_be }}"
+         data-title="{{ task.listingtask.csr.display_title_to_be|default:task.title }}"
          data-scheduled-date="{{ task.listingtask.scheduled_for }}"
          data-executed-date="{{ task.listingtask.executed_at }}"
          data-completed-date="{{ task.listingtask.completed_at }}"
          data-price="{{ task.listingtask.card.listed_card_info.list_price }}"
-         data-thumb="{{ task.listingtask.card.cropped_image.thumbnail.url }}"
-         data-error="{{ task.error_str|default:'' }}">
+         data-thumb="{{ task.listingtask.card.cropped_image.thumbnail.url|default:task.bulklistingtask.successors.first.listingtask.card.cropped_image.thumbnail.url }}"
+         data-error="{{ task.error_str|default:'' }}"
+         data-csr-list="{{task.get_csr_id}}">
         
         <table style="width:100%; border-collapse:collapse;">
             <tr>
@@ -23,10 +24,18 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;"> 
                         
                         <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; min-width: 0;">
-                            <small>{% if task.listingtask.group_key %}{% else %}⭐{% endif %}</small>
-                            <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" title="{{ task.listingtask.csr.display_full_name|default:task.name }}">
-                                {{ task.listingtask.csr.display_full_name|default:task.name }} ({{task.id}})
+                            {% if task.group_key %}{% else %}<small>⭐</small>{% endif %}
+                            {% if task.bulklistingtask %}
+                                <b style="white-space: wrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" title="{{ task.listingtask.csr.display_full_name|default:task.title }}">
+                                    Bulk List (TID {{task.id}})
+                                    ${{task.bulklistingtask.value|floatformat:2}}
+                                </b>
+                            {% else %}           
+                            <b style="white-space: wrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" title="{{ task.listingtask.csr.display_full_name|default:task.title }}">
+                                {{ task.listingtask.csr.display_full_name|default:task.title }} ({{task.listingtask.csr.id|default:""}})
+                                ${{task.listingtask.card.listed_card_info.list_price|floatformat:2}}
                             </b>
+                            {% endif %}
                         </div>
 
                         <!-- Action Dropdown Trigger Menu -->
@@ -46,6 +55,10 @@
                                 <button type="button" class="menu-item-btn" onclick="openRescheduleModal(event, '{{ task.id }}')">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                                     <span>Reschedule</span>
+                                </button>
+                                <button type="button" class="menu-item-btn" onclick="confirmListingStatus(event, '{{ task.id }}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                    <span>Confirm</span>
                                 </button>
                                 <button type="button" class="menu-item-btn text-danger" onclick="deleteTask(event, '{{ task.id }}')">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>

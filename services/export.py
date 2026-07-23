@@ -1,10 +1,12 @@
 import csv
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
+from core.models.Status import StatusBase
+from core.models.ListingStatus import ListingStatus
 from django.http import HttpResponse
-from services import ebay
 from services.models.models import Settings
 from services.google import GoogleDriveUploader
+from services import ebay
 from django.shortcuts import get_object_or_404
 import requests
 
@@ -85,7 +87,10 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
     
     #find or create django group object
     group = ProductGroup.get_or_create(group_key, csrs)
-    
+    if group.replaced_by:
+        group = group.replaced_by
+        
+
     inventory_group_data = group.export_to_ebay_variation_group(new_csrs=csrs)
     
     listing_id = None
@@ -123,166 +128,164 @@ def clear_inventory_group(group_key):
     access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
     ebay.create_inventory_group(group_key, inventory_group_data, access_token)
 
-#TODO: This whole process is cobbled together.  needs to be fixed
-def export_to_ebay(csr_id, publish=False, group_key=None):
-    
-    print("ebay export ", csr_id, publish, group_key)
+from django.shortcuts import get_object_or_404
+from django.db import transaction
 
+def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
+    """
+    Unified Bulk eBay Export Engine with Batch Variation Grouping.
+    
+    Accepts:
+      - csr_ids: A list of integer IDs (e.g., [105, 106, 107])
+      
+    Returns a dictionary summarizing execution counts and tracking statuses.
+    """
     settings = Settings.get_default()
-    #uploader = GoogleDriveUploader()
-    if ebay.has_user_consent(settings):
+    if not ebay.has_user_consent(settings):
+        raise Exception("Missing user consent for eBay Operations")
 
-        csr = get_object_or_404(CardSearchResult, id=csr_id)
-        listed_info = csr.parent_card.listed_card_info
-        #TODO: update these methods to check before creating new?
-        listed_info.shareable_link_front = upload_to_cloudinary(csr.get_latest_front())
-        listed_info.shareable_link_reverse = upload_to_cloudinary(csr.get_latest_reverse())
-
-        #also upload to google drive
-        #uploader = GoogleDriveUploader()
-        #uploader.upload_and_share(csr.get_latest_front(), csr.display_full_name)
-        #uploader.upload_and_share(csr.get_latest_reverse(), csr.display_full_name)
-        #print("am i here", csr.sku)
-        listed_info.sku = csr.build_sku()
-        #print("am i here", csr.sku)
-        print("SKU:", listed_info.sku)
-        print("🔗 Public link:", listed_info.shareable_link_front)
-        print("🔗 Public link:", listed_info.shareable_link_reverse)
-
-        print(listed_info.list_price)
-
-        item_data = None
-        if group_key:
-            group = ProductGroup.get_or_create(group_key, [csr])
-            print(csr.variation_title_base)
-            print(group.variation_data)
-            #print("single row:", group.variation_data[csr.variation_title_base])
-            if False:#csr.variation_title_base in group.variation_data:
-                #This is a full dup of something already listed under a diff sku in this group, add 1 to that item instead of creating a new item
-                group.variation_data[csr.variation_title_base][1] += 1
-                group.save()
-                #print("single row:", group.variation_data[csr.variation_title_base])
-                csr_for_sku = group.products.get(sku=group.variation_data[csr.variation_title_base][0])
-                update_data = group.export_to_qty_update(csr_for_sku, group.variation_data[csr.variation_title_base][1])
-                
-                access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
-                if ebay.update_inventory_item_qty(update_data, access_token):
-                    #link to main sku
-                    csr.ebay_listed_under_sku = csr_for_sku
-                    csr.save()
-                    #item was updated successfully
-                    return True, csr_for_sku.ebay_offer_id, csr_for_sku.ebay_listing_id
-            
-        print("new item")
-        #if we didn't fill item data above, this needs a new inv item and offer    
-        item_data = csr.export_to_template(listed_info.sku, ebay.ebay_item_data_template, [listed_info.shareable_link_front, listed_info.shareable_link_reverse])
-        print("Item data:", item_data)
-
-        offer_data = {
-            "sku": listed_info.sku,
-            "marketplaceId": "EBAY_US",
-            "format": "FIXED_PRICE",
-            "listingDescription": listed_info.listing_detail_text,
-            "availableQuantity": listed_info.list_qty,
-            "pricingSummary": {
-                "price": {
-                "value": listed_info.list_price,
-                "currency": "USD"
-                }
-            },
-            "condition": 4000,
-            "categoryId": ebay.CATEGORY_ID,
-            #"conditionId":4000,
-            #"storeCategoryId": "",
-            "listingPolicies": {    
-                "fulfillmentPolicyId": ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if listed_info.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND,
-                "paymentPolicyId": ebay.PAYMENT_POLICY_EBAY_MANAGED,
-                "returnPolicyId": ebay.RETURN_POLICY_NO_RETURNS
-            },
-            "merchantLocationKey": "Freeport"
-
-        }
-        #print(csr.list_price)
-        print("Offer data:", offer_data)
-        #add best offer if this is not going to be part of a variation group
-        if not group_key:
-            listing = offer_data.setdefault("listingPolicies", {})
-            best_offer = listing.setdefault("bestOfferTerms", {})
-
-            best_offer["bestOfferEnabled"] = True
-
-        if listed_info.list_price <= 0:
-            raise Exception("List price not valid")
-        elif not publish:
-            return True, None, None#don't talk to ebay if we're not publishing
-        
-        access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
-        #csr.check_category_metadata("261328",access_token)
-        if ebay.create_inventory_item(listed_info.sku, item_data, access_token):
-            #item was created successfully
-            #print("checkinv: ", csr.check_inventory_item_exists(sku, access_token))
-            offer_id, status = ebay.get_or_create_offer(offer_data, access_token, listed_info.sku)
-            print(offer_id, status, publish)
-            if status == 201:
-                #csr.ebay_listing_id = ebay.publish_offer(offer_id, access_token)
-                listed_info.offer_id = offer_id
-            else:
-                #"Error response from ebay"
-                listed_info.listing_id = ""
-            
-            if group_key and not group_key == "-1":
-                listed_info.listing_id = add_to_variation_group([csr], access_token, group_key=group_key, publish=publish)
-            elif publish:
-                listed_info.listing_id = ebay.publish_offer(offer_id, access_token)
-
-            retval = listed_info.listing_id != None                
-            csr.save()
-            listed_info.save()
-        else:
-            ebay.get_inventory_group(group_key, settings, access_token)
-            retval = True
-        
-        return retval, listed_info.offer_id, listed_info.listing_id
-    
-        #print("asking for token ")
-        #access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
-        #print(access_token)
-        #ebay.publish_offer("66119568011", access_token)
-
-    else:
-        raise Exception("Missing user consent")
-
-
-''''
-#TODO: These are "working" upload functions but the sites themselves are broken at this time
-eventually we want to loop this into a configurable upload location
-POSTIMAGE_API_KEY = "375d65b31ef5453eb9652cc870e769e9"
-IMAGEBB_API_KEY = "18d2d0172a59b3f8e7134eea7dcd2bb3"
-
-def upload_to_postimage(image):
-    url = "https://api.postimage.org/1/upload"
-    files = {"file":open(image, "rb")}
-    data = {
-        "key": POSTIMAGE_API_KEY,
-        "expire": "0",  # 0 = never expire
-        "adult": "0"    # 0 = safe content
+    results_summary = {
+        "success_count": 0,
+        "failed_count": 0,
+        "details": []
     }
-    response = requests.post(url, files=files, data=data)
-    print(response.text)
-    response.raise_for_status()
-    return response.json().get("url")
 
+    # Gather successfully prepared CSR objects for a single batch variation upload
+    successful_group_csrs = []
 
-def upload_to_imageBB(image):
-    url = "https://api.imgbb.com/1/upload"
-    with open(image, "rb") as file:
-        encoded_image = base64.b64encode(file.read()).decode("utf-8")
+    # 1. Fetch the authentication token ONCE for the entire batch lifecycle
+    access_token = None
+    if publish:
+        access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
 
-    with open(image, "rb") as file:
-        payload = {
-            "key": IMAGEBB_API_KEY,
-            "image": encoded_image
-        }
-        response = requests.post(url, data=payload)
-        response.raise_for_status()
-        return response.json()["data"]["url"]'''
+    csr_ids = [csr_id] if csr_id else csr_ids
+    print(f"Starting eBay export execution targeting {len(csr_ids)} item(s)...")
+
+    # 2. PHASE 1: Process individual items, images, and inventory records
+    for csr_id in csr_ids:
+        try:
+            with transaction.atomic():
+                csr = get_object_or_404(CardSearchResult, id=csr_id)
+                listed_info = csr.parent_card.listed_card_info
+
+                if listed_info.list_price <= 0:
+                    raise Exception("List price not valid")
+
+                listed_info.upload_listing_images(csr.get_latest_front(), csr.get_latest_reverse())
+                listed_info.build_sku()                
+
+                # Prepare API Payload Data structures
+                item_data = csr.export_to_template(
+                    listed_info.sku, 
+                    ebay.ebay_item_data_template, 
+                    [listed_info.shareable_link_front, listed_info.shareable_link_reverse]
+                )
+                offer_data = listed_info.export_to_offer_template(ebay.ebay_offer_data_template, (not group_key))
+
+                # If preview/dry-run mode, save assets locally and move to next item
+                if not publish:
+                    csr.save()
+                    listed_info.save()
+                    
+                    results_summary["success_count"] += 1
+                    results_summary["details"].append({
+                        "csr_id": csr_id,
+                        "status": "DRAFT_SAVED",
+                        "offer_id": None,
+                        "listing_id": None
+                    })
+                    print(f"📁 Saved local draft for CSR ID {csr_id} (Publish=False)")
+                    continue
+
+                # Create the item and offer on eBay
+                if ebay.create_inventory_item(listed_info.sku, item_data, access_token):
+                    print("Offer data: ", offer_data)
+                    offer_id, status = ebay.get_or_create_offer(offer_data, access_token, listed_info.sku)
+                    
+                    if status == 201:
+                        listed_info.offer_id = offer_id
+                    else:
+                        listed_info.listing_id = ""
+
+                    # Branch logic handling: Single standalone items publish immediately
+                    if not group_key or group_key == "-1":
+                        listed_info.listing_id = ebay.publish_offer(offer_id, access_token)
+                        if listed_info.listing_id is None:
+                            raise Exception("eBay offer failed to publish.")
+                        
+                        ListingStatus.create(listed_info, listed_info.list_qty, StatusBase.LISTED, 0, True)
+                        results_summary["success_count"] += 1
+                        results_summary["details"].append({
+                            "csr_id": csr_id,
+                            "status": "PUBLISHED",
+                            "offer_id": listed_info.offer_id,
+                            "listing_id": listed_info.listing_id
+                        })
+                        print(f"✅ Successfully published standalone CSR ID {csr_id} to eBay")
+                    
+                    else:
+                        # Hold this validated item back for the final batch variation grouping call
+                        successful_group_csrs.append(csr)
+                        print(f"📦 Staged CSR ID {csr_id} for batch group listing processing")
+
+                    # Persist synchronized updates back to local db
+                    csr.save()
+                    listed_info.save()
+                    
+                else:
+                    # Fallback recovery strategy matching your original blueprint rules
+                    ebay.get_inventory_group(group_key, settings, access_token)
+                    results_summary["success_count"] += 1
+
+        except Exception as e:
+            results_summary["failed_count"] += 1
+            results_summary["details"].append({
+                "csr_id": csr_id,
+                "status": "FAILED",
+                "error": str(e)
+            })
+            print(f"❌ Failed to process CSR ID {csr_id}: {str(e)}")
+
+    # 3. PHASE 2: Handle batch variation grouping all at once
+    if publish and group_key and group_key != "-1" and successful_group_csrs:
+        print(f"🔗 Combining {len(successful_group_csrs)} items into eBay Variation Group: {group_key}...")
+        try:
+            # Send the entire batch list together in one API call
+            batch_listing_id = add_to_variation_group(
+                successful_group_csrs, 
+                access_token, 
+                group_key=group_key, 
+                publish=publish
+            )
+            
+            # Update all local database objects with the single returned group listing ID
+            with transaction.atomic():
+                for csr in successful_group_csrs:
+                    listed_info = csr.parent_card.listed_card_info
+                    listed_info.listing_id = batch_listing_id
+                    
+                    csr.save()
+                    listed_info.save()
+                    
+                    results_summary["success_count"] += 1
+                    results_summary["details"].append({
+                        "csr_id": csr.id,
+                        "status": "GROUP_PUBLISHED",
+                        "offer_id": listed_info.offer_id,
+                        "listing_id": batch_listing_id
+                    })
+            print(f"🚀 Batch grouping complete! eBay Listing ID: {batch_listing_id}")
+            
+        except Exception as e:
+            print(f"❌ Critical failure publishing batch variation group: {str(e)}")
+            # Log individual failures for the items that were in the group batch
+            for csr in successful_group_csrs:
+                results_summary["failed_count"] += 1
+                results_summary["details"].append({
+                    "csr_id": csr.id,
+                    "status": "GROUP_FAILED",
+                    "error": f"Group packaging crash: {str(e)}"
+                })
+
+    print(f"Export execution run finished. Success: {results_summary['success_count']} | Failed: {results_summary['failed_count']}")
+    return results_summary

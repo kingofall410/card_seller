@@ -13,16 +13,16 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('hello/', misc_views.hello_world),
     path('get_dynamic_options/', search_views.get_dynamic_options, name='get_dynamic_options'),
     path('test/', misc_views.test_view, name="test_view"),
-    path('delete/', card_views.delete, name="delete"),
+    path('delete_card/', card_views.delete, name="delete"),
+    path('delete_card/<int:card_id>/', card_views.delete, name="delete"),
     path('crop_review/<int:collection_id>/', card_views.crop_review, name="crop_review"),
     path('crop/<int:card_id>/', card_views.crop, name="crop"),
     path('save_and_next/<int:card_id>', card_views.save_and_next, name="save_and_next"),
     path('next/<int:card_id>', card_views.next_card, name="next_card"),    
     path("upload_image/", image_views.upload_image, name="upload_image"),
-    path("upload_image/<int:collection_id>", image_views.upload_image, name="upload_image"),    
+    path("upload_image/<int:collection_id>/", image_views.upload_image, name="upload_image"),    
     path('image_search/<int:card_id>/', search_views.image_search, name='image_search'),
     path('retokenize/<int:csr_id>/', card_views.retokenize, name='retokenize'),
     path('image_search_collection/<int:collection_id>/', search_views.image_search_collection, name='image_search_collection'),
@@ -36,12 +36,15 @@ urlpatterns = [
     path("settings/", settings_views.view_settings, name="settings"),
     path("update_settings/", settings_views.update_settings, name="update_settings"),
     path("collection/<int:collection_id>", collection_views.view_collection, name="collection"),
-    path("collection/", collection_views.view_ad_hoc_collection, name="view_ad_hoc_collection"),
+    path("collection/", collection_views.view_collection, name="collection"),
     path("card/<int:card_id>/", card_views.view_card, name="view_card"),
     path("archive/<int:card_id>/", card_views.archive, name="archive"),
     path("bulk_archive/", card_views.bulk_archive, name="bulk_archive"),
+    path('update_tags/<int:card_id>', card_views.update_tags, name='update_tags'),
+    path('bulk_tag/', card_views.bulk_tag, name='bulk_tag'),
     path("rehydrate/<int:card_id>/", card_views.rehydrate, name="rehydrate"),
     path("re_sku/<int:card_id>/", card_views.re_sku, name="re_sku"),    
+    path("re_sku/", card_views.bulk_re_sku, name="bulk_re_sku"),    
     path("card_test/", card_views.card_test, name="card_test"),
     path("single_card_test/<int:card_id>/", card_views.single_card_test, name="single_card_test"),
     path("card_search_ajax/", card_views.card_search_ajax, name="card_search_ajax"),    
@@ -49,6 +52,7 @@ urlpatterns = [
     path("update_csr_status_only/<int:csr_id>", card_views.update_csr_status_only, name="update_csr_status_only"),    
     path("settings/upload/<str:file_type>/", settings_views.settings_file_upload, name="settings_file_upload"),
     path("update_csr_fields/", card_views.update_csr_fields, name="update_csr_fields"),
+    path("bulk_update_csr_fields/", card_views.bulk_update_csr_fields, name="bulk_update_csr_fields"),
     path("update_li_fields/", card_views.update_li_fields, name="update_li_fields"),
     path('refresh_listing_status/<int:card_id>/', card_views.refresh_listing_status, name="refresh_listing_status"),
     path('refresh_listing_status/', card_views.refresh_listing_status, name="refresh_listing_status"),
@@ -76,9 +80,11 @@ urlpatterns = [
     path('price_collection/<int:collection_id>/', collection_views.price_collection, name="price_collection"),
     path('bulk_hold/<int:collection_id>/', card_views.bulk_hold, name="bulk_hold"),
     path('bulk_list/<str:group_key>/', export_views.bulk_list, name='bulk_list'),
+    path('bulk_list/', export_views.bulk_list, name='bulk_list'),
     path('bulk_status_update/<slug:status_value>/', card_views.bulk_status_update, name="bulk_status_update"),
     path('identify_collection/<int:collection_id>/', collection_views.identify_collection, name="identify_collection"),
     path('listings/', collection_views.listing_view, name="listing_view"),
-    path('card_status_monitor/', card_views.card_status_monitor, name="card_status_monitor")
+    path('card_status_monitor/', card_views.card_status_monitor, name="card_status_monitor"),
+    #path('pg_dash/', card_views.pg_dash, name="pg_dash")
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

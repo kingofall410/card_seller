@@ -14,7 +14,7 @@ def get_dynamic_options(request):
     pass
 
 @csrf_exempt
-def image_search(request, card_id, create_new_csr=True, continue_process=False):
+def image_search(request, card_id, create_new_csr=True, continue_process=True):
     print("image_searchy", request.body)
     if not card_id:
         return JsonResponse({'error': 'Card ID is required'}, status=400)
@@ -29,7 +29,7 @@ def image_search(request, card_id, create_new_csr=True, continue_process=False):
     csr = active_csr if active_csr and not create_new_csr else None
 
     if continue_process:
-        search_results = lookup.single_image_lookup(card, all_fields, settings, refine=settings.run_refine_after_id, scrape_sold_data=settings.run_pricing_after_refine, result_count_max=settings.id_listings, csr=csr)
+        search_results = lookup.single_image_lookup(card, all_fields, settings, refine=False, scrape_sold_data=False, result_count_max=settings.id_listings, csr=csr)
     
     if search_results:
         return JsonResponse({"success": True, "error": ""})

@@ -95,9 +95,11 @@
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
         gap: 10px 0px;
     }
-
-    /* Hide DataTables UI we don't need for infinite scroll */
+    
+    /* Hide DataTables UI elements we don't need for infinite scroll */
     .dataTables_paginate, .dataTables_length { display: none !important; }
+    
+    /* Base configuration hides data engine table completely on startup */
     #card-data-engine { display: none !important; }
 
     /* Loading Indicator */
@@ -109,30 +111,96 @@
         display: none;
     }
 
-    /* Fade the card grid slightly when filtering is active */
-#visual-card-grid.filtering-active {
-    opacity: 0.5;
-    transition: opacity 0.15s ease;
-    pointer-events: none; /* Block double-clicking during active filter */
-}
+    #grouped-card-view {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+    }
 
-/* Add a visual indicator to the sidebar panes to show they are working */
-.dtsp-searchPane.pane-processing {
-    position: relative;
-    opacity: 0.7;
-}
-.dtsp-searchPane.pane-processing::after {
-    content: "⚡ Filtering...";
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 11px;
-    font-weight: bold;
-    color: #007bff;
-    background: #eef6ff;
-    padding: 2px 8px;
-    border-radius: 4px;
-}
+    /* Fade the card grid slightly when filtering is active */
+    #visual-card-grid.filtering-active {
+        opacity: 0.5;
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+    }
+
+    /* Add a visual indicator to the sidebar panes to show they are working */
+    .dtsp-searchPane.pane-processing {
+        position: relative;
+        opacity: 0.7;
+    }
+    .dtsp-searchPane.pane-processing::after {
+        content: "⚡ Filtering...";
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        color: #007bff;
+        background: #eef6ff;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    /* --- Hover Image Preview Tooltip --- */
+    .dt-image-preview {
+        position: fixed;
+        display: none;
+        z-index: 9999;
+        pointer-events: none;
+        background: #ffffff;
+        border: 1px solid #dcdcdc;
+        padding: 6px;
+        border-radius: 6px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        max-width: 200px;
+    }
+    .dt-image-preview img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 4px;
+    }
+
+    /* --- Persistent Spreadsheet Input Styling --- */
+    .dt-inline-edit {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+    }
+    
+    /* Make inputs obvious but clean on row hover */
+    tr:hover .dt-inline-edit {
+        border-color: #e0e0e0;
+        background: #ffffff;
+    }
+
+    /* High contrast focus states mimicking Excel/Airtable cell activations */
+    .dt-inline-edit:focus {
+        outline: none;
+        background: #ffffff !important;
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        color: #000000;
+    }
+
+    /* Visual confirmation modifier state when backend write pipeline completes successfully */
+    .dt-cell-committed {
+        animation: flash-success 1.2s ease;
+    }
+    @keyframes flash-success {
+        0% { background-color: rgba(40, 167, 69, 0.25); }
+        100% { background-color: transparent; }
+    }
 </style>
 
 <div class="dashboard-container">
@@ -144,42 +212,25 @@
     <main class="main-content">
         <header class="content-header">
             <div id="header-info-mount"></div>
+            <div id="header-toggle-mount" style="margin-right: 15px;"></div>
             <div id="header-filter-mount"></div>
         </header>
 
-        <div id="visual-card-grid">
-            {% for card in cards %}
-                {% include "components/card_item_flat.html" with card=card %}
-            {% endfor %}
-        </div>
+        <div id="visual-card-grid"></div>
+        
+        {% include "components/collection_product_groups.html" %}
+
+        {% include "components/collection_datatable.html" %}
 
         <div id="infinite-loader">Loading more cards...</div>
     </main>
 </div>
 
-<table id="card-data-engine">
-    <thead>
-        <tr><th>Name</th><th>Groups</th><th>Value</th><th>Year</th><th>Brand</th><th>Team</th><th>Collection</th><th>Value ($)</th><th>ID</th><th>Modified</th><th>Status</th><th>Group ID</th></tr>
-    </thead>
-    <tbody>
-        {% for card in cards %}
-        <tr>
-            <td>{{ card.name|default:"N/A" }}</td>
-            <td>{{ card.product_group_name }}</td>
-            <td>{{ card.val_range }}</td> 
-            <td>{{ card.year|default:"N/A" }}</td>
-            <td>{{ card.brand|default:"N/A" }}</td>
-            <td>{{ card.team|default:"N/A" }}</td>
-            <td>{{ card.collection_id }}</td>
-            <td>{{ card.value|default:0 }}</td>            
-            <td>{{ card.id }}</td>
-            <td>{{ card.modification_date }}</td>
-            <td>{{ card.overall_status|default:"Pending" }}</td>
-            <td>{{ card.product_group_key }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div id="dt-row-hover-preview" class="dt-image-preview">
+    <img src="" alt="Card Front Preview">
+</div>
+
+{% include "components/card_item_flat.html" %}
 
 <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
@@ -188,35 +239,36 @@
 
 <script>
 window.zoomState = {
-    idColumnIndex: 8 // Resolved dynamically on startup
+    idColumnIndex: 12 
 };
+let isApplyingServerUpdate = false;
 
 (function($) {
     const sortConfig = [
-        { label: 'Name', attr: 0 }, 
-        //{ label: 'Status', attr: 10 },  
-        { label: 'Year', attr: 3 }, 
-        //{ label: 'Brand', attr: 4 }, 
-        //{ label: 'Team', attr: 5 }, 
-        { label: 'Collection ID', attr: 6 },  
-        //{ label: 'Value Range', attr: 2 }, 
-        { label: 'Value ($)', attr: 7 }, 
-        { label: 'ID', attr: 8 },
-        { label: 'Modified', attr: 9 },
-        { label: 'Group', attr: 1 }
+        { label: 'Player Name', attrName: 'player name' }, 
+        { label: 'Year', attrName: 'year' }, 
+        { label: 'Collection ID', attrName: 'collection' },  
+        { label: 'Value ($)', attrName: 'value ($)' }, 
+        { label: 'ID', attrName: 'id' },
+        { label: 'Modified', attrName: 'modified' },
+        { label: 'Group', attrName: 'status' } 
     ];
-    let currentSort = { attr: 0, dir: 'desc' };
+    
+    let currentSort = { attrName: 'id', attrIdx: null, dir: 'asc' };
     let loadingNextPage = false;
 
     // --- Dynamic Sort Bar Generation ---
-    function buildSortBar(tableApi) {
+    function buildSortBar(tableApi, headerMap) {
         const bar = document.getElementById('dynamic-sort-bar');
         if (!bar) return;
         bar.innerHTML = '<span class="sort-label">Sort Collection</span>';
 
         sortConfig.forEach(cfg => {
+            const targetIdx = headerMap[cfg.attrName];
+            if (targetIdx === undefined) return; 
+
             const link = document.createElement('a');
-            const isActive = currentSort.attr === cfg.attr;
+            const isActive = currentSort.attrName === cfg.attrName;
             
             link.href = "javascript:void(0)"; 
             link.className = isActive ? 'active' : '';
@@ -226,44 +278,98 @@ window.zoomState = {
             
             link.addEventListener('click', (e) => {
                 e.preventDefault();
+                currentSort.dir = isActive 
+                    ? (currentSort.dir === 'asc' ? 'desc' : 'asc') 
+                    : ((cfg.attrName === 'player name' || cfg.attrName === 'value ($)') ? 'desc' : 'asc');
                 
-                currentSort.dir = isActive ? (currentSort.dir === 'asc' ? 'desc' : 'asc') : ((cfg.attr === 0 || cfg.attr === 7) ? 'desc' : 'asc');
-                currentSort.attr = cfg.attr;
+                currentSort.attrName = cfg.attrName;
+                currentSort.attrIdx = targetIdx;
                 
-                tableApi.order([[currentSort.attr, currentSort.dir]]).page.len(50).draw();
-                buildSortBar(tableApi);
+                tableApi.order([[currentSort.attrIdx, currentSort.dir]]).page.len(50).draw();
+                buildSortBar(tableApi, headerMap);
             });
             
             bar.appendChild(link);
         });
     }
 
-    // --- NEW DOUBLE-CLICK URL TARGETING ENGINE ---
+    // --- DOUBLE-CLICK URL TARGETING ENGINE ---
     $(document).on('dblclick', '.dtsp-searchPane table tbody tr', function (e) {
         e.preventDefault();
-        
         const $row = $(this);
         const targetValue = $row.find('.dtsp-name').text().trim();
         const selection = targetValue || $row.find('td').first().text().trim();
-        
         if (!selection) return;
 
         const currentUrl = new URL(window.location.href);
         const basePath = currentUrl.pathname;
-        const parentSelection = currentUrl.searchParams.get('since') || '30';
-
-        // URL format: ?q="Selection Name"&since=ParentName
-        const targetTargetUrl = `${basePath}?q=${selection}&since=${parentSelection}`;
+        const parentSelection = currentUrl.searchParams.get('timeframe') || '30';
+        const targetTargetUrl = `${basePath}?q=${selection}&timeframe=${parentSelection}`;
 
         console.log(`Opening Drill-Down View: ${targetTargetUrl}`);
         window.open(targetTargetUrl, '_blank');
     });
 
-    // --- DATATABLES STAGE & CONFIGURATION ---
+    // =====================================================================
+    // CORE INITIALIZATION ENGINE PASS
+    // =====================================================================
     $(document).ready(function() {
         const grid = $('#visual-card-grid');
         const loader = $('#infinite-loader');
+        const $previewBox = $('#dt-row-hover-preview');
+        const $previewImg = $previewBox.find('img');
+        
+        // Build the Header Map Dictionary straight from the DOM table elements
+        const headerMap = {};
+        $('#card-data-engine thead th').each(function(idx) {
+            const text = $(this).text().trim().toLowerCase();
+            headerMap[text] = idx;
+        });
 
+        const idxName = headerMap['player name'] !== undefined ? headerMap['player name'] : 4;
+        const idxStatus = headerMap['status'] !== undefined ? headerMap['status'] : 8; 
+        const idxGroup = headerMap['groups'] !== undefined ? headerMap['groups'] : 14; 
+        
+        const idxYear = headerMap['year'] !== undefined ? headerMap['year'] : 0;
+        const idxBrand = headerMap['brand'] !== undefined ? headerMap['brand'] : 1;
+        const idxValue = headerMap['value ($)'] !== undefined ? headerMap['value ($)'] : 11;
+        const idxId = headerMap['id'] !== undefined ? headerMap['id'] : 12;
+        const idxCsrId = headerMap['csr id'] !== undefined ? headerMap['csr id'] : 17;
+        const idxCollId = headerMap['collection'] !== undefined ? headerMap['collection'] : 10;
+        const idxFrontUrl = headerMap['front url'] !== undefined ? headerMap['front url'] : 16;
+
+        currentSort.attrIdx = idxId;
+
+        // Map initial payload safely matching the un-swapped logic
+        const preloadedCardsList = [];
+        $('#card-data-engine tbody tr').each(function() {
+            const $tds = $(this).find('td');
+            preloadedCardsList.push({
+                id: $tds.eq(idxId).text().trim(),
+                name: $tds.eq(idxName).text().trim(),
+                year: $tds.eq(idxYear).text().trim(),
+                brand: $tds.eq(idxBrand).text().trim(),
+                value: parseFloat($tds.eq(idxValue).text().trim() || 0),
+                overall_status: $tds.eq(idxStatus).text().trim(),
+                collection_id: $tds.eq(idxCollId).text().trim(),
+                product_group_name: $tds.eq(idxGroup).text().trim(),
+                front_url: $tds.eq(idxFrontUrl).text().trim()
+            });
+        });
+
+        // SINGLE RENDERING PATH
+        preloadedCardsList.forEach(card => {
+            const $compiledComponent = drawOrHydrateCardComponent(card);
+            grid.append($compiledComponent);
+        });
+
+        // Functional rendering adapter factory for dynamic editable inputs
+        function createPersistentInputRenderer(safeData) {
+            const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
+            return `<input type="text" class="dt-inline-edit" value="${cleanVal}" data-current="${cleanVal}">`;
+        }
+
+        // Instantiate DataTables with corrected priority array stack
         const table = $('#card-data-engine').DataTable({
             dom: 'ift',
             pageLength: 50,
@@ -273,36 +379,43 @@ window.zoomState = {
                 cascadePanes: false
             },
             columnDefs: [
-                {
-                    searchPanes: {
-                        show: true,
-                        initCollapsed: false,
-                        order: ['count', 'desc'],
-                        threshold: 1,
-                        orthogonal: { display: 'filter' }
-                    },
-                    targets: [0] // Name
-                },
-                {
-                    searchPanes: {
-                        show: true,
-                        initCollapsed: false,
-                        order: ['count', 'desc']
-                    },
-                    targets: [1] // group
-                },
-                {
-                    searchPanes: {
-                        show: true,
-                        initCollapsed: true,
-                        order: ['count', 'desc']
-                    },
-                    targets: [2, 3, 4, 5, 6, 10] // val range, year, brand, etc
-                },
-                {
-                    searchPanes: { show: false },
-                    targets: [7, 8, 9],//status value mod date` id
+                { searchPanes: {show: true, initCollapsed: false, order: ['count', 'desc'], orthogonal: { display: 'filter' }, order: 1 }, targets: [idxName] },
+                { searchPanes: {show: true, initCollapsed: false, order: ['count', 'desc'], order: 2 }, targets: [idxStatus], visible: false },
+                { searchPanes: {show: true, initCollapsed: false, order: ['count', 'desc'], order: 3 }, targets: [idxGroup], visible: false },
+                { searchPanes: { show: true, initCollapsed: true, order: ['count', 'desc'], order: 4 }, targets: [idxYear] },
+                { searchPanes: { show: true, initCollapsed: true, order: ['count', 'desc'], order: 5 }, targets: [idxBrand] },
+                { searchPanes: { show: true, initCollapsed: true, order: ['count', 'desc'], order: 6 }, targets: [idxCollId], visible: false },
+                { 
+                    searchPanes: { show: false }, 
+                    targets: [
+                        idxFrontUrl,
+                        headerMap['modified'] || 13,
+                        headerMap['group id'] || 15,
+                        headerMap['value'] || 9
+                    ], 
                     visible: false
+                },
+                { 
+                    searchPanes: { show: true, initCollapsed: true}, 
+                    targets: [
+                        idxValue, idxId,
+                        headerMap['subset'] || 2, 
+                        headerMap['card name'] || 3, 
+                        headerMap['card number'] || 5, 
+                        headerMap['city'] || 6,
+                        headerMap['team'] || 7
+                    ], 
+                },
+                // HOOK: Structural Render Engine Pipeline transformation pass for inline editing
+                { 
+                    targets: [idxName, idxYear, idxBrand, idxValue, idxStatus],
+                    render: function(data, type, row) {
+                        if (type === 'display') {
+                            return createPersistentInputRenderer(data);
+                        }
+                        // Maintain completely pristine string representations for search engine, filters and math sorting profiles
+                        return data;
+                    }
                 }
             ],
             infoCallback: function(settings, start, end, max, total, pre) {
@@ -311,34 +424,76 @@ window.zoomState = {
             initComplete: function() {
                 const api = this.api();
 
-                // Dynamic resolution of the "ID" column index
-                api.columns().every(function(idx) {
-                    const headerText = $(this.header()).text().trim().toLowerCase();
-                    if (headerText === 'id') {
-                        window.zoomState.idColumnIndex = idx;
-                        console.log(`Resolved ID Column Index to: ${idx}`);
-                    }
-                });
+                window.zoomState = window.zoomState || {};
+                window.zoomState.idColumnIndex = idxId;
+                window.zoomState.headerMap = headerMap; 
 
                 api.searchPanes.container().appendTo('#panes-container');
-                
-                setTimeout(() => {
-                    api.searchPanes.resizePanes();
-                }, 50);
+                setTimeout(() => { api.searchPanes.resizePanes(); }, 50);
 
                 $('.dataTables_info').appendTo('#header-info-mount');
                 $('.dataTables_filter').appendTo('#header-filter-mount');
-                buildSortBar(api);
+                
+                buildSortBar(api, headerMap);
 
-                // --- ADDED: LISTEN FOR USER CLICKING PANES ---
-                // We capture the click early to trigger immediate UI feedback
+                // --- 3-STATE RADIO TOGGLE MECHANICS ---
+                const $toggleContainer = $('<div class="view-toggle-group"></div>').css({
+                    'display': 'flex', 'gap': '5px', 'background': '#eee', 
+                    'padding': '3px', 'border-radius': '6px'
+                });
+
+                const views = ['Grid', 'Table', 'Grouped'];
+                views.forEach((view, idx) => {
+                    const $radio = $(`<input type="radio" name="view-toggle" id="view-${idx}" value="${idx}" ${idx === 0 ? 'checked' : ''} style="display:none;">`);
+                    const $label = $(`<label for="view-${idx}" style="padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 4px; transition: 0.2s;">${view}</label>`);
+                    
+                    if (idx === 0) $label.css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+
+                    $label.on('click', function() {
+                        $('.view-toggle-group label').css({'background': 'transparent', 'box-shadow': 'none'});
+                        $(this).css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+                        
+                        const $engineTable = $('#card-data-engine');
+                        const $grid = $('#visual-card-grid');
+                        const $groupedView = $('#grouped-card-view');
+
+                        $engineTable.attr('style', 'display: none !important;');
+                        $grid.hide();
+                        $groupedView.hide();
+
+                        if (idx === 0) $grid.show();
+                        else if (idx === 1) $engineTable.attr('style', 'display: table !important; width: 100%; margin-top: 20px;');
+                        else if (idx === 2) $groupedView.show();
+                    });
+
+                    $toggleContainer.append($radio).append($label);
+                });
+
+                $('#header-toggle-mount').append($toggleContainer);
+
+                // --- LIVE IMAGE PREVIEW TRACKING ENGINE ---
+                $('#card-data-engine tbody').on('mouseenter', 'tr', function() {
+                    const rowData = table.row(this).data();
+                    if (!rowData) return;
+
+                    const url = rowData[idxFrontUrl] ? rowData[idxFrontUrl].trim() : '';
+                    if (url && url !== 'None' && url !== '-') {
+                        $previewImg.attr('src', url);
+                        $previewBox.show();
+                    }
+                }).on('mousemove', 'tr', function(e) {
+                    $previewBox.css({
+                        top: (e.clientY + 15) + 'px',
+                        left: (e.clientX + 15) + 'px'
+                    });
+                }).on('mouseleave', 'tr', function() {
+                    $previewBox.hide();
+                    $previewImg.attr('src', '');
+                });
+
                 $('#panes-container').on('click', '.dtsp-searchPane table tbody tr', function() {
                     const pane = $(this).closest('.dtsp-searchPane');
-                    
-                    // 1. Immediately highlight the row visually before DT does it
                     $(this).toggleClass('selected'); 
-                    
-                    // 2. Add visual feedback classes
                     grid.addClass('filtering-active');
                     pane.addClass('pane-processing');
                     loader.text("Applying filters...").show();
@@ -348,99 +503,197 @@ window.zoomState = {
                 const api = this.api();
                 const targetIdx = window.zoomState.idColumnIndex;
                 
-                // Extract matching IDs dynamically with fallback
                 let activeIds = api.rows({ page: 'all', filter: 'applied', order: 'applied' })
-                                    .data().toArray().map(row => {
+                                   .data().toArray().map(row => {
                                         const rawId = row[targetIdx] !== undefined ? row[targetIdx] : (row[row.length - 1] || '');
                                         return rawId.toString();
-                                    });
+                                   });
                 
-                // Sync sequence cache
                 sessionStorage.setItem('card_sequence', JSON.stringify(activeIds));
-                
                 grid.find('.card-item').hide();
                 
                 const currentPageIds = api.rows({ page: 'current', filter: 'applied', order: 'applied' })
-                                        .data().toArray().map(row => {
+                                         .data().toArray().map(row => {
                                             const rawId = row[targetIdx] !== undefined ? row[targetIdx] : (row[row.length - 1] || '');
                                             return rawId.toString();
-                                        });
+                                         });
 
                 currentPageIds.forEach(id => {
                     grid.find(`.card-item[data-id="${id}"]`).show().appendTo(grid);
                 });
 
-                // Remove processing/filtering overlays when DOM has finished rendering
                 setTimeout(() => { 
                     loadingNextPage = false; 
                     grid.removeClass('filtering-active');
                     $('.dtsp-searchPane').removeClass('pane-processing');
                     loader.text("Loading more cards...").hide(); 
-                }, 150); // Small delay to allow the browser to paint changes
+                }, 150);
+            }
+        });
+
+        // =====================================================================
+        // QUICKEDIT MODEL SERVER WRITE PIPELINE INTEGRATION
+        // =====================================================================
+        function quickEditCard(tableApi, visualRowIndex, updatedFields, $inputEl) {
+            const visibleRowData = tableApi.row(visualRowIndex).data();
+            const csrId = visibleRowData[idxId].toString().trim();
+
+            const sourceData = tableApi.rows().data().toArray();
+            const sourceRowIndex = sourceData.findIndex(row => String(row[idxId]).trim() === csrId);
+
+            if (sourceRowIndex < 0) {
+                console.warn("Source reference index missing for csrId:", csrId);
+                return;
+            }
+
+            $.ajax({
+                url: "/update_csr_fields/",
+                method: "POST",
+                contentType: "application/json",
+                headers: { 'X-CSRFToken': CardLiveFeedUpdater.getCsrfToken() },
+                data: JSON.stringify({
+                    csrId: csrId,
+                    allFields: updatedFields
+                }),
+                success: response => {
+                    const serverConfirmedFields = response.search_result;
+                    const targetVisualIdx = sourceRowIndex; 
+
+                    if (targetVisualIdx < 0) return;
+
+                    // Map modifications quietly across primary data layer arrays
+                    Object.entries(serverConfirmedFields).forEach(([fieldKey, value]) => {
+                        if (!fieldKey || typeof fieldKey !== 'string') return;
+
+                        const mappedColIdx = headerMap[fieldKey.replace('_', ' ').toLowerCase()];
+                        if (mappedColIdx === undefined) return;
+
+                        isApplyingServerUpdate = true;
+                        
+                        const rowDataCache = tableApi.row(targetVisualIdx).data();
+                        rowDataCache[mappedColIdx] = value;
+                        tableApi.row(targetVisualIdx).data(rowDataCache);
+
+                        isApplyingServerUpdate = false;
+                    });
+
+                    // Trigger success animation indicator directly on the cell parent wrapper
+                    if ($inputEl && $inputEl.length) {
+                        const $td = $inputEl.closest('td');
+                        $td.addClass('dt-cell-committed');
+                        setTimeout(() => $td.removeClass('dt-cell-committed'), 1200);
+                    }
+
+                    // Sync corresponding template element profiles inside the Visual Grid layout view
+                    const refreshedRowData = tableApi.row(targetVisualIdx).data();
+                    const synchronizedPayload = {
+                        
+                        name: refreshedRowData[idxName],
+                        year: refreshedRowData[idxYear],
+                        brand: refreshedRowData[idxBrand],
+                        value: parseFloat(refreshedRowData[idxValue] || 0),
+                        overall_status: refreshedRowData[idxStatus],
+                        collection_id: refreshedRowData[idxCollId],
+                        product_group_name: refreshedRowData[idxGroup],
+                        front_url: refreshedRowData[idxFrontUrl],
+                        csr_id: refreshedRowData[idxId]
+                    };
+
+                    const $gridCard = $(`#card-${cardId}`);
+                    if ($gridCard.length) {
+                        drawOrHydrateCardComponent(synchronizedPayload, $gridCard);
+                        $gridCard.css('transition', 'all 0.3s ease').css('outline', '2px solid #28a745');
+                        setTimeout(() => $gridCard.css('outline', 'none'), 1200);
+                    }
+
+                    // Redraw tracking frames to protect search results and index states
+                    tableApi.draw(false);
+                },
+                error: xhr => {
+                    console.error("Database quickEdit synchronization dropped:", xhr.responseText);
+                    // Revert UI input element back to historical data on write crash
+                    if ($inputEl && $inputEl.length) {
+                        $inputEl.val($inputEl.attr('data-current'));
+                    }
+                    alert("Error processing updates on database record.");
+                }
+            });
+        }
+
+        // --- Persistent Cell Input Pipeline Observers ---
+        $('#card-data-engine tbody').on('change', '.dt-inline-edit', function() {
+            const $input = $(this);
+            const updatedVal = $input.val().trim();
+            const originalVal = $input.attr('data-current');
+            
+            if (updatedVal === originalVal || isApplyingServerUpdate) return;
+
+            const cell = table.cell($input.closest('td'));
+            const cellIdx = cell.index();
+            const columnName = table.column(cellIdx.column).header().textContent.trim().toLowerCase().replace(' ', '_');
+
+            const fieldChangeset = {};
+            fieldChangeset[columnName] = updatedVal;
+
+            // Commit state immediately to block concurrent race triggers
+            $input.attr('data-current', updatedVal);
+
+            quickEditCard(table, cellIdx.row, fieldChangeset, $input);
+        });
+
+        // Add standard spread-sheet tracking key inputs
+        $('#card-data-engine tbody').on('keydown', '.dt-inline-edit', function(evt) {
+            if (evt.which === 13) { 
+                evt.preventDefault(); 
+                $(this).blur(); // Defers naturally execution flow directly back into change listener
+            } else if (evt.which === 27) { 
+                evt.preventDefault(); 
+                // Escape key undo pattern configuration pass
+                $(this).val($(this).attr('data-current')).blur(); 
             }
         });
     });
 })(jQuery);
 
-// Live Feed Patch Handler
+// =====================================================================
+// SINGLE ARCHITECTURE FEED TARGET INTERFACE: PATCH AND UPDATE ACTIONS
+// =====================================================================
 function patchCardUpdates(updatedCards) {
+    if (isApplyingServerUpdate) return; 
     const table = $('#card-data-engine').DataTable();
     const targetIdx = window.zoomState.idColumnIndex;
+    const hMap = window.zoomState.headerMap || {};
+
+    const idxName = hMap['player name'] !== undefined ? hMap['player name'] : 4;
+    const idxStatus = hMap['status'] !== undefined ? hMap['status'] : 8; 
+    const idxValue = hMap['value ($)'] !== undefined ? hMap['value ($)'] : 11;
 
     updatedCards.forEach(card => {
-        const row = table.row((idx, data, node) => {
+        const row = table.row((idx, data) => {
             const rawId = data[targetIdx] !== undefined ? data[targetIdx] : (data[data.length - 1] || '');
             return rawId.toString() === card.id.toString();
         });
 
         if (row.any()) {
             const rowData = row.data();
-            rowData[0] = card.name || rowData[0];
-            rowData[1] = card.overall_status || rowData[1];
-            rowData[7] = card.value || rowData[7];
+            
+            // If the user is actively focused on a specific input element field, do not smash it
+            const $rowEl = $(row.node());
+            
+            let nameFocused = $rowEl.find(`td:nth-child(${idxName + 1}) .dt-inline-edit`).is(':focus');
+            let statusFocused = $rowEl.find(`td:nth-child(${idxStatus + 1}) .dt-inline-edit`).is(':focus');
+            let valueFocused = $rowEl.find(`td:nth-child(${idxValue + 1}) .dt-inline-edit`).is(':focus');
+
+            if (!nameFocused) rowData[idxName] = card.name || rowData[idxName];
+            if (!statusFocused) rowData[idxStatus] = card.overall_status || rowData[idxStatus];
+            if (!valueFocused) rowData[idxValue] = card.value || rowData[idxValue];
+            
             row.data(rowData);
 
             const $card = $(`#card-${card.id}`);
             if ($card.length) {
-                $card.attr('data-value', card.value);
-                $card.attr('data-overall_status', card.overall_status);
-
-                $card.removeClass((idx, className) => 
-                    (className.match(/(^|\s)status-\S+/g) || []).join(' ')
-                ).addClass(`status-${card.overall_status.toLowerCase()}`);
-
-                const $meta = $card.find('.card-meta');
-                $meta.eq(0).find('strong').text(card.name);
-                $meta.eq(1).text(card.overall_status);      
-                  
-                const formattedValue = new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD'
-                }).format(card.value || 0);
-
-                $meta.eq(3).text(formattedValue);
-
-                // ==========================================
-                // DYNAMIC CHART VARIABLE LIVE RE-PAINT
-                // ==========================================
-                // Find the micro chart wrapper nested inside this updated card item
-                const $chartContainer = $card.find('.mini-stacked-container');
-                
-                if ($chartContainer.length) {
-                    // Update the custom variables. The browser's calc() engine will
-                    // immediately recalculate and re-draw the bars in real-time.
-                    $chartContainer.css({
-                        '--min': card.min_offer !== undefined ? card.min_offer : $chartContainer.css('--min'),
-                        '--max': card.max_offer !== undefined ? card.max_offer : $chartContainer.css('--max'),
-                        '--avg-low': card.min_avg !== undefined ? card.min_avg : $chartContainer.css('--avg-low'),
-                        '--avg-high': card.max_avg !== undefined ? card.max_avg : $chartContainer.css('--avg-high'),
-                        '--avg': card.average !== undefined ? card.average : $chartContainer.css('--avg')
-                    });
-                }
-                // ==========================================
-
-                $card.css('transition', 'all 0.5s ease');
-                $card.css('outline', '2px solid #28a745');
+                drawOrHydrateCardComponent(card, $card);
+                $card.css('transition', 'all 0.5s ease').css('outline', '2px solid #28a745');
                 setTimeout(() => $card.css('outline', 'none'), 2000);
             }
         }
@@ -454,8 +707,8 @@ const CardLiveFeedUpdater = {
     visibleCardIds: new Set(),
     observer: null,
     updateTimeoutId: null,
-    updateIntervalMs: 60000, // Sync frequency (ds)
-    batchDelayMs: 300,      // Debounce window to let scrolling settle
+    updateIntervalMs: 5000, 
+    batchDelayMs: 300,      
 
     init() {
         this.setupIntersectionObserver();
@@ -463,24 +716,14 @@ const CardLiveFeedUpdater = {
         console.log("Card Live Feed Updater Initialized.");
     },
 
-    // Observe which cards enter and leave the physical viewport
     setupIntersectionObserver() {
-        const observerOptions = {
-            root: null,
-            rootMargin: '100px',
-            threshold: 0.1
-        };
+        const observerOptions = { root: null, rootMargin: '100px', threshold: 0.1 };
 
         this.observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 const cardId = entry.target.getAttribute('data-id');
                 if (!cardId) return;
-
-                if (entry.isIntersecting) {
-                    this.visibleCardIds.add(cardId);
-                } else {
-                    this.visibleCardIds.delete(cardId);
-                }
+                if (entry.isIntersecting) { this.visibleCardIds.add(cardId); } else { this.visibleCardIds.delete(cardId); }
             });
 
             clearTimeout(this.updateTimeoutId);
@@ -497,13 +740,17 @@ const CardLiveFeedUpdater = {
     },
 
     observeGridItems() {
-        const cards = document.querySelectorAll('#visual-card-grid .card-item');
-        cards.forEach(card => {
+        const allCards = document.querySelectorAll('#visual-card-grid .card-item');
+
+        const visibleCards = Array.from(allCards).filter(card => {
+            return card.checkVisibility ? card.checkVisibility() : (card.offsetWidth > 0 || card.offsetHeight > 0);
+        });
+
+        visibleCards.forEach(card => {
             this.observer.observe(card);
         });
     },
 
-    // Safely capture CSRF Token from your Django page
     getCsrfToken() {
         const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
         if (tokenInput) return tokenInput.value;
@@ -522,8 +769,10 @@ const CardLiveFeedUpdater = {
         return cookieValue;
     },
 
-    // Triggers the POST request structured exactly like your AJAX snippet
     triggerBatchUpdate() {
+        // Exit early if the user is actively typing or modifying fields to prevent cursor jumps
+        if (isApplyingServerUpdate || $('.dt-inline-edit:focus').length > 0) return;
+        
         const idsToUpdate = Array.from(this.visibleCardIds);
         if (idsToUpdate.length === 0) return;
 
@@ -532,34 +781,25 @@ const CardLiveFeedUpdater = {
         $.ajax({
             url: "/get_flat_cards/",
             method: "POST",
-            headers: {
-                'X-CSRFToken': this.getCsrfToken() // Django security requirement for POST
-            },
-            data: {
-                'card_ids': idsToUpdate, // Passed cleanly as a standard form data list
-            },
+            headers: { 'X-CSRFToken': this.getCsrfToken() },
+            data: { 'card_ids': idsToUpdate },
             success: function(response) {
                 console.log("Auto-sync response received:", response);
                 if (response && response["data"]) {
                     patchCardUpdates(response["data"]);
                 }
             },
-            error: function(xhr) {
-                console.error("Auto-sync update failed:", xhr.responseText);
-            }
+            error: function(xhr) { console.error("Auto-sync update failed:", xhr.responseText); }
         });
     },
 
     startPeriodicSync() {
         setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                this.triggerBatchUpdate();
-            }
+            if (document.visibilityState === 'visible') { this.triggerBatchUpdate(); }
         }, this.updateIntervalMs);
     }
 };
 
-// Initialize on load
 document.addEventListener('DOMContentLoaded', () => {
     CardLiveFeedUpdater.init();
 });

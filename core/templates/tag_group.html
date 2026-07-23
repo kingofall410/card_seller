@@ -1,0 +1,282 @@
+{% load custom_tags %}
+<script>
+function saveGroupField(groupKey, fieldName, value) {
+    console.log(`Saving group ${groupKey} field: ${fieldName} -> ${value}`);
+    $.ajax({
+        url: `/update_product_group/`,
+        type: 'POST',
+        data: {
+            'group_key': groupKey,
+            'field': fieldName,
+            'value': value,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function(response) {
+            console.log("Group field update saved successfully.");
+        },
+        error: function(xhr) {
+            console.error("Failed to apply dynamic group updates.");
+        }
+    });
+}
+
+function removeGroup(groupKey) {
+    if (confirm("Are you sure you want to completely remove this product group mapping stack?")) {
+        console.log(`Removing group elements linked to: ${groupKey}`);
+        // Add your redirect or AJAX deletion workflow path here
+    }
+}
+
+function submitGroupForm(groupKey, elementId, targetUrl) {
+    console.log(`Routing form capture stack for group ${groupKey} to: ${targetUrl}`);
+    window.location.href = targetUrl;
+}
+
+function submitGroupAction(targetUrl, group_id) {
+    console.log(`Executing targeted engine operation view macro layout: ${targetUrl}`);
+    $.ajax({
+      url: targetUrl,
+      method: "POST", // Change to POST
+      data: {
+          'grp_id': group_id, 
+      },
+      success: function(response) {
+        console.log("Response received:", response);
+    },
+      error: function(xhr) {
+          // Since you got a 500 error, this block will now catch it
+          console.log(xhr.responseText); 
+          alert("Request failed. Check the Django terminal for the traceback.");
+      }
+  });
+}
+</script>
+
+{% load static %}
+<script src="{% static 'js/lg_monitor.js' %}"></script>
+
+  {% with primary_card=group.list.0 %}
+  
+  <div class="listing-group one-liner group-item-card" data-product-group id="pg-{{ group.grouper }}" data-group-key="{{ group.grouper }}">
+    <div class="listing-header-container" style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <span class="listing-header-label" style="font-weight: bold; font-size: 1.1rem;">
+          Tag: {{ group.grouper }} ({{ group.list|length }} Cards)
+          <div class="collection-actions" style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <button onclick="submitGroupForm('{{ group.grouper }}', null, '/crop_review/{{ group.grouper }}/')" title="Crop Review">✂</button>
+              <button onclick="submitGroupAction('/price_collection/', '{{ group.grouper }}')">💲</button>
+              <button onclick="submitGroupAction('/bulk_archive/', '{{ group.grouper }}')" title="Archive">🗄️</button>          
+              <button onclick="submitGroupAction('/refresh_listing_status/', '{{ group.grouper }}')" title="Refresh">🔄</button>
+              <button onclick="submitGroupAction('/card_test/', '{{ group.grouper }}')" title="Test">🧪</button>
+          </div>
+        </span>
+        <div class="search-string" style="font-size: 0.8rem; color: #777; font-family: monospace;">
+          Total: ${{ group.list|calculate_group_value|floatformat:2 }})
+        </div>
+        <button class="refresh-lg-btn" title="Refresh Group Scraping Stack">⚾</button>
+      </div>
+
+      <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;">
+        <small class="text-muted" style="margin-left: auto; background: #f8f9fa; padding: 2px 6px; border-radius: 4px; border: 1px solid #eee;">
+          Collection ID: {{ primary_card.collection_id }}
+        </small>
+      </div>
+    </div>
+
+    <div class="sort-controls" style="margin-bottom: 10px;">
+      <span class="sort-title" style="font-size: 0.8rem; color: #999; text-transform: uppercase; margin-right: 8px;">Sort Variant Cards:</span>
+      <span class="sort-link" data-sort="price" data-dir="desc">Price ↓</span>
+      <span class="sort-link" data-sort="date" data-dir="desc" class="active">Date ↓</span>
+      <span class="sort-link" data-sort="title" data-dir="asc">Title ↑</span>
+    </div>
+
+    <div class="image-grid scroll-row" id="grid-{{ group.grouper }}">
+      {% for card in group.list %}
+        <div class="listing status-{{ card.overall_status|lower }}"
+             data-id="{{ card.id }}" 
+             data-price="{{ card.value|default:0 }}" 
+             data-date="{{ card.modification_date|date:'c' }}" 
+             data-title="{{ card.name }}"
+             data-bids="{{ card.active_bids|default:0 }}"
+             data-format="{{ card.overall_status|default:'' }}">
+          
+          <a href="/card/{{ card.id }}/" target="_blank" class="thumb-wrapper">
+            {% if card.front_url %}
+              <img src="{{ card.front_url }}" class="listing-thumb" alt="" title="{{ card.name }}">
+            {% else %}
+              <div class="missing-thumb-placeholder">No Img</div>
+            {% endif %}
+          </a>
+          <div class="listing-caption" style="font-weight: bold; color: #222;">${{ card.value|default:0|floatformat:2 }}</div>
+          <div class="listing-caption" style="font-size: 0.7rem; color: #666;">{{ card.modification_date|date:'M d, Y' }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <script>
+  (function() {
+      const gKey = "{{ group.grouper }}";
+      const groupEl = document.getElementById(`pg-${gKey}`);
+      const gridEl = document.getElementById(`grid-${gKey}`);
+      const variantNodes = Array.from(gridEl.querySelectorAll(".listing"));
+      const sortBtns = groupEl.querySelectorAll(".sort-link");
+      const refreshBtn = groupEl.querySelector(".refresh-lg-btn");
+
+      variantNodes.forEach(v => {
+          v._sortDate = new Date(v.dataset.date).getTime() || 0;
+          v._sortTitle = (v.dataset.title || "").toLowerCase();
+          v._sortPrice = parseFloat(v.dataset.price) || 0;
+          
+          const bids = parseInt(v.dataset.bids, 10) || 0;
+          const format = v.dataset.format;
+          if (format === 'Auction' && bids <= 1) {
+              v.classList.add('low-bid-auction');
+          }
+      });
+
+      function applySort(mode, dir) {
+          variantNodes.sort((a, b) => {
+              let res = 0;
+              if (mode === "price") res = a._sortPrice - b._sortPrice;
+              else if (mode === "date") res = a._sortDate - b._sortDate;
+              else if (mode === "title") res = a._sortTitle.localeCompare(b._sortTitle);
+              return dir === "asc" ? res : -res;
+          });
+          variantNodes.forEach(v => gridEl.appendChild(v));
+      }
+
+      applySort("date", "desc");
+
+      variantNodes.forEach(item => {
+          const variantId = item.dataset.id;
+          ["mouseenter", "mouseleave", "click"].forEach(evtType => {
+              item.addEventListener(evtType, () => {
+                  const action = evtType === "mouseenter" ? "highlightListing" : 
+                                 evtType === "mouseleave" ? "unhighlightListing" : "clickListing";
+                  window.dispatchEvent(new CustomEvent(action, { 
+                      detail: { group_key: gKey, variant_id: variantId } 
+                }));
+              });
+          });
+      });
+
+      sortBtns.forEach(link => {
+          link.addEventListener("click", () => {
+              const mode = link.dataset.sort;
+              const newDir = link.dataset.dir === "desc" ? "asc" : "desc";
+              link.dataset.dir = newDir;
+              link.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ${newDir === "desc" ? "↓" : "↑"}`;
+              sortBtns.forEach(l => l.classList.remove("active"));
+              link.classList.add("active");
+              applySort(mode, newDir);
+          });
+      });
+
+      if (refreshBtn) {
+          refreshBtn.addEventListener("click", async function(e) {
+              e.preventDefault();
+              refreshBtn.classList.add('loading');
+              
+              if (window.LGMonitor) {
+                  window.LGMonitor.getInstance().watchGroup(gKey);
+              }
+
+              try {
+                  const response = await fetch(`/async_price_search/${gKey}`);
+                  if (response.ok) {
+                      refreshBtn.textContent = "⌛"; 
+                  } else {
+                      refreshBtn.classList.remove('loading');
+                      refreshBtn.textContent = "❌";
+                  }
+              } catch (err) {
+                  console.error(`Group refresh failed: ${gKey}`, err);
+                  refreshBtn.classList.remove('loading');
+              }
+          });
+      }
+  })();
+  </script>
+
+  {% endwith %}
+
+<style>
+  .listing-group.one-liner { 
+    display: block;
+    width: 100%; 
+    box-sizing: border-box;
+    background: #fff; 
+    border: 1px solid #e0e0e0; 
+    border-radius: 8px; 
+    padding: 15px; 
+    margin-bottom: 20px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+  }
+  
+  .listing-group.one-liner .image-grid { 
+    display: flex; 
+    flex-wrap: nowrap; 
+    overflow-x: auto; 
+    gap: 10px; 
+    padding: 4px 4px 10px 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .listing-group.one-liner .listing { 
+    flex: 0 0 auto; 
+    width: 105px; 
+    background-color: #fff; 
+    padding: 6px; 
+    border: 2px solid transparent; 
+    border-radius: 6px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08); 
+    transition: transform 0.2s, box-shadow 0.2s; 
+    box-sizing: border-box;
+  }
+  
+  .listing-group.one-liner .listing:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15); 
+  }
+
+  .thumb-wrapper {
+    display: block;
+    width: 100%;
+    height: 120px; 
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+  
+  .listing-group.one-liner .listing-thumb { 
+    border: 1px solid #e0e0e0; 
+    border-radius: 4px; 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover;
+    display: block; 
+    box-sizing: border-box; 
+  }
+
+  .missing-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #f0f0f0;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: #888;
+  }
+  
+  .listing-group.one-liner .listing.low-bid-auction { border-color: #dc3545; }
+  .sort-link { cursor: pointer; margin-right: 10px; font-size: 0.85em; color: #0d6efd; }
+  .sort-link.active { font-weight: bold; text-decoration: underline; color: #212529; }
+  .refresh-lg-btn { background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 0.8rem; color: #666; transition: all 0.2s; }
+  .refresh-lg-btn:hover { background-color: #f0f0f0; border-color: #bbb; color: #333; }
+  .refresh-lg-btn.loading { animation: spin 1s linear infinite; pointer-events: none; opacity: 0.6; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>

@@ -108,7 +108,7 @@ const AppOrchestrator = {
         this.state.isLoading = true;
 
         try {
-            let sinceString = this.state.timeframe > 0 ? `&since=${this.getSinceDate(this.state.timeframe)}` : "";
+            let sinceString = this.state.timeframe > 0 ? `&timeframe=${this.getSinceDate(this.state.timeframe)}` : "";
             let url = `/card_search_ajax/?q=${encodeURIComponent(this.state.currentQuery)}&page=${this.state.currentPage}${sinceString}`;
 
             if (Object.keys(this.state.activeFilters).length > 0) {

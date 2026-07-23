@@ -6,19 +6,27 @@
   <div class="listing-header-container" style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
     <div style="display: flex; justify-content: space-between; align-items: baseline;">
       <span class="listing-header-label" style="font-weight: bold; font-size: 1.1rem;">
-        {{ listing_group.id }} {{ listing_group.label }} ({{ listing_group.listings.count }}) - ${{ listing_group.recent_avg_price|floatformat:0 }} ---- - ${{ listing_group.modified_avg|floatformat:0 }}
+        {{ listing_group.label }} 
       </span>
       <div class="search-string" style="font-size: 0.8rem; color: #777; font-family: monospace;">
-        {{ listing_group.id_string }} {{ listing_group.filter_terms }}
+        {{ listing_group.force_search_string }}
       </div>
       <button class="refresh-lg-btn" title="Refresh Price Search">💲</button>
     </div>
-
+    <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;"> 
+      <b>{{ listing_group.modification_date|date:'m/d/Y H:i:s' }} ({{ listing_group.listings.count }})</b> </span>
+      
+    </div>
     <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;">
-      <span style="color: #198754;"><b>${{ listing_group.max_price|floatformat:0 }}</b></span>
-      <span style="color: #0d6efd;"><b>${{ listing_group.avg_price|floatformat:0 }}</b></span>
-      <span style="color: #dc3545;"><b>${{ listing_group.min_price|floatformat:0 }}</b></span>
-      <span style="color: #827a7bff;"><b>{{ listing_group.price_spread|floatformat:2 }}%</b></span>
+      <b>Recent: ({{ listing_group.recent_date|date:'M, Y' }}) <span style="color: #198754;">${{ listing_group.last_5_max_price|floatformat:2 }}</b></span>
+      <span style="color: #0d6efd;"><b>${{ listing_group.recent_avg_price|floatformat:2 }}</b></span>
+      <span style="color: #dc3545;"><b>${{ listing_group.last_5_min_price|floatformat:2 }}</b></span>
+      
+    </div>
+    <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;">
+      <b>All Time: <span style="color: #198754;">${{ listing_group.max_price|floatformat:2 }}</b></span>
+      <span style="color: #0d6efd;"><b>${{ listing_group.avg_price|floatformat:2 }}</b></span>
+      <span style="color: #dc3545;"><b>${{ listing_group.min_price|floatformat:2 }}</b></span>
       <small class="text-muted" style="margin-left: auto; background: #f8f9fa; padding: 2px 6px; border-radius: 4px; border: 1px solid #eee;">
         Spread: {{ listing_group.price_spread }}%
       </small>

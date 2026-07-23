@@ -109,18 +109,6 @@ document.addEventListener("DOMContentLoaded", function () {
             .finally(() => restoreButton(button));
     }
 
-    function clearListedInfo(button, cardId) {
-        
-        showSpinnerOnButton(button);
-
-        const url = `/clear_listed_info/${cardId}`;
-
-        fetch(url)
-            .then(res => res.json())
-            .then(data => onSuccess && onSuccess(data))
-            .finally(() => restoreButton(button));
-    }
-
     /* ---------------------------
        GROUP SELECT (NEW GROUP)
     ----------------------------*/
@@ -129,23 +117,37 @@ document.addEventListener("DOMContentLoaded", function () {
             // 1. If we aren't creating a new group, we need to fetch the next date
             if (this.value !== "__new__") {
                 const groupId = this.value;
-                const cardId = "{{ card_id }}"; // Ensure this template tag is rendered correctly
-                
-                // 2. Fetch the next available listing date from your server
+                const cardId = "{{ card_id }}";
+                // Assuming you have access to the related ListedInfo ID
+                const liId = "{{ card.listed_card_info_id }}"; 
+
+                // Prepare the data to match your view's request.POST.get() calls
+                const formData = new URLSearchParams();
+                formData.append("li_id", liId);
+                formData.append("field", "product_group_group_key"); // Or whichever field name you are updating
+                formData.append("value", groupId);
+                console.log(formData)
                 try {
-                    const response = await fetch(`/get_next_listing_date/?group_id=${groupId}`);
+                    const response = await fetch(`/update_li_fields/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: formData
+                    });
+
                     const data = await response.json();
-                    
-                    // 3. Find the specific schedule input for this card
-                    // Assuming your schedule input has an ID like 'schedule-123'
-                    const scheduleInput = document.getElementById(`schedule-${cardId}`);
-                    
-                    if (scheduleInput && data.next_date) {
-                        // Update the value with the date returned from the server
-                        scheduleInput.value = data.next_date;
+
+                    if (data.success) {
+                        console.log("Field updated successfully");
+                        
+                        // If you still need the next date, you might want to chain 
+                        // another fetch call here, or return the date from this view.
+                    } else {
+                        console.error("Update failed:", data.message);
                     }
                 } catch (error) {
-                    console.error("Error fetching next date:", error);
+                    console.error("Error calling update_li_fields:", error);
                 }
             } else {
 

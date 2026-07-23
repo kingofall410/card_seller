@@ -161,55 +161,22 @@
     <div class="status-badge-selector">
         <span style="font-size: 13px; color: #666; font-weight: bold; margin-right: 5px;">Statuses:</span>
         
-        <div class="status-badge pre-list" data-status="imported,manual,unexecuted" data-state="0">
-            <span class="badge-dot"></span> Pre-Listing
+        <div class="status-badge pre-list" data-status="imported" data-state="0">
+            <span class="badge-dot"></span> Imported
         </div>
-        <div class="status-badge priced" data-status="priced" data-state="0">
-            <span class="badge-dot"></span> Priced
+        <div class="status-badge priced" data-status="priced,unlisted,pending" data-state="0">
+            <span class="badge-dot"></span> Pricing
         </div>
         <div class="status-badge reviewed" data-status="reviewed" data-state="0">
             <span class="badge-dot"></span> Reviewed
         </div>
-        <div class="status-badge listed" data-status="listed,staged" data-state="0">
+        <div class="status-badge listed" data-status="listed,staged,confirmed" data-state="0">
             <span class="badge-dot"></span> Listed / Staged
         </div>
         <div class="status-badge hold-sold" data-status="held,sold" data-state="0">
             <span class="badge-dot"></span> Hold / Sold
         </div>
     </div>
-
-    <div class="autocomplete-container">
-        <select id="target-selector" style="width: 100%;">
-            <option value="">Link Collection or Group...</option>
-            
-            {% if collections %}
-            <optgroup label="Collections">
-                {% for collection in collections %}
-                    <option value="col_{{ collection.id }}" 
-                            data-type="collection" 
-                            data-name="{{ collection.name }}" 
-                            data-identifier="{{ collection.id }}">
-                        {{ collection.name }} (ID: {{ collection.id }})
-                    </option>
-                {% endfor %}
-            </optgroup>
-            {% endif %}
-
-            {% if groups %}
-            <optgroup label="Product Groups">
-                {% for group in groups %}
-                    <option value="grp_{{ group.key }}" 
-                            data-type="group" 
-                            data-name="{{ group.name }}" 
-                            data-identifier="{{ group.key }}">
-                        {{ group.name }} (Key: {{ group.key }})
-                    </option>
-                {% endfor %}
-            </optgroup>
-            {% endif %}
-        </select>
-    </div>
-
 </div>
 
 <div class="timeframe-selector" style="justify-content: center; display: flex; gap: 15px; margin-bottom: 10px; font-size: 12px; color: #6b7280;">
@@ -232,7 +199,7 @@
 
         const params = new URLSearchParams(window.location.search);
         const urlQuery = params.get('q');
-        const urlTimeframe = params.get('since');
+        const urlTimeframe = params.get('timeframe');
         const includedStatuses = params.getAll('status');
         const excludedStatuses = params.getAll('exclude_status');
 
@@ -301,7 +268,7 @@
             }
             
             if (timeframe && timeframe !== "0") {
-                newParams.set('since', timeframe);
+                newParams.set('timeframe', timeframe);
             }
 
             // Capture Selected Collection or Group

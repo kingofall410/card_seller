@@ -7,12 +7,13 @@ from core.models.Cropping import CropParams
 from core.models.Status import *
 from core.models.Group import *
 from core.models.ListingGroup import *
-from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
+from services.models.models import Brand, Subset, Team, City, KnownName, PlayerYearTeamCity, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 from services import settings_management as app_settings
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from itertools import product, combinations
+import traceback
 
 class OverrideableFieldsMixin(models.Model):
     class Meta:
@@ -20,35 +21,18 @@ class OverrideableFieldsMixin(models.Model):
 
     def add_token_link(self, field, value, select=False, all_field_data={}):
         print("add token link: ", field, value, select)
-        available_tokens_fieldname = f"{field}_available_tokens"
-        selected_token_fieldname = f"{field}_selected_token"        
+        #available_tokens_fieldname = f"{field}_available_tokens"#legacy remove when able
+        selected_token_fieldname = f"{field}_selected_token"    
         selected_token = None
-        print("c:", available_tokens_fieldname, selected_token_fieldname)
-        #TODO:This is going to be extra slow of course; don't search through every name every time
-        if hasattr(self, available_tokens_fieldname) and hasattr(self, selected_token_fieldname):
-            print("D")
-            avail_token_manager = getattr(self, available_tokens_fieldname)
-            print (avail_token_manager)
-            if avail_token_manager and avail_token_manager.filter(raw_value__iexact=value).exists():
-                print("E")
-                selected_token = avail_token_manager.get(raw_value__iexact=value)
-                print("F")
-            else:
-                print("G")
-                selected_token = app_settings.add_token(field, value, all_field_data, user_settings=None)
-                #print("H:", selected_token)
-                if selected_token:
-                    avail_token_manager.add(selected_token)
-                print("I")
-            print("J")
-            if select: 
-                print("K")
-                setattr(self, selected_token_fieldname, selected_token)
-                print("L")
-        else:
-            print("link not found", available_tokens_fieldname, selected_token_fieldname)
-            pass
 
+        if hasattr(self, selected_token_fieldname):    
+            selected_token = app_settings.add_token(field, value, all_field_data, user_settings=None)
+            if select: 
+                #print("K")
+                setattr(self, selected_token_fieldname, selected_token)
+        else:
+            print("link not found", selected_token_fieldname)
+            
         return selected_token
 
     def check_update_set_token(self, field_name, field_value):
@@ -65,7 +49,7 @@ class OverrideableFieldsMixin(models.Model):
 
         # Validate fields exist
         model_fields = [f.name for f in self._meta.get_fields()]
-        print(model_fields)
+        #print(model_fields)
         if field_to_set not in model_fields:
             print(f"⚠️ Field '{field_to_set}' does not exist on model.")
             return
@@ -77,8 +61,8 @@ class OverrideableFieldsMixin(models.Model):
         if isinstance(is_manual, str):
             is_manual = is_manual.lower() in ["true", "1", "yes"]
 
-        print("Setting:", field_to_set, "=", new_field_value)
-        print("Setting:", is_manual_fieldname, "=", is_manual)
+        #print("Setting:", field_to_set, "=", new_field_value)
+        #print("Setting:", is_manual_fieldname, "=", is_manual)
         try:
             if new_field_value:
                 setattr(self, field_to_set, new_field_value)
@@ -93,7 +77,7 @@ class OverrideableFieldsMixin(models.Model):
         #remove this hardcode
         if not field in self.calculated_fields:
             self.add_token_link(field, new_field_value, True, all_field_data)
-        
+
         #write through the parallel filter terms if updated
         if field == "parallel_filter_terms":
             if is_manual:
@@ -103,8 +87,31 @@ class OverrideableFieldsMixin(models.Model):
                 #otherwise pull
                 self.parallel_filter_terms = self.parallel_selected_token.filter_terms
 
-        #if field in self.set_definition_fields:
-            #self.check_update_set_token(field, new_field_value)
+        #handle the initial NULL setting of parallel
+        if field == "parallel" and not new_field_value:
+            #print("selecting it")
+            self.parallel_filter_terms = self.parallel_selected_token.filter_terms
+
+        #update PYT Mapping if all info is available
+        elif field == "city" or field == "team":
+            print("update pyt", field, is_manual)
+            if self.full_name_selected_token and self.year_selected_token:
+                
+                pyt,_ = PlayerYearTeamCity.objects.get_or_create(player_name=self.full_name_selected_token, year=self.year_selected_token)
+                
+                if pyt:
+                    if self.city_is_manual and self.city_selected_token:
+                        pyt.city = self.city_selected_token
+                    else:
+                        self.city_selected_token = pyt.city
+
+                    if self.team_is_manual and self.team_selected_token:
+                        pyt.team = self.team_selected_token
+                        if not pyt.city:
+                            pyt.city = self.team_selected_token.home_city
+                    else:
+                        self.team_selected_token = pyt.team
+                    pyt.save()
 
     def __getattr__(self, name):
         #print("getattr", name)
@@ -149,62 +156,62 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     full_name = models.CharField(max_length=500, blank=True, null=True)
     full_name_m = models.CharField(max_length=500, blank=True, null=True)
     full_name_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    full_name_available_tokens = models.ManyToManyField(KnownName, blank=True, related_name="csr_as_available_full_name")
+    #full_name_available_tokens = models.ManyToManyField(KnownName, blank=True, related_name="csr_as_available_full_name")
     full_name_selected_token = models.ForeignKey(KnownName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_full_name")
     
     year = models.CharField(max_length=20, blank=True, null=True)
     year_m = models.CharField(max_length=20, blank=True, null=True)
     year_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    year_available_tokens = models.ManyToManyField(Season, blank=True, related_name="csr_as_available_year")
+    #year_available_tokens = models.ManyToManyField(Season, blank=True, related_name="csr_as_available_year")
     year_selected_token = models.ForeignKey(Season, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_year")
     
     brand = models.CharField(max_length=500, blank=True, null=True)
     brand_m = models.CharField(max_length=500, blank=True, null=True)
     brand_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    brand_available_tokens = models.ManyToManyField(Brand, blank=True, related_name="csr_as_available_brand")
-    brand_selected_token = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_brand")
+    #brand_available_tokens = models.ManyToManyField(Brand, blank=True, related_name="csr_as_available_brand")
+    brand_selected_token = models.ForeignKey(Brand, null=True, blank=True, on_delete=models.SET_NULL, related_name="csr_as_selected_brand")
     
     subset = models.CharField(max_length=500, blank=True, null=True)
     subset_m = models.CharField(max_length=500, blank=True, null=True)
     subset_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    subset_available_tokens = models.ManyToManyField(Subset, blank=True, related_name="csr_as_available_subset")
-    subset_selected_token = models.ForeignKey(Subset, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_subset")
+    #subset_available_tokens = models.ManyToManyField(Subset, blank=True, related_name="csr_as_available_subset")
+    subset_selected_token = models.ForeignKey(Subset, null=True, blank=True, on_delete=models.SET_NULL, related_name="csr_as_selected_subset")
     
     card_number = models.CharField(max_length=100, blank=True, null=True)
     card_number_m = models.CharField(max_length=100, blank=True, null=True)
     card_number_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    card_number_available_tokens = models.ManyToManyField(CardNumber, blank=True, related_name="csr_as_available_card_number")
+    #card_number_available_tokens = models.ManyToManyField(CardNumber, blank=True, related_name="csr_as_available_card_number")
     card_number_selected_token = models.ForeignKey(CardNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_number")
 
     card_name = models.CharField(max_length=500, blank=True, null=True)
     card_name_m = models.CharField(max_length=500, blank=True, null=True)
     card_name_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    card_name_available_tokens = models.ManyToManyField(CardName, blank=True, related_name="csr_as_available_card_name")
-    card_name_selected_token = models.ForeignKey(CardName, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_card_name")
+    #card_name_available_tokens = models.ManyToManyField(CardName, blank=True, related_name="csr_as_available_card_name")
+    card_name_selected_token = models.ForeignKey(CardName, null=True, blank=True, on_delete=models.SET_NULL, related_name="csr_as_selected_card_name")
 
     team = models.CharField(max_length=500, blank=True, null=True)
     team_m = models.CharField(max_length=500, blank=True, null=True)
     team_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    team_available_tokens = models.ManyToManyField(Team, blank=True, related_name="csr_as_available_team")
+    #team_available_tokens = models.ManyToManyField(Team, blank=True, related_name="csr_as_available_team")
     team_selected_token = models.ForeignKey(Team, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_team")
     
     city = models.CharField(max_length=500, blank=True, null=True)
     city_m = models.CharField(max_length=500, blank=True, null=True)
     city_is_manual = models.BooleanField(default=False, blank=True, null=True)
-    city_available_tokens = models.ManyToManyField(City, blank=True, related_name="csr_as_available_city")
+    #city_available_tokens = models.ManyToManyField(City, blank=True, related_name="csr_as_available_city")
     city_selected_token = models.ForeignKey(City, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_city")
     
     serial_number = models.CharField(max_length=100, blank=True, null=True)
     serial_number_m = models.CharField(max_length=100, blank=True, null=True)
     serial_number_is_manual = models.BooleanField(default=False, blank=True, null=True)    
-    serial_number_available_tokens = models.ManyToManyField(SerialNumber, blank=True, related_name="csr_as_available_serial_number")
+    #serial_number_available_tokens = models.ManyToManyField(SerialNumber, blank=True, related_name="csr_as_available_serial_number")
     serial_number_selected_token = models.ForeignKey(SerialNumber, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_serial_number")
     
     parallel = models.CharField(max_length=100, blank=True, null=True)
     parallel_m = models.CharField(max_length=100, blank=True, null=True)
     parallel_is_manual = models.BooleanField(default=False, blank=True, null=True)    
-    parallel_available_tokens = models.ManyToManyField(Parallel, blank=True, related_name="csr_as_available_parallel")
-    parallel_selected_token = models.ForeignKey(Parallel, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_parallel")
+    #parallel_available_tokens = models.ManyToManyField(Parallel, blank=True, related_name="csr_as_available_parallel")
+    parallel_selected_token = models.ForeignKey(Parallel, null=True, blank=True, on_delete=models.SET_NULL, related_name="csr_as_selected_parallel")
     
     title_to_be = models.CharField(max_length=500, blank=True)
     title_to_be_m = models.CharField(max_length=500, blank=True)
@@ -239,7 +246,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     front_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_front", null=True)
     reverse_crop_params = models.OneToOneField(CropParams,  on_delete=models.CASCADE, related_name="csr_as_reverse", null=True)
 
-    #these are listing specific thus far
+    #these are listing specific thus far --> remove in favor of listedinfo
     sport = models.CharField(max_length=500, blank=True)
     league = models.CharField(max_length=500, blank=True)
     features = models.CharField(max_length=500, blank=True)
@@ -353,9 +360,27 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
     
     @property
+    def natural_sort_value(self):
+            
+        title_parts = [
+            self.display_value("year"),
+            self.display_value("brand"),
+            self.display_value("subset") if (self.display_value("subset") and self.display_value("subset") != " ") else None,
+            self.display_value("card_name") if (self.display_value("card_name") and self.display_value("card_name") != " ") else None,
+            self.display_value('card_number') if self.display_value("card_number") else None,
+            self.display_value("parallel") if  (self.display_value("parallel") and self.display_value("parallel") != " ") else None,
+        ]
+        title = " ".join(part.strip() for part in title_parts if part and part.strip())
+        #print("condition:", self.condition)
+        #print("titles:", title)
+        return title
+
+    @property
     def get_pricing_groups(self):
         sold_groups = list(self.listing_groups.filter(is_sold=True))
         sold_groups.sort(key=lambda x: "Sold Raw" not in (x.label or ""))
+        #print(",".join(x.label+"-"+str(x.id) for x in sold_groups))
+        #print(", ".join(str(x) for x in sold_groups[0].clusters))
         return sold_groups
 
     @property
@@ -365,7 +390,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     @property
     def get_avail_groups(self):
-        avail_groups = list(self.listing_groups.filter(is_img=False).filter(is_sold=False))        
+        avail_groups = list(self.listing_groups.filter(is_img=False).filter(is_sold=False))
+        #print(",".join(x.label+"-"+str(x.id) for x in avail_groups))  
+        #print(", ".join(str(x) for x in avail_groups[0].clusters))    
         return avail_groups
 
     def get_listing_group(self, is_sold=False, is_wide=False, is_refined=False, is_img=False):
@@ -380,23 +407,56 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         else:
             return self.front_crop_params
      
-    def perform_status_update(self, new_status):
+    def perform_status_update(self, new_status, force=False):
         self.overall_status = new_status
-        # Use .filter().update() to avoid re-triggering ASR.save()
-        type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
+        if force and new_status == StatusBase.REVIEWED:
+            self.parent_card.listed_card_info.accept_msrp()
+        else:
+            # Use .filter().update() to avoid re-triggering ASR.save()
+            type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
 
 
     def save(self, *args, **kwargs):
-        print("saving csr", self.id, self.title_to_be, self.title_to_be_m, self.title_to_be_is_manual)
-        
+        print("saving csr", self.id, self.title_to_be)
+        #print("stack trace: ")
+        #traceback.print_stack()
         self.title_to_be = self.build_title(condition_sensitive=True)
         self.variation_title_base = self.build_title(short=True, condition_sensitive=True)
-        self.filter_terms = self.filter_terms or " -box -pack -variation -sp -ssp -lot -auto -autograph"
+        if not self.filter_terms_is_manual:
+            self.filter_terms = " -box -pack -lot -auto -autograph -signed -refractor -chrome" 
         
+        #parallel_selected_token can only be NULL if the brand and year are null
+        if self.brand_selected_token and self.year_selected_token and not self.parallel_is_manual:
+            self.set_ovr_attribute("parallel", "", False, {"brand": self.display_brand, "year": self.display_year, "subset": self.display_subset})
+
         if self.parallel_selected_token and not self.parallel_filter_terms_is_manual:
+                        
             print(self.parallel_selected_token.id)
             #self.set_ovr_attribute("parallel_filter_terms", self.parallel_selected_token.filter_terms, False)
             self.parallel_filter_terms = self.parallel_selected_token.filter_terms
+       
+        #process PYT mapping if I have player+year
+        if self.full_name_selected_token and self.year_selected_token:
+            print("fnst", self.full_name_selected_token.id)
+            pyt,_ = PlayerYearTeamCity.objects.get_or_create(player_name=self.full_name_selected_token, year=self.year_selected_token)
+
+            if pyt.city and not self.city_is_manual:
+                print("setting city from db")                
+                self.set_ovr_attribute("city", pyt.city.primary_value, False)
+            elif not pyt.city:
+                pyt.city = self.city_selected_token
+
+
+            if pyt.team and not self.team_is_manual:
+                print("setting team from db")                
+                self.set_ovr_attribute("team", pyt.team.primary_value, False)
+            elif not pyt.team:
+                pyt.team = self.team_selected_token
+            pyt.save()
+
+        #add default parents
+        if self.subset_selected_token and self.subset_selected_token.parent_brand and (not self.brand_selected_token or self.brand_selected_token.primary_value == ""):
+            self.set_ovr_attribute("brand", self.subset_selected_token.parent_brand.primary_value, False)
 
         self.parent_card.update_mod_date()
         
@@ -405,40 +465,36 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         #this is all a crutch for shitty code
         #check to see if we have been sold
-        if hasattr(self.parent_card, "listed_card_info"):
-            listing_status = self.parent_card.listed_card_info.listing_statuses.last()
+        #I do the listed check so that I can force any card back to listing to unfuck it (p(h)uckett?)
+        if hasattr(self.parent_card, "listed_card_info") and self.overall_status != StatusBase.LISTED:
+            lci = self.parent_card.listed_card_info
+            print(", ".join(f"{ls.listing_status}-{ls.create_sku}-{ls.id}" for ls in lci.listing_statuses.all()))
+            listing_status = lci.listing_statuses.filter(create_sku=lci.sku).last()
             if listing_status:
-                if self.overall_status == StatusBase.LISTED or self.overall_status == StatusBase.CONFIRMED:
-                    if listing_status.listing_status == StatusBase.SOLD:
-                        self.overall_status = StatusBase.SOLD
-                    elif listing_status.listing_status == StatusBase.UNLISTED:
-                        self.overall_status = StatusBase.UNLISTED
-                    else:
-                        self.overall_status = StatusBase.CONFIRMED
+                self.overall_status = listing_status.listing_status
 
         
         #calculate pricing badge values
-        raw_sold = self.listing_groups.filter(label__icontains="Raw").first()
-        if not raw_sold:
-            raw_sold = self.listing_groups.filter(label__icontains="Sold").first()
+        if self.pk:
+            raw_sold = self.listing_groups.filter(label__icontains="Raw").first()
+            if not raw_sold:
+                raw_sold = self.listing_groups.filter(label__icontains="Sold").first()
 
-        available = self.listing_groups.filter(label__icontains="Available").first()
-        if not available:
-            available = self.listing_groups.filter(label__icontains="ID").first()
+            available = self.listing_groups.filter(label__icontains="Available").first()
+            if not available:
+                available = self.listing_groups.filter(label__icontains="ID").first()
 
-        if available:
-            self.min_offer = available.last_5_min_price
-            self.max_offer = available.last_5_max_price
+            if available:
+                self.min_offer = available.min_price
+                self.max_offer = available.last_5_max_price
 
-        if raw_sold:
-            self.min_avg = raw_sold.last_5_min_price
-            self.max_avg = raw_sold.last_5_max_price
-        #if self.attribute_flags:
-            #print(self.attributes)
-            #print(self.attribute_flags)
-            #self.features = " | ".join(key for key in self.attribute_flags.keys())
-            #print(self.features)
-        #self.title_to_be = f"{self.display_value("year")} {self.display_value("brand")} {self.display_value("full_name")} {self.display_value("city")} {self.display_value("team")}"
+            if raw_sold:
+                self.min_avg = raw_sold.last_5_min_price
+                self.max_avg = raw_sold.last_5_max_price
+                if hasattr(self.parent_card, "listed_card_info"):
+                    self.ebay_msrp = raw_sold.recent_avg_price
+                    self.parent_card.listed_card_info.save()            
+
         super().save(*args, **kwargs)
 
     @classmethod
@@ -528,7 +584,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                     aggregate[token.field_key][token.primary_value] += 1
                     self.add_token_link(CardSearchResult.stupid_map(token.field_key), token.primary_value, select=False)
                 else:
-                    #print("no primary token:", token)
+                    print("no primary token:", token)
                     pass
 
             for token in listing.title.unknown_tokens:
@@ -586,19 +642,18 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 else:
                     
                     most_common = counter.most_common(1)
-                    if most_common and (most_common[0][1]/total) >= .1:
+                    if most_common and (most_common[0][1]/total) >= .4:
                         final_value = most_common[0][0]
                     else:
                         final_value = ""
 
                 #disaster
                 if field_name in self.overrideable_fields:
-                    self.set_ovr_attribute(field_name, final_value, False)
+                    self.set_ovr_attribute(field_name, final_value, False, {"brand": self.display_brand, "year": self.display_year, "subset": self.display_subset})
+                
                 elif field_name != 'condition':#?
                     setattr(self, field_name, final_value)
-                
 
-        
         self.set_ovr_attribute("title_to_be", self.build_title(condition_sensitive=True), False)
         self.save()
         #print("Final collapsed tokens:", self.collapsed_tokens)
@@ -703,7 +758,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         return csr   
     
     #matches map is keyword_string --> (listing variable, [listings])
-    def update_listings(self, matches_map, is_refined=False):
+    @classmethod
+    def update_listings(cls, matches_map, is_refined=False):
         #print("UPDATE", matches_map)
         results = []
         for keywords in matches_map:
@@ -713,15 +769,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             if len(listing_group.listings.all()) > 0:
                 listing_group.listings.all().delete()
 
-            results = [ProductListing.from_search_results(item, self, tokenize=False) for item in listings]
+            results = [ProductListing.from_search_results(item, listing_group.search_result, tokenize=False) for item in listings]
             #print("RESULTS", results)
             listing_group.listings.set(results)
+            listing_group.search_string = keywords
             listing_group.modification_date = timezone.now()
             listing_group.save()
-
-            #self.aggregate_pricing_info()
-        #print("sold:", sold_listings)
-        self.save()
 
     @classmethod
     def from_graded_card_record(cls, pcard, record, csr=None, tokenize=True):
@@ -828,20 +881,31 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def build_search_string(self):
         
         year_opt_array = self.build_year_options()
-        parallel_opt_array = self.build_explosion_options([self.display_value("parallel")])
+        year_opt_string = year_opt_array[0]#not needed until compound year"("+",".join([opt for opt in year_opt_array])+")" if len(year_opt_array) > 0 else ""
+
+        parallel_opt_string = None
+        parallel_opt_array = []
+
+        #we only build parallel opts from the main field here.  filter terms are appended in lg.get_search_string
+        if not self.display_value("parallel_filter_terms"):
+            #print("Adding parallel straight", self.display_value("parallel"))
+            parallel_opt_array = self.build_explosion_options([self.display_value("parallel")])
+            #print("parallel_opt_array", parallel_opt_array)
+            parallel_opt_string ='('+','.join([opt for opt in parallel_opt_array])+")" if parallel_opt_array else parallel_opt_string
+            #print("Adding parallel straight", self.display_value("parallel"))
+
         card_name_opt_array = self.build_card_name_options()
         set_opt_array = self.build_explosion_options([self.display_value("brand"), self.display_value("subset")])
         
-
-        year_opt_string = year_opt_array[0]#not needed until compound year"("+",".join([opt for opt in year_opt_array])+")" if len(year_opt_array) > 0 else ""
+        set_opt_string ='('+','.join([opt for opt in set_opt_array])+")" if set_opt_array else ""
         
-        set_opt_string ='('+','.join([opt for opt in set_opt_array])+")" if set_opt_array  else ""
-        parallel_opt_string = "("+",".join([opt for opt in parallel_opt_array])+")" if parallel_opt_array else ""
         #card_name_opt_string = "("+",".join([opt for opt in card_name_opt_array])+")" if card_name_opt_array else ""
-        auto_string = "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else ""
+        
         psa_string = ""#(PSA 10,PSA 9,PSA 8,)"
-        return " ".join([(year_opt_string or ""), set_opt_string, auto_string, parallel_opt_string, \
-                        self.display_value("full_name"), (self.display_value("card_number") or""), (self.display_value("parallel_filter_terms") or ""), psa_string])
+        ret = " ".join([(year_opt_string or ""), (set_opt_string or ""), (parallel_opt_string or ""), \
+                        (self.display_value("full_name") or""), (self.display_value("card_number") or ""), psa_string])
+        print(ret)
+        return ret
         
     #this has become a disaster and needs to be phased out
     def build_title(self, condition_sensitive=False, short=False):
@@ -1040,7 +1104,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         filled_template["conditionDescriptors"] = condition_descriptor
         filled_template["product"]["aspects"]["Card Condition"] = condition_token.primary_token.ebay_string_value
         filled_template["product"]["aspects"]["Sport"] = "Baseball"
-        filled_template["product"]["aspects"]["League"] = "MLB"
+        filled_template["product"]["aspects"]["League"] = "Major League Baseball (MLB)"
         filled_template["product"]["imageUrls"] = image_links
         #need to backfill these all to lists
         filled_template["product"]["aspects"] = {
@@ -1119,12 +1183,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             print("no")
             val = raw_group.recent_avg_price
             val2 = raw_group.modified_avg
-        print("UV", val, val2)
+        print("UV", val, val2, hasattr(self.parent_card, "listed_card_info"))
         self.ebay_msrp = val
-        if hasattr(self.parent_card, "listed_card_info"):
-            self.parent_card.listed_card_info.msrp = self.ebay_msrp
-            self.save(update_fields=["ebay_msrp"])
-        self.parent_card.save()
+        self.save()
 
 #TODO: needs to be refactored into ProductGroup
 

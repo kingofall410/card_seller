@@ -11,6 +11,7 @@ from services import lookup
 from services.models.models import Settings
 from core.models.Card import Card, Collection
 from services import lookup
+from services.models.task import ListingTask
 from core.models.CardSearchResult import CardSearchResult
 from core.views import card_views, image_views
 from django.views.decorators.csrf import csrf_exempt
@@ -20,12 +21,14 @@ from django.forms.models import model_to_dict
 from django.apps import apps
 from django.db.models import Prefetch
 from core.models.Status import StatusBase
+from core.models.TagGroup import TagGroup
 from django.views.decorators.http import require_POST
 from django.db.models import Case, When, Value, CharField, OuterRef, Subquery, FloatField
 from django.db.models.functions import Concat, Coalesce, Greatest, Cast, Ceil
 from pathlib import Path
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.utils import timezone
+from itertools import chain
 
 @require_POST
 @csrf_exempt
@@ -45,10 +48,15 @@ def price_collection(request, collection_id):
         card_list = list(collection.cards.order_by('id'))
     print(card_list)
 
-    core_config = apps.get_app_config("core")
-    for card in card_list:
-        core_config.queue.schedule_pricing_task(name=f"price card {card.id}", csr=card.active_search_results, card=card, callback=lookup.price_only_card, params={"card_id": card.id, "settings_id":2}, on_success_status=StatusBase.PRICED)
 
+
+    lgs = list(chain.from_iterable(card.active_search_results.get_pricing_groups for card in card_list))
+    lgids = [lg.id for lg in lgs]
+
+
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_pricing_task(name=f"refresh lgs", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.refresh_listing_groups, params={"lg_ids":lgids}, on_success_status=StatusBase.PRICED)
+    
     return JsonResponse({"success": True, "error": ""})
 
 @require_POST # Ensure only POST requests hit this
@@ -184,125 +192,226 @@ def spreadsheet_rows_from_search_result(cards, field_names):
 def new_collection(request):
     collection = Collection.objects.create()
     return redirect('collection', collection.id)
-def flatten_collection(base_queryset, limit=None):
-    # 1. Subquery for latest result
-    latest_search_id = CardSearchResult.objects.filter(
-        parent_card=OuterRef('pk')
+
+def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_list=None, query_string=None):
+    """
+    Flattens card data by driving the query from the CardSearchResult table.
+    Uses unique annotation names to avoid conflicting with model fields.
+    """
+    from django.db.models import Subquery, OuterRef, F, Q, Case, When, Value, CharField, FloatField
+    from django.db.models.functions import Coalesce, Cast, Ceil, Greatest
+    from pathlib import Path
+
+    # 1. Start with search results linked to the incoming card scope
+    query = CardSearchResult.objects.filter(parent_card__in=base_queryset)
+
+    # 2. Isolate to the absolute newest CSR row per card
+    latest_id_subquery = CardSearchResult.objects.filter(
+        parent_card=OuterRef('parent_card')
     ).order_by('-id').values('id')[:1]
+    
+    query = query.filter(id=Subquery(latest_id_subquery))
 
-    # 2. Base Filter & Relationship Join Annotations
-    query = base_queryset.filter(
-        search_results__id=Subquery(latest_search_id)
-    ).distinct().order_by('-id').annotate(
-        # Year Override Logic
-        year=Case(
-            When(search_results__year_is_manual=True, then=F('search_results__year_m')),
-            default=F('search_results__year'),
+    # 3. Apply workflow status constraints
+    if status_list:
+        query = query.filter(overall_status__in=status_list)
+
+    if excl_status_list:    
+        query = query.exclude(overall_status__in=excl_status_list)
+        
+    # 4. Apply text search filters
+    if query_string:
+        query = query.filter(
+            Q(full_name__icontains=query_string) |
+            Q(year__icontains=query_string) |
+            Q(brand__icontains=query_string) |
+            Q(team__icontains=query_string)
+        )
+
+    # Isolated Subquery to get the latest task date without causing N+1 hits
+    latest_task_scheduled_subquery = ListingTask.objects.filter(
+        card=OuterRef('parent_card')
+    ).order_by('-scheduled_for').values('scheduled_for')[:1]
+
+    # Isolated Subquery to get the primary tag group without causing N+1 hits
+    ptg_scheduled_subquery = TagGroup.objects.filter(
+        tagged_cards=OuterRef('parent_card')
+    ).order_by('-id').values('group_title')[:1]
+
+    # 5. Extract parent fields using unique names to prevent model conflicts
+    query = query.annotate(
+        fetched_card_id=F('parent_card__id'),
+        fetched_collection_id=F('parent_card__collection_id'),
+        fetched_value=F('parent_card__value'),
+        fetched_mod_date=F('parent_card__modification_date'),
+        fetched_sku=F('parent_card__listed_card_info__sku'),
+        fetched_msrp=F('parent_card__listed_card_info__msrp'),
+        fetched_list_price=F('parent_card__listed_card_info__list_price'),
+        fetched_qty=F('parent_card__listed_card_info__list_qty'),
+        
+        # Injected listing task timestamp annotation
+        latest_task_scheduled=Subquery(latest_task_scheduled_subquery),
+        primary_tag_group=Subquery(ptg_scheduled_subquery),
+        
+        # Local CSR Field Overrides
+        custom_year=Case(
+            When(year_is_manual=True, then=F('year_m')),
+            default=F('year'),
             output_field=CharField()
         ),
-
-        # Brand Override Logic
-        brand=Case(
-            When(search_results__brand_is_manual=True, then=F('search_results__brand_m')),
-            default=F('search_results__brand'),
+        custom_brand=Case(
+            When(brand_is_manual=True, then=F('brand_m')),
+            default=F('brand'),
             output_field=CharField()
         ),
-
-        # Name Override Logic
-        name=Case(
-            When(search_results__full_name_is_manual=True, then=F('search_results__full_name_m')),
-            default=F('search_results__full_name'),
+        custom_name=Case(
+            When(full_name_is_manual=True, then=F('full_name_m')),
+            default=F('full_name'),
             output_field=CharField()
         ),
-
-        # Subset Override Logic
-        subset=Coalesce(
+        custom_subset=Coalesce(
             Case(
-                When(search_results__subset_is_manual=True, then=F('search_results__subset_m')),
-                default=F('search_results__subset'),
+                When(subset_is_manual=True, then=F('subset_m')),
+                default=F('subset'),
                 output_field=CharField()
             ),
             Value('')
         ),
-
-        # City Override Logic
-        city=Case(
-            When(search_results__city_is_manual=True, then=F('search_results__city_m')),
-            default=F('search_results__city'),
+        custom_city=Case(
+            When(city_is_manual=True, then=F('city_m')),
+            default=F('city'),
             output_field=CharField()
         ),
-
-        # Team Override Logic
-        team=Case(
-            When(search_results__team_is_manual=True, then=F('search_results__team_m')),
-            default=F('search_results__team'),
+        custom_team=Case(
+            When(team_is_manual=True, then=F('team_m')),
+            default=F('team'),
             output_field=CharField()
         ),
-
-        # 🛠️ FIX 1: Explicitly resolve the backend fields properly via relation spans
-        min_offer=Coalesce(
-            "search_results__min_offer", 
-            0.0, 
-            output_field=FloatField()
+        custom_card_name=Case(
+            When(card_name_is_manual=True, then=F('card_name_m')),
+            default=F('card_name'),
+            output_field=CharField()
         ),
-        max_offer=Coalesce(
-            "search_results__max_offer", 
-            0.0, 
-            output_field=FloatField()
+        custom_card_nr=Case(
+            When(card_number_is_manual=True, then=F('card_number_m')),
+            default=F('card_number'),
+            output_field=CharField()
         ),
-        min_avg=Coalesce(
-            "search_results__min_avg",
-            0.0,
-            output_field=FloatField()
+        custom_parallel=Case(
+            When(parallel_is_manual=True, then=F('parallel_m')),
+            default=F('parallel'),
+            output_field=CharField()
         ),
-        max_avg=Coalesce(
-            "search_results__max_avg",
-            0.0,
-            output_field=FloatField()
-        ),
-
-        # 🛠️ FIX 2: Explicit relation paths + Null safety wrap 
-        highest_raw_val=Greatest(
-            Coalesce(Cast('search_results__max_offer', FloatField()), 0.0), 
-            Coalesce(Cast('search_results__max_avg', FloatField()), 0.0)
+        custom_title=Case(
+            When(parallel_is_manual=True, then=F('title_to_be_m')),
+            default=F('title_to_be'),
+            output_field=CharField()
         ),
         
-        # Static allocations
-        overall_status=F('search_results__overall_status'),
-        legacy_sku=F('search_results__sku'),
-        csr_id=F('search_results__id'),
-        product_group_name=F('search_results__ebay_product_group__group_title'),
-        product_group_key=F('search_results__ebay_product_group__group_key'),
-        val_range=Case(
-            When(value=0, then=Value('$0.00')),
-            When(value__lt=1, then=Value('$0.00 - $0.99')),
-            When(value__lt=3, then=Value('$1.00 - $2.99')),
-            When(value__lt=5, then=Value('$3.00 - $4.99')),
+        # Numeric Baseline Realignment
+        min_offer_val=Coalesce(F("min_offer"), Value(0.0), output_field=FloatField()),
+        max_offer_val=Coalesce(F("max_offer"), Value(0.0), output_field=FloatField()),
+        min_avg_val=Coalesce(F("min_avg"), Value(0.0), output_field=FloatField()),
+        max_avg_val=Coalesce(F("max_avg"), Value(0.0), output_field=FloatField()),
+        
+        highest_raw_val=Greatest(
+            Coalesce(Cast(F('max_offer'), FloatField()), Value(0.0)), 
+            Coalesce(Cast(F('max_avg'), FloatField()), Value(0.0))
+        ),
+        
+        # Map straight projections from existing CSR model fields
+        legacy_sku=F('sku'),
+        csr_id=F('id'),
+        legacy_msrp=F('ebay_msrp'),
+        product_group_name=F('ebay_product_group__group_title'),
+        product_group_key=F('ebay_product_group__group_key'),
+        
+        val_range_str=Case(
+            When(parent_card__value=0, then=Value('$0.00')),
+            When(parent_card__value__lt=1, then=Value('$0.00 - $0.99')),
+            When(parent_card__value__lt=3, then=Value('$1.00 - $2.99')),
+            When(parent_card__value__lt=5, then=Value('$3.00 - $4.99')),
             default=Value('$10+'),
             output_field=CharField(),
-        ),
-        sku=F('listed_card_info__sku')
+        )
     )
 
-    # 🛠️ FIX 3: Chain-annotate 'scale_max' so it can reference 'highest_raw_val'
+    # 6. Apply trailing calculations and select values using the clean aliases
     query = query.annotate(
-        scale_max=Ceil(F('highest_raw_val') / 5.0) * 5.0
+        scale_max_val=Ceil(F('highest_raw_val') / 5.0) * 5.0
     ).values(
-        'id', 'collection_id', 'value', 'year', 'brand', 'subset', 'city', 'overall_status', 
-        'team', 'name', 'val_range', 'sku', 'legacy_sku', 'csr_id', 'min_offer', 'max_offer', 
-        'min_avg', 'max_avg', 'scale_max', 'product_group_name', 'product_group_key', 'modification_date'
-    )
+        'fetched_card_id', 'fetched_collection_id', 'fetched_value', 'fetched_mod_date', 
+        'fetched_sku', 'fetched_msrp', 'fetched_qty', 'fetched_list_price',
+        'custom_year', 'custom_brand', 'custom_subset', 'custom_city', 'custom_team', 
+        'custom_name', 'custom_card_name', 'custom_card_nr', 'custom_parallel', 'custom_title',
+        'overall_status', 'legacy_sku', 'csr_id', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
+        'max_avg_val', 'scale_max_val', 'product_group_name', 'product_group_key', 'val_range_str',
+        'latest_task_scheduled', 'primary_tag_group'  # Passed through raw row generation
+    ).order_by('-fetched_card_id')
 
-    # 3. Limit / Slicing executions
     if limit:
-        cards_list = list(query[:limit])
+        raw_rows = list(query[:limit])
     else:
-        cards_list = list(query)
+        raw_rows = list(query)
 
-    # Extract IDs for Image processing
+    cards_list = []
+    for row in raw_rows:
+        # Build the natural sort components manually from the dictionary data
+        
+        
+        title_parts = [
+            row['custom_year'],
+            row['custom_brand'],
+            row['custom_subset'] if (row['custom_subset'] and row['custom_subset'].strip()) else None,
+            row['custom_card_name'] if (row['custom_card_name'] and row['custom_card_name'].strip()) else None,
+            row['custom_card_nr'] if (row['custom_card_nr'] and row['custom_card_nr'].strip()) else None,
+            row['custom_parallel'] if (row['custom_parallel'] and row['custom_parallel'].strip()) else None,
+        ]
+        
+        # Clean out empty strings and extra spaces exactly like your property does
+        natural_sort_title = " ".join(str(part).strip() for part in title_parts if part and str(part).strip())
+
+        price_sort_val = row['fetched_list_price'] if row['fetched_list_price'] and row['fetched_list_price'] > 0 else row['fetched_msrp'] if row['fetched_msrp'] else 0
+
+        cards_list.append({
+            'id': row['fetched_card_id'],
+            'collection_id': row['fetched_collection_id'],
+            'value': row['fetched_value'],
+            'modification_date': row['fetched_mod_date'],
+            'sku': row['fetched_sku'],
+            'msrp': row['fetched_msrp'],
+            'legacy_msrp': row['legacy_msrp'],
+            'list_price': row['fetched_list_price'],
+            'qty': row['fetched_qty'],
+            'year': row['custom_year'],
+            'brand': row['custom_brand'],
+            'subset': row['custom_subset'],
+            'city': row['custom_city'],
+            'team': row['custom_team'],
+            'name': row['custom_name'],
+            'card_name': row['custom_card_name'],
+            'parallel': row['custom_parallel'],
+            'title_to_be': row['custom_title'],
+            'card_nr': row['custom_card_nr'],
+            'overall_status': row['overall_status'],
+            'legacy_sku': row['legacy_sku'],
+            'csr_id': row['csr_id'],
+            'min_offer': row['min_offer_val'],
+            'max_offer': row['max_offer_val'],
+            'min_avg': row['min_avg_val'],
+            'max_avg': row['max_avg_val'],
+            'scale_max': row['scale_max_val'],
+            'product_group_name': row['product_group_name'],
+            'product_group_key': row['product_group_key'],
+            'val_range': row['val_range_str'],
+            'latest_task_scheduled': row['latest_task_scheduled'],
+            'primary_tag_group': row['primary_tag_group'],
+            'natural_sort': natural_sort_title,
+            'all_price_sort': price_sort_val
+        })
+
+    # 8. Batch Map Images using the translated parent card IDs
     card_ids = [card_dict['id'] for card_dict in cards_list]
-
-    # Batch process image verification mapping 
     image_map = {
         c.id: c for c in Card.objects.filter(
             id__in=card_ids
@@ -311,77 +420,74 @@ def flatten_collection(base_queryset, limit=None):
     
     for card_data in cards_list:
         card_obj = image_map.get(card_data['id'])
+        card_data['front_thumb_url'] = None
+        card_data['reverse_thumb_url'] = None
         card_data['front_url'] = None
         card_data['reverse_url'] = None
 
         if card_obj:
             if card_obj.cropped_image and card_obj.cropped_image.img:
                 if Path(card_obj.cropped_image.img.path).exists():
-                    card_data['front_url'] = card_obj.cropped_image.thumbnail.url
+                    card_data['front_url'] = card_obj.cropped_image.url()
+                    card_data['front_thumb_url'] = card_obj.cropped_image.thumbnail.url
             
             if card_obj.cropped_reverse and card_obj.cropped_reverse.img:
                 if Path(card_obj.cropped_reverse.img.path).exists():
-                    card_data['reverse_url'] = card_obj.cropped_reverse.thumbnail.url
+                    card_data['reverse_url'] = card_obj.cropped_reverse.url()
+                    card_data['reverse_thumb_url'] = card_obj.cropped_reverse.thumbnail.url
 
     return cards_list
-    
+
 def view_collection(request, collection_id):
-    
-    if collection_id == 0:
-        return view_ad_hoc_collection(request)
-    
-    query = request.GET.get('q')
-    status_list = request.GET.getlist('status')
-    collection_id = request.GET.get('cid')
-    grp_id = request.GET.get('group_key')    
-    timeframe = request.GET.get('timeframe', '0')
-
-    if '0' in status_list:
-        status_list.remove('0')
-    
-    if collection_id:
-        # Start with base queryset
-        qs = Card.objects.filter(collection_id=collection_id)
-    elif grp_id:
-        qs = Card.objects.filter(
-            search_results__ebay_product_group__group_key=grp_id
-        ).prefetch_related(
-            'search_results',
-            'search_results__ebay_product_group' # Prefetches the product group relation
-        ).distinct()
-    elif timeframe != '0':
-        start_date = timezone.now() - timedelta(days=int(timeframe))
-        qs = Card.objects.filter(modification_date__gte=start_date)        
-    else:
-        qs = Card.objects.all()
-        timeframe=120
-
-    # Apply Status Filter (Using list of statuses)
-    if status_list:
-        qs = qs.filter(search_results__overall_status__in=status_list)
         
-    if not query and not timeframe:
-        return render(request, "collection_builder.html", {"settings":Settings.get_default(), "StatusBase":StatusBase})    
-    
-    # 3. Apply Global Text Search
-    if query:
-        contains_filters = Q(
-            Q(search_results__full_name__icontains=query) |
-            Q(search_results__year__icontains=query) |
-            Q(search_results__brand__icontains=query) |
-            Q(search_results__overall_status__icontains=query) |
-            Q(search_results__team__icontains=query) 
-        )
+    text_query = request.GET.get('q')
+    status_list = request.GET.getlist('status')
+    exclude_status_list = request.GET.getlist('exclude_status')
+    collection_id_list = request.GET.getlist('cid')
+    grp_id_list = request.GET.getlist('grp_id')
+    timeframe = request.GET.get('timeframe', '0')
+    start_listing_date = request.GET.get('start_listing_date', None)
+    end_listing_date = request.GET.get('end_listing_date', None)
 
-        # Filter against the SearchResult model linked to the Card
-        qs = qs.filter(contains_filters)
+    query_set = Card.objects.all()
+    if collection_id_list:
+        query_set = query_set.filter(collection_id__in=collection_id_list)
+
+    if grp_id_list:
+        query_set = query_set.filter(search_results__ebay_product_group__group_key__in=grp_id)
+
+    if timeframe != '0':
+        start_date = timezone.now() - timedelta(days=int(timeframe))
+        query_set = query_set.filter(modification_date__gte=start_date)   
+    else:
+        start_date = timezone.make_aware(datetime.fromisoformat(start_listing_date))
+        end_date = timezone.make_aware(datetime.fromisoformat(end_listing_date))
+        query_set = query_set.filter(
+            listed_card_info__listing_datetime__date__gte=start_date
+        ).filter(listed_card_info__listing_datetime__date__lte=end_date)
     
 
-    # 5. Use your core logic to get the final list (annotations, images, etc.)
-    # We pass the filtered queryset 'qs' here
-    card_list = flatten_collection(qs)
-    return render(request, "collection_builder.html", {"cards":card_list, "q":query, "since":timeframe, "settings":Settings.get_default(), "StatusBase":StatusBase})
-    #return render(request, "ad_hoc_collection.html", {"cards":Card.objects.all(), "settings":settings, "StatusBase":StatusBase})
+    # Step 2: Pass filters down to be safely evaluated against ONLY the latest CSR
+    card_list = flatten_collection(
+        base_queryset=query_set, 
+        status_list=status_list,
+        excl_status_list=exclude_status_list,
+        query_string=text_query
+    )
+
+    # Step 3: Sort the clean dictionary payload safely
+    card_list = sorted(
+        card_list, 
+        key=lambda x: x['product_group_key'] if x['product_group_key'] else ''
+    )
+    
+    return render(request, "collection_builder.html", {
+        "cards": card_list, 
+        "q": text_query, 
+        "timeframe": timeframe, 
+        "settings": Settings.get_default(), 
+        "StatusBase": StatusBase
+    })
 
 def view_ad_hoc_collection(request, card_ids=None):
     cards = []

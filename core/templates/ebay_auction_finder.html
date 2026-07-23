@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>eBay & FB Marketplace Assistant</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 30px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h2 { margin-top: 0; margin-bottom: 20px; }
+
+        /* Search Card Form Layout & Tabs */
+        .search-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 24px;
+        }
+        .search-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            background: none;
+            color: #666;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        .tab-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .tab-btn.active {
+            background: #0063d1;
+            color: white;
+            font-weight: bold;
+        }
+        
+        /* FB Tab Active Highlight Styling */
+        .tab-btn.active.fb-tab {
+            background: #1877f2;
+        }
+        
+        .search-form-panel {
+            display: none;
+        }
+        .search-form-panel.active {
+            display: block;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .flex-grow { flex-grow: 1; }
+        label {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            padding: 10px 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        /* Interactive State Notifications Toast */
+        .toast-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 14px 24px;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+            transition: all 0.3s ease;
+        }
+        
+        /* Buttons Setup */
+        button, .btn {
+            background: #0063d1;
+            color: white;
+            border: none;
+            padding: 11px 24px;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover, .btn:hover { background: #0050a8; }
+
+        /* FB Marketplace Specific Colors */
+        .btn-fb {
+            background: #1877f2;
+        }
+        .btn-fb:hover {
+            background: #166fe5;
+        }
+        
+        /* Tiny Action Item Button Rules */
+        .btn-action-upload {
+            background-color: #28a745;
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .btn-action-upload:hover { background-color: #218838; }
+        .btn-action-upload:disabled { background-color: #6c757d; cursor: not-allowed; }
+        
+        /* Clean Listing Row Content Components */
+        .results-heading {
+            margin: 20px 0 10px 0;
+            font-size: 1.1rem;
+            color: #444;
+        }
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .item-row {
+            display: flex;
+            gap: 16px;
+            background: white;
+            padding: 16px;
+            border-radius: 6px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            align-items: center;
+        }
+        .item-img {
+            width: 90px;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 4px;
+            background-color: #eee;
+        }
+        .item-details {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex-grow: 1;
+            height: 90px; /* Aligns with image height block cleanly */
+        }
+        .item-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #0063d1;
+            text-decoration: none;
+            line-height: 1.3;
+        }
+        .item-title:hover { text-decoration: underline; }
+        
+        /* Direct Split Layout Rules */
+        .middle-body-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .price-line {
+            font-size: 0.95rem;
+            color: #555;
+            margin: 4px 0;
+        }
+        .price-main { font-weight: bold; color: #222; }
+        .price-shipping { color: #666; font-size: 0.9rem; }
+        
+        .meta-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .bid-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            background: #fbebeb;
+            color: #d9534f;
+        }
+        .bid-badge.zero-bids { background: #eafaf1; color: #2e7d32; }
+        .empty-state { text-align: center; padding: 40px; background: #fff; border-radius: 6px; color: #777; }
+
+        /* Console Debug Area CSS */
+        .debug-console {
+            background: #222;
+            color: #00ff00;
+            font-family: monospace;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 30px;
+            font-size: 0.85rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🔍 Deal Finder Engine</h2>
+    
+    <div id="toast" class="toast-notification"></div>
+
+    <div class="search-card">
+        <div class="search-tabs">
+            <button id="tab-ebay" class="tab-btn {% if source != 'facebook' %}active{% endif %}" onclick="switchTab('ebay-panel')">eBay Auctions</button>
+            <button id="tab-fb" class="tab-btn fb-tab {% if source == 'facebook' %}active{% endif %}" onclick="switchTab('fb-panel')">FB Marketplace</button>
+        </div>
+
+        <div id="ebay-panel" class="search-form-panel {% if source != 'facebook' %}active{% endif %}">
+            <form method="GET" action="" onsubmit="logDebug('eBay Form submitted.');">
+                <input type="hidden" name="source" value="ebay">
+                <div class="form-row">
+                    <div class="form-group flex-grow">
+                        <label for="search-input">eBay Keyword Search</label>
+                        <input type="text" id="search-input" name="q" value="{% if source != 'facebook' %}{{ search_term }}{% endif %}" placeholder="e.g. 1993 jeter psa..." required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hours-input">Ending Within</label>
+                        <select id="hours-input" name="hours">
+                            <option value="1" {% if hours_until_end == 1 %}selected{% endif %}>1 Hour</option>
+                            <option value="4" {% if hours_until_end == 4 %}selected{% endif %}>4 Hours</option>
+                            <option value="12" {% if hours_until_end == 12 %}selected{% endif %}>12 Hours</option>
+                            <option value="24" {% if hours_until_end == 24 %}selected{% endif %}>24 Hours</option>
+                            <option value="48" {% if hours_until_end == 48 %}selected{% endif %}>48 Hours</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit">Scan Auctions</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="fb-panel" class="search-form-panel {% if source == 'facebook' %}active{% endif %}">
+            <form method="GET" action="" onsubmit="logDebug('FB Marketplace Form submitted.');">
+                <input type="hidden" name="source" value="facebook">
+                <div class="form-row">
+                    <div class="form-group flex-grow">
+                        <label for="fb-search-input">FB Marketplace Search</label>
+                        <input type="text" id="fb-search-input" name="q" value="{% if source == 'facebook' %}{{ search_term }}{% endif %}" placeholder="e.g. Herman Miller Aeron..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fb-location">Location / City</label>
+                        <input type="text" id="fb-location" name="location" value="{{ request.GET.location }}" placeholder="e.g. Chicago" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="fb-radius">Radius (Miles)</label>
+                        <select id="fb-radius" name="radius">
+                            <option value="5" {% if request.GET.radius == '5' %}selected{% endif %}>5 Miles</option>
+                            <option value="10" {% if request.GET.radius == '10' or not request.GET.radius %}selected{% endif %}>10 Miles</option>
+                            <option value="20" {% if request.GET.radius == '20' %}selected{% endif %}>20 Miles</option>
+                            <option value="50" {% if request.GET.radius == '50' %}selected{% endif %}>50 Miles</option>
+                            <option value="100" {% if request.GET.radius == '100' %}selected{% endif %}>100 Miles</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-fb">Scrape Marketplace</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if search_term %}
+        <div class="results-heading">
+            {% if source == 'facebook' %}
+                Facebook Marketplace items matching <strong>"{{ search_term }}"</strong> near <strong>"{{ request.GET.location }}"</strong>:
+            {% else %}
+                Auctions matching <strong>"{{ search_term }}"</strong> ending within {{ hours_until_end }} hours:
+            {% endif %}
+        </div>
+
+        <div class="item-list">
+            {% for item in results %}
+                <div class="item-row">
+                    {% if source == 'facebook' %}
+                        {% if item.img_url %}
+                            <img class="item-img" id="img-{{ item.item_id }}" 
+                                src="{% if 'http' in item.thumb_url %}{{ item.thumb_url }}{% else %}{{ MEDIA_URL }}{{ item.thumb_url }}{% endif %}" 
+                                alt="Item image">
+                        {% else %}
+                            <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
+                        {% endif %}
+                        
+                        <div class="item-details">
+                            <div>
+                                <a href="https://www.facebook.com/marketplace/item/{{ item.item_id }}/" target="_blank" class="item-title" style="color: #1877f2;">
+                                    {{ item.title.title }}
+                                </a>
+                                
+                                <div class="middle-body-row">
+                                    <div class="price-line">
+                                        <span class="price-main">${{ item.ebay_price|default:"0.00" }}</span>
+                                        <span class="price-shipping">({{ item.format|default:"Local Pickup" }})</span>
+                                    </div>
+                                    
+                                    <div>
+                                        {% if item.img_url %}
+                                            <button class="btn btn-action-upload" style="background-color: #1877f2;" 
+                                                    onclick="logDebug('Checking saved status for asset: {{ item.item_id }}'); uploadItemImage('{{ item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}')">
+                                                💾 Saved to DB
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="meta-row">
+                                <span style="color: #666; font-weight: bold;">📍 Verified Listing</span>
+                                <span style="color: #999;">| Source: FB Marketplace DB (ID: {{ item.item_id }})</span>
+                            </div>
+                        </div>
+
+                    {% else %}
+                        {% if item.image.imageUrl %}
+                            <img class="item-img" id="img-{{ item.item_id }}" src="{{ item.thumb_url }}" alt="Thumbnail">
+                        {% else %}
+                            <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
+                        {% endif %}
+                        
+                        <div class="item-details">
+                            <div>
+                                <a href="{{ item.itemWebUrl }}" target="_blank" class="item-title">
+                                    {{ item.title }}
+                                </a>
+                                
+                                <div class="middle-body-row">
+                                    <div class="price-line">
+                                        <span class="price-main">${{ item.currentBidPrice.value|default:"0.00" }}</span>
+                                        <span class="price-shipping">
+                                            + 
+                                            {% if item.shippingOptions.0.shippingCost %}
+                                                ${{ item.shippingOptions.0.shippingCost.value }} ship
+                                            {% else %}
+                                                {{ item.shippingOptions.0.shippingCostType|default:"Free"|lower }} ship
+                                            {% endif %}
+                                        </span>
+                                        <span style="font-size: 0.8rem; color:#888;">{{ item.currentBidPrice.currency }}</span>
+                                    </div>
+                                    
+                                    <div>
+                                        {% if item.image.imageUrl %}
+                                            <button class="btn btn-action-upload" onclick="logDebug('Uploading external eBay asset: {{ item.itemId }}'); uploadItemImage('{{ item.itemId }}', '{{ item.image.imageUrl }}')">
+                                                📷 Upload Item
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="meta-row">
+                                <span class="bid-badge {% if item.bidCount == 0 %}zero-bids{% endif %}">
+                                    🔨 {{ item.bidCount }} {% if item.bidCount == 1 %}bid{% else %}bids{% endif %}
+                                </span>
+                                
+                                <span style="color: #c94a00; font-weight: bold;">
+                                    ⏱️ {{ item.countdown_text }}
+                                </span>
+                                
+                                <span style="color: #999;">| ID: {{ item.legacyItemId|default:item.itemId }}</span>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <div class="empty-state">
+                    No active listings found matching your parameters.
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
+    <div class="debug-console" id="debug-log-console">
+        <div>[System Log] Debug logs enabled. Ready to capture search operations...</div>
+    </div>
+</div>
+
+{% include "components/drop_zone.html" %}
+
+<script>
+// Debug logger helper
+function logDebug(message) {
+    const consoleDiv = document.getElementById('debug-log-console');
+    if (!consoleDiv) return;
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+    const logItem = document.createElement('div');
+    logItem.textContent = `[${timestamp}] ${message}`;
+    consoleDiv.appendChild(logItem);
+    consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    console.log(`[DEBUG] ${message}`);
+}
+
+function switchTab(panelId) {
+    logDebug(`Switching search view panel to: ${panelId}`);
+    
+    // Hide panels
+    document.querySelectorAll('.search-form-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    // Remove active styles from tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected panel
+    document.getElementById(panelId).classList.add('active');
+    
+    // Apply tab styles
+    if (panelId === 'ebay-panel') {
+        document.getElementById('tab-ebay').classList.add('active');
+    } else if (panelId === 'fb-panel') {
+        document.getElementById('tab-fb').classList.add('active');
+    }
+}
+
+function showToast(message, isSuccess = true) {
+    logDebug(`Toast Notification: ${message} (Success = ${isSuccess})`);
+    const toast = document.getElementById('toast');
+    toast.innerText = message;
+    toast.style.background = isSuccess ? '#28a745' : '#dc3545';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3500);
+}
+
+function uploadItemImage(itemId, imageUrl) {
+    logDebug(`Initiating collection upload flow for Image/Item ID: ${itemId}`);
+    const entryRow = document.getElementById(`img-${itemId}`).closest('.item-row');
+    const actionBtn = entryRow.querySelector('.btn-action-upload');
+    
+    actionBtn.disabled = true;
+    actionBtn.innerText = '⏳ Uploading...';
+
+    logDebug(`Fetching source image blob directly: ${imageUrl}`);
+    fetch(imageUrl)
+        .then(response => {
+            if (!response.ok) throw new Error('Could not pull target image from source host server.');
+            return response.blob();
+        })
+        .then(blob => {
+            logDebug(`Blob conversion successful. Constructing FormData container.`);
+            const file = new File([blob], `item_${itemId}.jpg`, { type: "image/jpeg" });
+            
+            const formData = new FormData();
+            formData.append('images', file);
+            formData.append('collection_id', '0');
+            formData.append('slab', 'false');
+
+            const uploadUrl = "{% url 'upload_image' collection_id=0 %}";
+            logDebug(`Posting raw image blob payload payload parameters to django route: ${uploadUrl}`);
+            
+            return fetch(uploadUrl, {
+                method: 'POST',
+                body: formData
+            });
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Server returned tracking fault processing error.');
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                logDebug('Image uploaded and synced cleanly with local engine collection.');
+                showToast('✅ Image fetched and uploaded successfully!');
+                actionBtn.innerText = '👍 Uploaded';
+                actionBtn.style.backgroundColor = '#6c757d';
+            } else {
+                throw new Error(data.message || 'Processing loop execution exception.');
+            }
+        })
+        .catch(error => {
+            logDebug(`CRITICAL ERROR during upload action: ${error.message}`);
+            showToast('❌ Error: ' + error.message, false);
+            actionBtn.disabled = false;
+            actionBtn.innerText = '📷 Retry Upload';
+        });
+}
+
+// Initial diagnostic scan message
+logDebug("Components loaded. Current system state parameter 'source' is: '{{ source }}'");
+</script>
+
+</body>
+</html>

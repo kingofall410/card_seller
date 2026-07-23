@@ -55,8 +55,8 @@ function submitAndGo(url) {
     $form.appendTo('body').submit();
 }
 
-function submitCollection(url) {
-    console.log("here");
+function submitCollection(url, startDate, spread, force, tags) {
+    console.log("submitCollection", url, tags);
     launchSequence()
     // 1. Get the data
     const rawData = sessionStorage.getItem('card_sequence');
@@ -69,10 +69,14 @@ function submitCollection(url) {
       method: "POST", // Change to POST
       data: {
           'card_ids': selections, // Selections is your [3691, 3692, ...]
+          'start_dt': startDate,
+          'spread': spread,
+          'force_price': force,
+          'tags': tags,
       },
       success: function(response) {
         console.log("Response received:", response);
-        patchCardUpdates(response["data"])
+        //patchCardUpdates(response["data"])
     },
       error: function(xhr) {
           // Since you got a 500 error, this block will now catch it

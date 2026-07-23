@@ -18,7 +18,7 @@ import traceback
 
 class ListingGroup(models.Model):
     search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, related_name="listing_groups")
-    modification_date = models.DateTimeField(auto_now_add=True)
+    modification_date = models.DateTimeField(auto_now=True)
 
     is_sold = models.BooleanField(default=False, blank=True, null=True)
     is_refined = models.BooleanField(default=False, blank=True, null=True)
@@ -61,12 +61,37 @@ class ListingGroup(models.Model):
     class Meta:
         unique_together = ("search_result", "label")
     
-    def get_search_string(self, id_string=None):
+    @property 
+    def force_search_string(self):
+        return self.get_search_string(self.search_result.build_search_string())
+
+    def get_search_string(self, id_string=""):
         if id_string:
             self.id_string = id_string
             self.save()
-        ss = " ".join([id_string, (self.filter_terms or ""), (self.search_result.display_filter_terms or ""), (self.search_result.display_parallel_filter_terms or "")])
-        return " ".join(ss.split())    
+        print(self.search_result.display_filter_terms, self.search_result.display_parallel_filter_terms)
+        all_terms = (self.search_result.display_filter_terms.split() if self.search_result.display_filter_terms else []) \
+            + (self.search_result.display_parallel_filter_terms.split() if self.search_result.display_parallel_filter_terms else []) \
+            + (self.filter_terms.split() if self.filter_terms else [])
+        
+        id_string_lower = id_string.lower()
+
+        filter_terms = [x.lower() if "(" not in x else x for x in all_terms
+            if x and not (x.lower().startswith("-") and x.lower()[1:] in id_string_lower)
+        ]
+    
+        print("FILTER TERMS: ", filter_terms)
+        
+        ss = " ".join([id_string] + filter_terms)
+        search_string_all_tokens = [token.lower() for token in ss.split()]
+        deconflicted_search_tokens = [x for x in search_string_all_tokens if x[0] != "-" or x[1:] in search_string_all_tokens]
+        self.search_string = " ".join(ss.split())
+        print("deconflicted final search string:", self.search_string)
+        return self.search_string
+
+    @property
+    def is_graded(self):
+        return self.label.find("PSA") >= 0        
 
     @property
     def modified_avg(self):
@@ -121,7 +146,7 @@ class ListingGroup(models.Model):
                 "size": round(size_percentage, 2)  # Represented as a clean percentage (e.g., 25.00)
             })
 
-        # 3. Direct assignment to the property
+        cluster_payload.sort(key=lambda x: x["size"], reverse=True)
         self.clusters = cluster_payload
 
     @property
@@ -200,13 +225,15 @@ class ListingGroup(models.Model):
         return [x for x in data if lower_bound <= x <= upper_bound]    
 
     def save(self, *args, **kwargs):
+        
+        print("LG save ", self.id)
         if self.pk and self.listings.exists():
             # 1. Sort the OBJECTS once. display_date() is a function, so call it in the key.
             listing_list = sorted(self.listings.all(), key=lambda x: x.display_date)
             
             # 2. Extract date strings using the function
             date_strings = [l.display_date for l in listing_list if l.display_date]
-            print(date_strings)
+            #print(date_strings)
             if date_strings:
                 # Since listing_list is sorted, min is index 0, max is index -1
                 min_dt_str = date_strings[0]
@@ -238,12 +265,12 @@ class ListingGroup(models.Model):
 
                 # Extract recent prices from the recent_listings (which are still sorted)
                 float_prices_recent = [float(l.ebay_price) for l in recent_listings]
-                print("float", float_prices_all)
+                #print("float", float_prices_all)
                 # 4. Filter Outliers (Maintains relative order)
                 clean_prices_all = self.filter_outliers(float_prices_all)
                 clean_prices_recent = self.filter_outliers(float_prices_recent)
                 
-                print("clean", clean_prices_all)
+                #print("clean", clean_prices_all)
                 if clean_prices_all:
                     self.min_price = min(float_prices_all)
                     self.max_price = max(float_prices_all)
@@ -262,7 +289,7 @@ class ListingGroup(models.Model):
                         # 3. End point: Average of the LAST 5% 
                         # FIXED SLICE: [-buffer_size:] gets the end of the list
                         last_5_percent_avg = sum(float_prices_all[-buffer_size:]) / buffer_size
-                        print("bs", buffer_size, first_5_percent_avg, last_5_percent_avg)
+                        print("buffer info", buffer_size, first_5_percent_avg, last_5_percent_avg)
                         
                         # 4. Calculate ftrend
                         if first_5_percent_avg > 0:
@@ -288,7 +315,6 @@ class ListingGroup(models.Model):
                         last_5_percent_avg = sum(last_5_pct) / buffer_size
                         self.last_5_min_price = min(last_5_pct)
                         self.last_5_max_price = max(last_5_pct)
-                        print("bs", buffer_size, first_5_percent_avg, last_5_percent_avg)
                         
                         # 4. Calculate ftrend
                         if first_5_percent_avg > 0:
@@ -301,8 +327,6 @@ class ListingGroup(models.Model):
                         self.overall_end_price = last_5_percent_avg
                         #this will be the RRP
                         self.recent_avg_price = self.overall_end_price
-                        self.last_5_min_price
-                        self.last_5_max_price
 
                     # --- 2. TREND RECENT (Branching off the Overall Trend) ---
                     if len(clean_prices_recent) >= 2:
@@ -336,8 +360,8 @@ class ListingGroup(models.Model):
                     self.trend_overall = self.trend_recent = self.velocity_total = self.velocity_recent = 0
             
         self.search_string = " ".join(filter(None, [self.id_string, self.filter_terms]))
-        super().save(*args, **kwargs)
         self.search_result.update_value()
+        super().save(*args, **kwargs)
 
     def serialize_listings(self):
         if self.label == "graded":
@@ -364,7 +388,7 @@ class ProductListing(models.Model):
     item_id = models.CharField(max_length=500, blank=True)
     listing_date = models.DateTimeField(blank=False, null=True)
     sold_date = models.DateTimeField(blank=False, null=True)
-    img_url = models.CharField(max_length=500, null=True, blank=True)
+    img_url = models.CharField(max_length=1500, null=True, blank=True)
     thumb_url = models.CharField(max_length=500, blank=False)    #title is declared below
     ebay_price = models.FloatField(default=0.0)
     format = models.CharField(max_length=500, blank=True)
@@ -372,7 +396,7 @@ class ProductListing(models.Model):
     bids = models.IntegerField(default=0)
     
     #legacy
-    search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, default=1, related_name="listings")    
+    search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, null=True, related_name="listings")    
     listing_group = models.ForeignKey(ListingGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="listings")
 
     @property
@@ -394,7 +418,64 @@ class ProductListing(models.Model):
         #parent_csr.update_fields(record)
         
         return listing
-
+        
+    @classmethod
+    def from_facebook_results(cls, item, tokenize=False):
+        """
+        Constructs and saves a database Listing instance from a scraped 
+        Facebook Marketplace item dictionary.
+        
+        :param item: Dictionary containing scraped data (title, price, url, local_image_path, etc.)
+        :param parent_csr: The parent search result context (active_search_results equivalent)
+        :param tokenize: Boolean flag to trigger title tokenization
+        """
+        listing = cls()
+        print(item)
+        # 1. Extract and Clean Listing ID from the Facebook URL
+        url = item.get("url", "")
+        id_match = re.search(r"/item/(\d+)", url)
+        listing.item_id = id_match.group(1) if id_match else "FB_N/A"
+        
+        # 2. Assign Timezone-Aware Dates (defaults to now as FB doesn't give a direct public timestamp easily)
+        # If your scraper extracts a creation timestamp, parse it similarly to the sold_date logic.
+        listing.listing_date = timezone.now()
+        listing.sold_date = None  # Marketplace items usually don't have historical "sold" dates scraping from live feed
+        
+        # 3. Handle Images (use the downloaded local image path if available, fallback to the external CDN URL)
+        local_path = item.get("local_image_path")
+        external_url = item.get("image_url", "")
+        
+        # Fallback assignment
+        listing.img_url = local_path if local_path else external_url
+        listing.thumb_url = external_url
+        
+        # 4. Clean and Parse Price (extract digits and decimals from strings like "$123.45")
+        raw_price = item.get("price", "0")
+        # Strip currency symbols and commas to leave a clean float-compatible string
+        clean_price = re.sub(r"[^\d.]", "", raw_price)
+        listing.ebay_price = clean_price if clean_price else "0"
+        
+        # 5. Default Attributes for FB's structural differences
+        listing.format = "Classified/Local"  # FB Marketplace default style
+        listing.bids = "0"
+        listing.qty = "1"
+        
+        # 6. Save the Base Listing
+        listing.save()
+        
+        # 7. Create Nested Title Object
+        listing.title = ListingTitle.objects.create(
+            title=item.get("title", "No Title"), 
+            parent_listing=listing
+        )
+        listing.save()
+        
+        # 8. Tokenize Title
+        if tokenize:
+            listing.title.tokenize(Settings.get_default())
+            
+        return listing
+        
     @classmethod
     def from_search_results(cls, item, parent_csr, tokenize=True):
         
@@ -421,6 +502,7 @@ class ProductListing(models.Model):
             listing.img_url = "http:"+img_url
         #print("item", item)
         listing.thumb_url = item.get("thumbnailImages", [{}])[0].get("imageUrl", listing.img_url)
+        listing.img_url = listing.thumb_url
         price = item.get("price", [{}])
         if isinstance(price, str):
             listing.ebay_price = price.replace('$', '').replace(',', '')
@@ -433,6 +515,10 @@ class ProductListing(models.Model):
             listing.format = item.get("buyingOptions", [""])[0]
         listing.qty = item.get("qty", "1").replace(",","")
         listing.search_result = parent_csr
+        #print(listing.item_id)
+        #print(listing.thumb_url)
+        #print(listing.img_url)
+        #print(listing.format)
         listing.save()
         listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
         listing.save()        
@@ -501,14 +587,14 @@ class ListingTitle(models.Model):
         #print(self.id)
         #this logic relies on the fact that the "key" must match something defined by reading in settings.  Thus, don't change these
         temp_title, tokens, self.season_tokens = Season.match_extract(self.title, tokens, "year", applied_settings, return_first_match=False)
-        print("pre brand: New tokens: ", self.season_tokens)
-        print("old tokens: ", tokens)
-        print("Remaining Title: ", temp_title)
+        #print("pre brand: New tokens: ", self.season_tokens)
+        #print("old tokens: ", tokens)
+        #print("Remaining Title: ", temp_title)
         temp_title, tokens, new_tokens = Brand.match_extract(temp_title, tokens, "brands", applied_settings)
         self.brand_tokens.set(new_tokens)
-        print("post brand: New tokens: ", new_tokens)
-        print("old tokens: ", tokens)
-        print("Remaining Title: ", temp_title)
+        #print("post brand: New tokens: ", new_tokens)
+        #print("old tokens: ", tokens)
+        #print("Remaining Title: ", temp_title)
         temp_title, tokens, new_tokens = Parallel.match_extract(temp_title, tokens, "parallel", applied_settings)
         self.parallel_tokens.set(new_tokens)
         #print("New tokens: ", new_tokens)

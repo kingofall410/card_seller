@@ -66,6 +66,7 @@
         .day-column.today { 
             background-color: var(--today-bg); 
             border-color: #ffe066;
+            z-index:0;
         }
 
         .day-header {
@@ -122,15 +123,17 @@
             border-radius: 4px;
             border: 1px solid rgba(0,0,0,0.05);
             border-left-width: 4px !important;
-            padding: 3px 5px; /* Tightened padding around card context */
+            padding: 3px 5px; 
         }
-        .status-listed { background-color: #00aaff20 !important; color: #000 !important; border-left: 4px solid #0088cc !important; }
+        .status-listed { background-color: #00aaff2e !important; color: #000 !important; border-left: 4px solid #0088cc !important; }
+        .status-staged { background-color: #ffcc0020 !important; color: #000 !important; border-left: 4px solid #ffcc00 !important; }
+        .status-confirmed { background-color: #00aaff2e !important; color: #000 !important; border: 4px solid #0088cc !important; }
         .status-identified { background-color: #ff666620 !important; color: #000 !important; border-left: 4px solid #cc4444 !important; }
         .status-pending { background-color: #ffcc0020 !important; color: #000 !important; border-left: 4px solid #ffcc00 !important; }
         .status-failed { background-color: #ff333320 !important; color: #000 !important; border-left: 4px solid #ff3333 !important; }
         .status-success, .status-completed { background-color: #33cc3320 !important; color: #000 !important; border-left: 4px solid #33cc33 !important; }
         .status-none { background-color: #96969620 !important; color: #000 !important; border-left: 4px solid #969696 !important; }
-
+        .status-sold { background-color: #c9bc008b !important; color: #000 !important; border-left: 4px solid #c9bc00ff !important; }
         /* --- Floating Hover Tooltip Elements Rules --- */
         #task-hover-tooltip {
             position: fixed;
@@ -236,37 +239,48 @@
         .task-container-day-footer {
             padding: 12px 8px 14px 8px;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            gap: 6px;
             align-items: center;
             background: transparent;
             width: 100%;
             box-sizing: border-box;
             border-top: 1px dashed #f1f3f5;
         }
-        .retry-all-failed-btn {
+        .action-batch-btn {
             background: #ffffff;
             color: #374151;
             border: 1px solid #d1d5db;
-            padding: 5px 14px;
+            padding: 5px 12px;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 500;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             transition: all 0.2s ease;
+            width: 90%;
+            box-sizing: border-box;
         }
-        .retry-all-failed-btn:hover {
+        .action-batch-btn:hover {
             background: #f9fafb;
             border-color: #9ca3af;
             color: #111827;
         }
-        .retry-all-failed-btn .btn-alert-dot {
+        .action-batch-btn .btn-alert-dot {
             width: 6px;
             height: 6px;
             background-color: #ef4444;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .action-batch-btn .btn-sync-dot {
+            width: 6px;
+            height: 6px;
+            background-color: #007bff;
             border-radius: 50%;
             display: inline-block;
         }
@@ -293,11 +307,11 @@
 <div class="calendar-week">
     {% for day in day_objects %}
         <div class="day-column {% if day.is_today %}today{% endif %}" data-day="{{ day.date|date:'Y-m-d' }}">
-            
+            <a href="{% url 'collection' '0'%}?start_listing_date={{ day.date|date:'Y-m-d' }}&end_listing_date={{ day.date|date:'Y-m-d' }}" style="text-decoration:none; color:inherit;">
             <div class="day-header">
                 <div class="day-name">{{ day.date|date:"l" }}</div>
                 <div class="day-number">{{ day.date.day }}</div>
-            </div>
+            </div></a>
 
             {% if day.summary %}
                 <div class="day-summary-bar">
@@ -321,16 +335,25 @@
                 {% endfor %}
             </div>
 
-            <!-- Dashboard action button template block hooks onto layout edge -->
-            {% if day.summary.failed > 0 %}
+            {% if day.tasks %}
             <div class="task-container-day-footer">
-                <button type="button" class="retry-all-failed-btn" onclick="retryAllFailedInGroup(event, this)">
+                <button type="button" class="action-batch-btn" onclick="refreshDayListings(event, this)">
+                    <span class="btn-sync-dot"></span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    <span>Refresh Listings</span>
+                </button>
+
+                {% if day.summary.failed > 0 %}
+                <button type="button" class="action-batch-btn" onclick="retryAllFailedInGroup(event, this)">
                     <span class="btn-alert-dot"></span>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                     </svg>
                     <span>Retry All Failed</span>
                 </button>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -338,15 +361,61 @@
     {% endfor %}
 </div>
 
-<!-- Singleton Popover Frame Container -->
 <div id="task-hover-tooltip"></div>
 
-<!-- 
-  ======================================================================
-  BATCH PROCESSING & ENGINE SCRIPT LAYER
-  ======================================================================
--->
 <script>
+function refreshDayListings(event, buttonEl) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    
+    const $containerColumn = $(buttonEl).closest('.day-column');
+    const dayGroupKey = $containerColumn.attr('data-day') || 'Selected Day';
+    
+    // 1. Find all task items inside this column area
+    const $allTasks = $containerColumn.find('.task-item');
+    
+    if ($allTasks.length === 0) {
+        alert("No tasks found to refresh in this column area.");
+        return;
+    }
+
+    // 2. Map through elements to build a clean array of target card IDs
+    const cardIds = [];
+    $allTasks.each(function() {
+        // Swapped to pick up the underlying card foreign key attribute directly
+        const cardId = $(this).attr('data-card-id'); 
+        if (cardId) cardIds.push(cardId);
+    });
+
+    if (cardIds.length === 0) {
+        alert("No valid card identifiers found on the elements in this column.");
+        return;
+    }
+
+    if (!confirm(`Refresh listing status data loop for all ${cardIds.length} cards scheduled on ${dayGroupKey}?`)) return;
+
+    const $btn = $(buttonEl);
+    $btn.prop('disabled', true).text('Refreshing Batch...');
+    console.log(cardIds)
+    // 3. Fire a single batch POST request to the backend with your payload array
+    $.ajax({
+        url: "/refresh_listing_status/",
+        method: "POST",
+        headers: { 'X-CSRFToken': getTemplateCsrfToken() },
+        data: {
+            'card_ids': cardIds
+        },
+        success: function(response) {
+            console.log("Batch card status sync successful:", response);
+            location.reload();
+        },
+        error: function(xhr) {
+            console.error(xhr.responseText);
+            alert(`Batch refresh failed with status ${xhr.status}. Check Django terminal.`);
+            $btn.prop('disabled', false).text('Refresh Listings');
+        }
+    });
+}
+
 // --- Global Action Batch Orchestrator ---
 function retryAllFailedInGroup(event, buttonEl) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
@@ -354,7 +423,7 @@ function retryAllFailedInGroup(event, buttonEl) {
     const $containerColumn = $(buttonEl).closest('.day-column');
     const dayGroupKey = $containerColumn.attr('data-day') || 'Selected Day';
     
-    const $failedTasks = $containerColumn.find('.task-item.status-failed, .task-item.status-error');
+    const $failedTasks = $containerColumn.find('.task-item:not(.status-confirmed)');
     
     if ($failedTasks.length === 0) {
         alert("No failed tasks found in this column area.");
@@ -406,9 +475,18 @@ function deleteTask(event, taskId) {
     $.ajax({
         url: `/services/delete_task/${taskId}/`,
         method: "POST",
-        headers: { 'X-CSRFToken': getTemplateCsrfToken() },
         success: function() { location.reload(); },
         error: function() { alert('Error occurred processing deletion request.'); }
+    });
+}
+
+function confirmListingStatus(event, taskId) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    $.ajax({
+        url: `/services/confirm_listing_status/${taskId}/`,
+        method: "POST",
+        success: function() { location.reload(); },
+        error: function() { alert('Error occurred processing confirmation request.'); }
     });
 }
 
@@ -448,7 +526,6 @@ $(document).ready(function() {
     const $tooltip = $('#task-hover-tooltip');
 
     $(document).on('mouseenter', '.task-item', function(e) {
-        // If mouse hits or enters via the action dropdown block target area, suppress tooltip creation
         if ($(e.target).closest('.task-action-dropdown').length) {
             $tooltip.css('opacity', '0');
             return;
@@ -471,6 +548,7 @@ $(document).ready(function() {
             <div style="font-weight:bold; text-align:center; margin-bottom:4px;">${$el.data('title') || 'Task Detail'}</div>
             <div style="font-size:11px; color:#ccc; width:100%;">
                 <div><b>Price:</b> $${$el.data('price') || '0.00'}</div>
+                <div><b>CSR:</b> ${$el.data('csr-list') || ''}</div>
                 <div><b>Scheduled:</b> ${$el.data('scheduled-date') || 'N/A'}</div>
                 <div><b>Executed:</b> ${$el.data('executed-date') || 'N/A'}</div>
                 <div><b>Completed:</b> ${$el.data('completed-date') || 'N/A'}</div>
@@ -482,7 +560,6 @@ $(document).ready(function() {
     });
 
     $(document).on('mousemove', '.task-item', function(e) {
-        // Kill tooltip visibility immediately if cursor drifts into the menu context trigger area
         if ($(e.target).closest('.task-action-dropdown').length) {
             $tooltip.css('opacity', '0');
             return;

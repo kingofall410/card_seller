@@ -111,6 +111,7 @@
       {% include "card_details.html" with card_id=card_tuple.1 search_result=card_tuple.2 datasetConfigs=card_tuple.11 StatusBase=StatusBase%}
     </div>
 
+      {% include "components/tag_manager.html" with card=card_tuple.0 %}
     <div class="listing-groups-wrapper">
       {% for listing_group in card_tuple.2.get_pricing_groups %}
         {% include "product_listings.html" with listing_group=listing_group %}

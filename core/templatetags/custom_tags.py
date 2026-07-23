@@ -4,12 +4,25 @@ from core.models.CardSearchResult import CardSearchResult
 from core.models.Group import ProductGroup
 from core.models.Card import Collection, CollectionStatus
 from core.models.Status import StatusBase
+from core.models.ListingSpread import ListingSpread
 from services.models.models import Brand, KnownName, Team, City, CardAttribute, Subset, Condition, Parallel
 from services.models.task import Task
 from django.db.models import F
 from django.core.serializers.json import DjangoJSONEncoder
 
 register = template.Library()
+
+@register.filter
+def calculate_group_value(group_list):
+    """Sums up the 'value' attribute of every card object in the regroup block"""
+    try:
+        return sum(float(card.get('value', 0) or 0) for card in group_list)
+    except (TypeError, ValueError):
+        return 0.00
+
+@register.filter
+def ptg_group_sort(cards):
+    return sorted(cards, key=lambda x:x["primary_tag_group"] or "Unassigned")
 
 @register.filter
 def model_name(obj):
@@ -116,6 +129,10 @@ def status_icon_meta(value):
 @register.simple_tag
 def get_textonly():
     return CardSearchResult.text_fields
+
+@register.simple_tag
+def get_spreads():
+    return ListingSpread.choices
 
 @register.simple_tag
 def get_product_groups():

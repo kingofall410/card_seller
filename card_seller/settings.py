@@ -32,7 +32,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #MEDIA_ROOT = os.path.join(BASE_DIR, 'card_seller', 'media')
 WATCHED_ROOT = os.path.join(BASE_DIR, 'watched')
-
+TAGGIT_CASE_INSENSITIVE = True
 # Application definition
 
 INSTALLED_APPS = [
@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 
     'core',
     'services',
+    'taggit'
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,1123 @@
+{% load custom_tags %}
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/searchpanes/2.2.0/css/searchPanes.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css">
+
+<style>
+    /* --- Main Page Layout --- */
+    .dashboard-container {
+        display: grid;
+        /* Sidebar remains fixed, Main Content fills all remaining space fluidly */
+        grid-template-columns: 320px minmax(0, 1fr); 
+        gap: 30px; 
+        padding: 20px;
+        background-color: #fcfcfc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* --- Sidebar --- */
+    .sidebar-panes {
+        grid-column: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding-right: 15px; 
+        border-right: 1px solid #eee;
+    }
+
+    #dynamic-sort-bar, .dtsp-searchPane {
+        background: #ffffff !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+    }
+
+    .dtsp-panesContainer {
+        order: -1 !important; 
+        margin-bottom: 10px !important;
+    }
+
+    /* --- Sort Bar --- */
+    .sort-label {
+        font-weight: 700;
+        display: block;
+        margin-bottom: 12px;
+        color: #1a1a1a;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
+
+    #dynamic-sort-bar a {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 10px;
+        font-size: 13px;
+        text-decoration: none;
+        color: #555;
+        border-radius: 4px;
+        cursor: pointer; 
+        transition: background 0.2s ease;
+    }
+
+    #dynamic-sort-bar a:hover {
+        background: #f0f0f0;
+        color: #000;
+    }
+
+    #dynamic-sort-bar a.active { 
+        background: #eef6ff; 
+        color: #007bff; 
+        font-weight: 600; 
+    }
+
+    /* --- Grid & Content Header --- */
+    .main-content { 
+        /* No longer need grid-column: 2; it naturally falls into place */
+        width: 100%;
+        justify-self: start; /* Keeps content anchored nicely if container exceeds 1500px */
+    }
+    .content-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 12px 20px;
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+    }
+
+    #header-info-mount {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        width: 100%;
+    }
+
+    #visual-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 10px 0px;
+    }
+    
+    /* Hide DataTables UI elements we don't need for infinite scroll */
+    .dataTables_paginate, .dataTables_length { display: none !important; }
+    
+    /* Base configuration hides data engine table completely on startup */
+    #card-data-engine { display: none !important; }
+
+    /* Loading Indicator */
+    #infinite-loader {
+        text-align: center;
+        padding: 40px;
+        font-weight: bold;
+        color: #888;
+        display: none;
+    }
+
+    #grouped-card-view {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    /* Fade the card grid slightly when filtering is active */
+    #visual-card-grid.filtering-active {
+        opacity: 0.5;
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+    }
+
+    /* Add a visual indicator to the sidebar panes to show they are working */
+    .dtsp-searchPane.pane-processing {
+        position: relative;
+        opacity: 0.7;
+    }
+    .dtsp-searchPane.pane-processing::after {
+        content: "⚡ Filtering...";
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        color: #007bff;
+        background: #eef6ff;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    /* --- Hover Image Preview Tooltip --- */
+    .dt-image-preview {
+        position: fixed;
+        display: none; /* jQuery will switch this to 'display: flex' automatically if you use .show() / .toggle() */
+        z-index: 9999;
+        pointer-events: none;
+        background: #ffffff;
+        border: 1px solid #dcdcdc;
+        padding: 6px;
+        border-radius: 6px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        
+        /* 1. Force the layout to be side-by-side */
+        display: flex; 
+        gap: 10px; /* Puts a clean gap between the two images */
+    }
+
+    .dt-image-preview img {
+        /* 2. Change block to inline-block/flex item behavior */
+        display: block; 
+        
+        /* 3. Control sizing so they don't break the screen layout */
+        max-height: 500px; /* Prevents giant cards from filling up the window */
+        width: auto;       /* Keeps the original aspect ratio correct */
+        border-radius: 4px;
+    }
+    /* --- Persistent Spreadsheet Input Styling --- */
+    .dt-inline-edit {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid transparent;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+    }
+    
+    /* Make inputs obvious but clean on row hover */
+    tr:hover .dt-inline-edit {
+        border-color: #e0e0e0;
+        background: #ffffff;
+    }
+
+    /* High contrast focus states mimicking Excel/Airtable cell activations */
+    .dt-inline-edit:focus {
+        outline: none;
+        background: #ffffff !important;
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        color: #000000;
+    }
+
+    /* Visual confirmation modifier state when backend write pipeline completes successfully */
+    .dt-cell-committed {
+        animation: flash-success 1.2s ease;
+    }
+    @keyframes flash-success {
+        0% { background-color: rgba(40, 167, 69, 0.25); }
+        100% { background-color: transparent; }
+    }
+    /* Default state: Make images small */
+table.dataTable tbody tr img {
+    width: 25px;                 /* Small thumbnail width */
+    height: auto;
+    transition: width 0.3s ease; /* Smooth growth animation */
+}
+
+/* Expanded state: Make images large when the row is clicked */
+table.dataTable tbody tr.expanded-row img {
+    width: 300px;                /* Large expanded width (adjust as needed) */
+}
+
+/* Pointer cursor to show the row is clickable */
+table.dataTable tbody tr {
+    cursor: pointer;
+}
+</style>
+
+<div class="dashboard-container">
+    <aside class="sidebar-panes">
+        <div id="dynamic-sort-bar"></div>
+        <div id="panes-container"></div>
+    </aside>
+
+    <main class="main-content">
+        <header class="content-header">
+            <div id="header-info-mount"></div>
+            <div id="header-toggle-mount" style="margin-right: 15px;"></div>
+        </header>
+
+        <div id="visual-card-grid"></div>
+        
+        {% comment %} {% include "components/collection_product_groups.html" %} {% endcomment %}
+
+        {% include "components/collection_datatable.html" %}
+
+        <div id="infinite-loader">Loading more cards...</div>
+    </main>
+</div>
+
+<div id="dt-row-hover-preview" class="dt-image-preview">
+    <img id="preview-front" src="" alt="Card Front Preview">
+    <img id="preview-back" src="" alt="Card Back Preview">
+</div>
+
+{% include "components/card_item_flat.html" %}
+
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/searchpanes/2.2.0/js/dataTables.searchPanes.min.js"></script>
+<script src="https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js"></script>
+
+<script>
+window.zoomState = {
+    idColumnIndex: 14
+};
+let isApplyingServerUpdate = false;
+
+(function($) {
+    const sortConfig = [
+        { label: 'Natural', attrName: 'natural sort' },
+        { label: 'Prices', attrName: 'all price sort' },
+        { label: 'Full Name', attrName: 'full name' }, 
+        { label: 'Year', attrName: 'year' }, 
+        { label: 'Collection ID', attrName: 'collection' },  
+        { label: 'Value ($)', attrName: 'value ($)' }, 
+        { label: 'ID', attrName: 'id' },
+        { label: 'Modified', attrName: 'modified' },
+        { label: 'Task Time', attrName: 'task time' },
+        { label: 'MSRP Only', attrName: 'msrp' },
+        { label: 'List$ Only', attrName: 'list price' }
+    ];
+    
+    let currentSort = { attrName: 'natural sort', attrIdx: null, dir: 'asc' };
+    let loadingNextPage = false;
+
+    // --- Dynamic Sort Bar Generation ---
+    function buildSortBar(tableApi, headerMap) {
+        const bar = document.getElementById('dynamic-sort-bar');
+        if (!bar) return;
+        bar.innerHTML = '<span class="sort-label">Sort Collection</span>';
+
+        sortConfig.forEach(cfg => {
+            const targetIdx = headerMap[cfg.attrName];
+            if (targetIdx === undefined) return; 
+
+            const link = document.createElement('a');
+            const isActive = currentSort.attrName === cfg.attrName;
+            
+            link.href = "javascript:void(0)"; 
+            link.className = isActive ? 'active' : '';
+            
+            let arrow = isActive ? (currentSort.dir === 'asc' ? "▲" : "▼") : "—";
+            link.innerHTML = `<span>${cfg.label}</span> <span style="opacity:0.4;">${arrow}</span>`;
+            
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                currentSort.dir = isActive 
+                    ? (currentSort.dir === 'asc' ? 'desc' : 'asc') 
+                    : ((cfg.attrName === 'full name' || cfg.attrName === 'value ($)') ? 'desc' : 'asc');
+                
+                currentSort.attrName = cfg.attrName;
+                currentSort.attrSortIdx = targetIdx;
+                
+                tableApi.order([[targetIdx, currentSort.dir]]).page.len(50).draw();
+                buildSortBar(tableApi, headerMap);
+            });
+            
+            bar.appendChild(link);
+        });
+    }
+
+    // --- DOUBLE-CLICK URL TARGETING ENGINE ---
+    $(document).on('dblclick', '.dtsp-searchPane table tbody tr', function (e) {
+        e.preventDefault();
+        const $row = $(this);
+        const targetValue = $row.find('.dtsp-name').text().trim();
+        const selection = targetValue || $row.find('td').first().text().trim();
+        if (!selection) return;
+
+        const currentUrl = new URL(window.location.href);
+        const basePath = currentUrl.pathname;
+        const parentSelection = currentUrl.searchParams.get('timeframe') || '30';
+        const targetTargetUrl = `${basePath}?q=${selection}&timeframe=${parentSelection}`;
+
+        console.log(`Opening Drill-Down View: ${targetTargetUrl}`);
+        window.open(targetTargetUrl, '_blank');
+    });
+
+    // =====================================================================
+    // CORE INITIALIZATION ENGINE PASS
+    // =====================================================================
+    $(document).ready(function() {
+        const grid = $('#visual-card-grid');
+        const loader = $('#infinite-loader');
+        const $previewBox = $('#dt-row-hover-preview');
+        const $previewImg = $previewBox.find('img');
+        
+        // Build the Header Map Dictionary straight from the DOM table elements
+        const headerMap = {};
+        $('#card-data-engine thead th').each(function(idx) {
+            const text = $(this).text().trim().toLowerCase();
+            headerMap[text] = idx;
+        });
+
+        const idxName = headerMap['full name'] !== undefined ? headerMap['full name'] : 4;
+        const idxStatus = headerMap['overall status'] !== undefined ? headerMap['overall status'] : 8; 
+        const idxGroup = headerMap['groups'] !== undefined ? headerMap['groups'] : 14; 
+        
+        const idxYear = headerMap['year'] !== undefined ? headerMap['year'] : 1;
+        const idxBrand = headerMap['brand'] !== undefined ? headerMap['brand'] : 2;
+        const idxValue = headerMap['Value ($)'] !== undefined ? headerMap['Value ($)'] : 13;
+        const idxValueRange = headerMap['val range'] !== undefined ? headerMap['val range'] : 17;
+        const idxId = headerMap['id'] !== undefined ? headerMap['id'] : 14;
+        const idxCsrId = headerMap['csr_id'] !== undefined ? headerMap['csr_id'] : (headerMap['csr id'] !== undefined ? headerMap['csr id'] : 19);
+        const idxCollId = headerMap['collection'] !== undefined ? headerMap['collection'] : 12;
+        const idxFrontUrl = headerMap['front url'] !== undefined ? headerMap['front url'] : 18;
+        const idxReverseUrl = headerMap['reverse url'] !== undefined ? headerMap['reverse url'] : 22;
+        const idxParallel = headerMap['parallel'] !== undefined ? headerMap['parallel'] : 5;
+        const idxFrontHdUrl = headerMap['front hd url'] !== undefined ? headerMap['front hd url'] : 23;
+        const idxReverseHdUrl = headerMap['reverse hd url'] !== undefined ? headerMap['reverse hd url'] : 24;
+        const idxMSRP = headerMap['MSRP'] !== undefined ? headerMap['MSRP'] : 25;
+        const idxListPrice = headerMap['list price'] !== undefined ? headerMap['list price'] : 26;
+        const idxNaturalSort = headerMap['natural sort'] !== undefined ? headerMap['natural sort'] : 27;
+        const idxAllPriceSort = headerMap['all price sort'] !== undefined ? headerMap['all price sort'] : 28;
+        const idxLegacyMSRP = headerMap['legacy msrp'] !== undefined ? headerMap['legacy msrp'] : 29;
+        const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 30;
+        
+        currentSort.attrIdx = idxId;
+
+        // =====================================================================
+        // ADVANCED BACKEND PIPELINE STATES & LEDGERS
+        // =====================================================================
+        const selectedIds = new Set(); // Single source of truth for checkbox state
+        const quickEditQueue = [];     // FIFO Pipeline array tracking database write tasks
+        
+        let isProcessingQueue = false;
+        let activeFocusLock = null;    // Remembers caret offset locations during optimistic redraws
+        let quickEditDebounceTimer = null;
+
+        // Separate cross-view tracking layers for shift clicks
+        let lastClickedTableIndex = null;
+        let lastClickedGridIndex = null;
+
+        // Map initial payload safely matching the un-swapped logic
+        const preloadedCardsList = [];
+        $('#card-data-engine tbody tr').each(function() {
+            const $tds = $(this).find('td');
+            preloadedCardsList.push({
+                id: $tds.eq(idxId).text().trim(),
+                csr_id: $tds.eq(idxCsrId).text().trim(),
+                name: $tds.eq(idxName).text().trim(),
+                year: $tds.eq(idxYear).text().trim(),
+                brand: $tds.eq(idxBrand).text().trim(),
+                value: $tds.eq(idxValue).text().trim(),
+                overall_status: $tds.eq(idxStatus).text().trim(),
+                collection_id: $tds.eq(idxCollId).text().trim(),
+                product_group_name: $tds.eq(idxGroup).text().trim(),
+                front_url: $tds.eq(idxFrontUrl).text().trim(),
+                reverse_url: $tds.eq(idxReverseUrl).text().trim(),
+                parallel: $tds.eq(idxParallel).text().trim(),
+                msrp: $tds.eq(idxMSRP).text().trim(),
+                list_price: $tds.eq(idxListPrice).text().trim(),
+                task_time: $tds.eq(20).text().trim(),
+                legacy_msrp: $tds.eq(idxLegacyMSRP).text().trim(),
+                qty: $tds.eq(idxQty).text().trim(),
+            });
+        });
+
+        /**
+        * Synchronizes state parameters exactly across UI visibility paradigms.
+        */
+        function renderCheckboxUI() {
+            // Sync the Table body checkboxes
+            $('#card-data-engine tbody .dt-row-chk').each(function() {
+                const id = $(this).data('id');
+                const isChecked = selectedIds.has(id);
+                $(this).prop('checked', isChecked);
+                $(this).closest('tr').toggleClass('selected', isChecked);
+            });
+
+            // Sync the Grid checkboxes
+            $('#visual-card-grid .card-item').each(function() {
+                const id = $(this).data('id');
+                const isChecked = selectedIds.has(id);
+                $(this).find('.card-chk-input').prop('checked', isChecked);
+            });
+
+            // Sync the Master Header Checkbox
+            const $tableCheckboxes = $('#card-data-engine tbody .dt-row-chk');
+            const total = $tableCheckboxes.length;
+            let checkedCount = 0;
+            
+            $tableCheckboxes.each(function() {
+                if (selectedIds.has($(this).data('id'))) checkedCount++;
+            });
+
+            const $masterChk = $('#select-all-table');
+            if (total === 0) {
+                $masterChk.prop('checked', false).prop('indeterminate', false);
+            } else if (checkedCount === total) {
+                $masterChk.prop('checked', true).prop('indeterminate', false);
+            } else if (checkedCount === 0) {
+                $masterChk.prop('checked', false).prop('indeterminate', false);
+            } else {
+                $masterChk.prop('checked', false).prop('indeterminate', true);
+            }
+        }
+
+        /* --- Unified Checkbox Core Event Actions --- */
+
+        // Master Header Toggle
+        $('#select-all-table').on('click', function() {
+            const isChecked = $(this).is(':checked');
+            
+            $('#card-data-engine tbody .dt-row-chk').each(function() {
+                const id = $(this).data('id');
+                if (isChecked) {
+                    selectedIds.add(id);
+                } else {
+                    selectedIds.delete(id);
+                }
+            });
+            renderCheckboxUI();
+        });
+
+        // Table Component Click and Shift Select Block
+        $('#card-data-engine tbody').on('click', '.dt-row-chk', function(e) {
+            const $checkboxes = $('#card-data-engine tbody .dt-row-chk');
+            const currentIndex = $checkboxes.index(this);
+            const targetId = $(this).data('id');
+            const isChecked = $(this).is(':checked'); 
+
+            if (e.shiftKey && lastClickedTableIndex !== null) {
+                const start = Math.min(lastClickedTableIndex, currentIndex);
+                const end = Math.max(lastClickedTableIndex, currentIndex);
+
+                $checkboxes.slice(start, end + 1).each(function() {
+                    const id = $(this).data('id');
+                    if (isChecked) selectedIds.add(id);
+                    else selectedIds.delete(id);
+                });
+                window.getSelection().removeAllRanges();
+            } else {
+                if (isChecked) selectedIds.add(targetId);
+                else selectedIds.delete(targetId);
+            }
+
+            lastClickedTableIndex = currentIndex;
+            renderCheckboxUI(); 
+        });
+
+        // Grid Component Click and Shift Select Block
+        $('#visual-card-grid').on('click', '.card-chk-input', function(e) {
+            const $checkboxes = $('#visual-card-grid .card-chk-input');
+            const currentIndex = $checkboxes.index(this);
+            const targetId = $(this).closest('.card-item').data('id');
+            const isChecked = $(this).is(':checked');
+
+            if (e.shiftKey && lastClickedGridIndex !== null) {
+                const start = Math.min(lastClickedGridIndex, currentIndex);
+                const end = Math.max(lastClickedGridIndex, currentIndex);
+
+                $checkboxes.slice(start, end + 1).each(function() {
+                    const id = $(this).closest('.card-item').data('id');
+                    if (isChecked) selectedIds.add(id);
+                    else selectedIds.delete(id);
+                });
+                window.getSelection().removeAllRanges();
+            } else {
+                if (isChecked) selectedIds.add(targetId);
+                else selectedIds.delete(targetId);
+            }
+
+            lastClickedGridIndex = currentIndex;
+            renderCheckboxUI(); 
+        });
+
+        // Fallback change event layer tracking
+        $('#visual-card-grid').on('change', '.card-chk-input', function() {
+            const isChecked = $(this).is(':checked');
+            const id = $(this).closest('.card-item').data('id');
+            $(`.dt-row-chk[data-id="${id}"]`).prop('checked', isChecked);
+        });
+
+        // Infinite Stream Handler
+        $(window).on('scroll', function() {
+            if (loadingNextPage || $('#visual-card-grid').is(':hidden')) return;
+
+            const distanceToBottom = $(document).height() - ($(window).scrollTop() + $(window).height());
+            if (distanceToBottom <= 250) {
+                const api = $('#card-data-engine').DataTable();
+                const info = api.page.info();
+
+                if (info.page < info.pages - 1) {
+                    loadingNextPage = true;
+                    loader.text("Streaming next assets...").show();
+
+                    setTimeout(() => {
+                        api.page.len(api.page.len() + 50).draw(false);
+                        loadingNextPage = false;
+                        loader.hide();
+                    }, 300);
+                }
+            }
+        });
+        
+        // Inject initial data structural elements safely 
+        if (grid.length > 0 && typeof drawOrHydrateCardComponent === 'function') {
+            preloadedCardsList.forEach(card => {
+                const $compiledComponent = drawOrHydrateCardComponent(card);
+                grid.append($compiledComponent);
+            });
+        }
+
+        // Cell template generator targets
+        function createPersistentInputRenderer(safeData) {
+            const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
+            return `<input type="text" class="dt-inline-edit" value="${cleanVal}" data-current="${cleanVal}">`;
+        }
+        function createImageRenderer(safeData) {
+            return `<img src="${safeData}" class="lazy-table-img" data-thumb="${safeData}">`;
+        }
+
+        // [Debug] Initializing Spreadsheet-like Input Focus Metadata Context Preservation Engine
+        // =====================================================================
+        // INPUT FOCUS METADATA CONTEXT PRESERVATION ENGINE
+        // =====================================================================
+        $('#card-data-engine')
+            .on('focusin', '.dt-inline-edit', function() {
+                const tableApi = $('#card-data-engine').DataTable();
+                const $input = $(this);
+                const cellIdx = tableApi.cell($input.closest('td')).index();
+                
+                // FIX: Reliable header parsing that safely handles malformed text strings
+                const textContent = tableApi.column(cellIdx.column).header().textContent || $(tableApi.column(cellIdx.column).header()).text();
+                const columnName = textContent.trim().toLowerCase().replace(/\s+/g, '_');
+                const rowData = tableApi.row(cellIdx.row).data();
+
+                activeFocusLock = {
+                    id: rowData[idxId],
+                    columnName: columnName,
+                    selectionStart: this.selectionStart
+                };
+                console.log(`[Debug] Focus Locked on ID: ${activeFocusLock.id}, Column: ${columnName}`);
+            })
+            .on('focusout', '.dt-inline-edit', function() {
+                // Allow short timeout so click events or tab movements settle before clearing the lock
+                setTimeout(() => {
+                    if (!document.activeElement.classList.contains('dt-inline-edit')) {
+                        activeFocusLock = null;
+                    }
+                }, 50);
+            });
+
+        function restoreInputFocusLock(tableApi) {
+            if (!activeFocusLock) return;
+
+            const targetRowIdx = tableApi.rows().indexes().filter((idx) => {
+                return tableApi.row(idx).data()[idxId] == activeFocusLock.id;
+            })[0];
+
+            if (targetRowIdx === undefined) return;
+
+            const targetColIdx = tableApi.columns().header().toArray().findIndex(header => {
+                return $(header).text().trim().toLowerCase().replace(/\s+/g, '_') === activeFocusLock.columnName;
+            });
+
+            if (targetColIdx !== -1) {
+                const cellNode = tableApi.cell(targetRowIdx, targetColIdx).node();
+                const $input = $(cellNode).find('.dt-inline-edit');
+                
+                if ($input.length && !$input.is(':focus')) {
+                    console.log(`[Debug] Restoring focus to ID: ${activeFocusLock.id}`);
+                    $input.focus();
+                    if ($input[0].setSelectionRange && activeFocusLock.selectionStart !== null) {
+                        $input[0].setSelectionRange(activeFocusLock.selectionStart, activeFocusLock.selectionStart);
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // ASYNC FIFO OPTIMISTIC SYNCHRONIZATION TRANSACTION QUEUE
+        // =====================================================================
+        async function processQuickEditQueue() {
+            if (isProcessingQueue || quickEditQueue.length === 0) return;
+            isProcessingQueue = true;
+
+            const tableApi = $('#card-data-engine').DataTable();
+            const nextPayload = quickEditQueue.shift();
+            const originalPristineValues = {}; 
+
+            console.log(`[Optimistic UI] Mutating fields locally for asset: ${nextPayload.csrId}`);
+            const allTargetCsrIds = [nextPayload.csrId, ...nextPayload.mirroredCsrIds].map(String);
+            const normalizedColName = nextPayload.column.replace(/_/g, ' ').toLowerCase();
+            const colIdx = headerMap[normalizedColName];
+
+            if (colIdx === undefined) {
+                console.error(`[Debug] Column index missing mapping for field name: ${nextPayload.column}`);
+                isProcessingQueue = false;
+                return processQuickEditQueue();
+            }
+
+            // STAGE A: Spreadsheet Optimization: Read and mutate DOM elements instantly *before* forcing internal data updates.
+            tableApi.rows().every(function(idx) {
+                const d = this.data();
+                const rowCsrId = String(d[idxCsrId]);
+
+                if (allTargetCsrIds.includes(rowCsrId)) {
+                    // Cache current state safely 
+                    if (!originalPristineValues[rowCsrId]) {
+                        const currentInput = $(this.node()).find(`td:eq(${colIdx}) .dt-inline-edit`);
+                        originalPristineValues[rowCsrId] = currentInput.attr('data-current') || currentInput.val() || '';
+                    }
+
+                    // Update underlying cache array references
+                    d[colIdx] = nextPayload.value; 
+                    
+                    // CRITICAL FIX: Update the specific cell node's value visually without triggering a destructive full-row data loop
+                    const cellNode = tableApi.cell(idx, colIdx).node();
+                    const $cellInput = $(cellNode).find('.dt-inline-edit');
+                    if ($cellInput.length && $cellInput.val() !== nextPayload.value) {
+                        $cellInput.val(nextPayload.value);
+                    }
+
+                    const $cellNode = $(cellNode);
+                    $cellNode.addClass('dt-cell-committed');
+                    setTimeout(() => $cellNode.removeClass('dt-cell-committed'), 800);
+                }
+            });
+
+            // STAGE B: Database Server Persistence Execution Loop
+            try {
+                console.log(`[Debug] Dispatching optimistic sync payload to server for CSR: ${nextPayload.csrId}`);
+
+                const response = await $.ajax({
+                    url: "/bulk_update_csr_fields/",
+                    method: "POST",
+                    contentType: "application/json",
+                    headers: { 'X-CSRFToken': (typeof CardLiveFeedUpdater !== 'undefined' ? CardLiveFeedUpdater.getCsrfToken() : '') },
+                    data: JSON.stringify({ 
+                        updates: [{ csrId: nextPayload.csrId, allFields: { [nextPayload.column]: nextPayload.value, [nextPayload.column+"_is_manual"]: true} }] 
+                    } )
+                });
+
+                console.log("[Background Sync] Server persistence successful:", response.results);
+
+                // STAGE C: Post-flight baseline adjustments. Refresh metadata without clearing inputs.
+                tableApi.rows().every(function(idx) {
+                    const d = this.data();
+                    const rowCsrId = String(d[idxCsrId]);
+
+                    if (allTargetCsrIds.includes(rowCsrId)) {
+                        const cellNode = tableApi.cell(idx, colIdx).node();
+                        const $cellInput = $(cellNode).find('.dt-inline-edit');
+                        if ($cellInput.length) {
+                            $cellInput.attr('data-current', nextPayload.value);
+                        }
+                    }
+                });
+
+            } catch (xhr) {
+                console.error("[CRITICAL BACKGROUND ERROR] Server sync rejected:", xhr.responseText);
+                
+                // AUTOMATIC SAFETY TRANSACTIONAL DATA ROLLBACK
+                tableApi.rows().every(function(idx) {
+                    const d = this.data();
+                    const rowCsrId = String(d[idxCsrId]);
+
+                    if (allTargetCsrIds.includes(rowCsrId) && originalPristineValues[rowCsrId] !== undefined) {
+                        const revertVal = originalPristineValues[rowCsrId];
+                        d[colIdx] = revertVal;
+                        
+                        const cellNode = tableApi.cell(idx, colIdx).node();
+                        const $cellInput = $(cellNode).find('.dt-inline-edit');
+                        if ($cellInput.length) {
+                            $cellInput.val(revertVal).attr('data-current', revertVal);
+                        }
+                    }
+                });
+
+                // Only redraw on total failure states
+                tableApi.draw(false);
+                restoreInputFocusLock(tableApi);
+                alert("Background update sync failed. Row values have been safely rolled back.");
+            } finally {
+                isProcessingQueue = false;
+                processQuickEditQueue(); 
+            }
+        }
+
+        // =====================================================================
+        // DATATABLES ORCHESTRATION LAYER DEFINITION
+        // =====================================================================
+        const table = $('#card-data-engine').DataTable({
+            dom: 'ift',
+            pageLength: 50,
+            searchPanes: { 
+                container: '#panes-container', 
+                layout: 'columns-1', 
+                stateSave: true,
+                cascadePanes: false,
+                initCollapsed: true,
+                columns: [6,10,12,1,2,9,17]
+            },
+            columnDefs: [
+                {
+                    targets: 0,
+                    orderable: false,
+                    render: function(data, type, row, meta) {
+                        const id = row[idxId];
+                        return `<input type="checkbox" class="dt-row-chk" data-id="${id}">`;
+                    }
+                },
+                {
+                    searchPanes: {
+                        show: true,
+                        initCollapsed: false,
+                        sortable: true,
+                        dtOpts: { order: [[1, 'desc']] }
+                    },
+                    targets: [6,10], 
+                },
+                {
+                    searchPanes: {
+                        show: true,
+                        dtOpts: { order: [[1, 'desc']] }
+                    },
+                    targets: [2,3,4,5,7,8], 
+                },
+                {
+                    searchPanes: {
+                        show: true,
+                        initCollapsed: false,
+                        dtOpts: { order: [[0, 'desc']] }
+                    },
+                    targets: [12], 
+                    visible: false
+                }, 
+                {
+                    searchPanes: {
+                        show: true,
+                        initCollapsed: false,
+                        dtOpts: { order: [[0, 'desc']] }
+                    },
+                    targets: [1]
+                }, 
+                {
+                    searchPanes: {
+                        show: true,
+                        dtOpts: { order: [[0, 'desc']] }
+                    },
+                    targets: [11,17], 
+                    type:'num',
+                    visible: false
+                },  
+                {
+                    targets: [20], 
+                    type: 'datetime',
+                    visible: true
+                },   
+                {
+                    targets: [idxFrontUrl, idxReverseUrl],
+                    type: 'display'
+                },  
+                {
+                    targets: [15,16,19,21,23,24,26],
+                    visible: false,
+                },
+                { 
+                    targets: '_all',
+                    render: function(data, type, row, meta) {
+                        if (type === 'display') {
+                            const colCount = meta.settings.aoColumns.length;
+                            const isMainTable = (colCount > 5); 
+                            const isProtected = (meta.col === 0 || meta.col === idxId || meta.col === idxCsrId || meta.col === idxFrontUrl || meta.col === idxReverseUrl || meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
+                            const isImg = (meta.col === idxFrontUrl || meta.col === idxReverseUrl) || (meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
+                            
+                            if (isMainTable && !isProtected) {
+                                return createPersistentInputRenderer(data);
+                            } else if (isMainTable && isImg) {
+                                return createImageRenderer(data);
+                            }
+                            return data;
+                        }
+                        return data;
+                    }
+                }
+            ],
+            infoCallback: function(settings, start, end, max, total, pre) {
+                return `Showing ${total} card${total !== 1 ? 's' : ''} of ${max}`;
+            },
+            initComplete: function() {
+                const api = this.api();
+                
+                const idIdx = api.columns().header().toArray().findIndex(th => $(th).text().trim() === 'ID');
+                console.log("Calculated ID Index:", idIdx);
+                window.zoomState = window.zoomState || {};
+                window.zoomState.idColumnIndex = idIdx;
+                window.zoomState.headerMap = headerMap; 
+
+                api.searchPanes.container().appendTo('#panes-container');
+                $('.dataTables_info').appendTo('#header-info-mount');
+                
+                buildSortBar(api, headerMap);
+
+                // --- 3-STATE RADIO TOGGLE MECHANICS ---
+                const $toggleContainer = $('<div class="view-toggle-group"></div>').css({
+                    'display': 'flex', 'gap': '5px', 'background': '#eee', 
+                    'padding': '3px', 'border-radius': '6px'
+                });
+
+                const views = ['Grid', 'Table', 'Grouped'];
+                views.forEach((view, idx) => {
+                    const $radio = $(`<input type="radio" name="view-toggle" id="view-${idx}" value="${idx}" ${idx === 0 ? 'checked' : ''} style="display:none;">`);
+                    const $label = $(`<label for="view-${idx}" style="padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 4px; transition: 0.2s;">${view}</label>`);
+                    
+                    if (idx === 0) $label.css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+
+                    $label.on('click', function() {
+                        $('.view-toggle-group label').css({'background': 'transparent', 'box-shadow': 'none'});
+                        $(this).css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+                        
+                        const $engineTable = $('#card-data-engine');
+                        const $grid = $('#visual-card-grid');
+                        const $groupedView = $('#grouped-card-view');
+
+                        $engineTable.attr('style', 'display: none !important;');
+                        $grid.hide();
+                        $groupedView.hide();
+
+                        if (idx === 0) $grid.show();
+                        else if (idx === 1) $engineTable.attr('style', 'display: table !important; width: 100%; margin-top: 20px;');
+                        else if (idx === 2) $groupedView.show();
+                        renderCheckboxUI();
+                    });
+
+                    $toggleContainer.append($radio).append($label);
+                });
+
+                $('#header-toggle-mount').append($toggleContainer);
+
+                // --- LIVE IMAGE PREVIEW TRACKING ENGINE ---
+                $('#card-data-engine tbody').on('mouseenter', 'tr', function() {
+                    const rowData = table.row(this).data();
+                    if (!rowData) return;
+
+                    const urlFront = rowData[idxFrontHdUrl] ? rowData[idxFrontHdUrl].trim() : '';
+                    const urlBack = rowData[idxReverseHdUrl] ? rowData[idxReverseHdUrl].trim() : '';
+                    
+                    let hasValidImage = false;
+
+                    if (urlFront && urlFront !== 'None' && urlFront !== '-') {
+                        $('#preview-front').attr('src', urlFront).show();
+                        hasValidImage = true;
+                    } else {
+                        $('#preview-front').hide();
+                    }
+
+                    if (urlBack && urlBack !== 'None' && urlBack !== '-') {
+                        $('#preview-back').attr('src', urlBack).show();
+                        hasValidImage = true;
+                    } else {
+                        $('#preview-back').hide();
+                    }
+
+                    if (hasValidImage) {
+                        $previewBox.show();
+                    }
+                })
+                .on('mousemove', 'tr', function(e) {
+                    $previewBox.css({
+                        top: (e.clientY + 15) + 'px',
+                        left: (e.clientX + 15) + 'px'
+                    });
+                })
+                .on('mouseleave', 'tr', function() {
+                    $previewBox.hide();
+                    $('#preview-front').attr('src', '');
+                    $('#preview-back').attr('src', '');
+                });
+
+                // --- DUAL IMAGE RESOLUTION ROW-WIDE SWAP ENGINE ---
+                $('#card-data-engine tbody').on('click', 'img', function (e) {
+                    e.stopPropagation();
+
+                    const $clickedImg = $(this);
+                    const $row = $clickedImg.closest('tr');
+                    const tableApi = $('#card-data-engine').DataTable();
+                    const rowData = tableApi.row($row).data();
+                    
+                    if (!rowData) return;
+
+                    $row.toggleClass('expanded-row');
+                    const isExpanded = $row.hasClass('expanded-row');
+                    
+                    const $frontImg = $row.find(`td:eq(${idxFrontUrl}) img, img.lazy-table-img:eq(0)`).first();
+                    const $reverseImg = $row.find(`td:eq(${idxReverseUrl}) img, img.lazy-table-img:eq(1)`).first();
+
+                    if (!$frontImg.data('thumb')) $frontImg.data('thumb', $frontImg.attr('src'));
+                    if (!$reverseImg.data('thumb')) $reverseImg.data('thumb', $reverseImg.attr('src'));
+
+                    if (isExpanded) {
+                        const frontHd = rowData[idxFrontHdUrl];
+                        const reverseHd = rowData[idxReverseHdUrl];
+
+                        console.log(`[Debug Engine] Initializing lazy load -> Front HD: ${frontHd} | Reverse HD: ${reverseHd}`);
+
+                        const lazyLoadAsset = ($imageElement, hdUrl) => {
+                            if (!hdUrl || hdUrl === '-' || hdUrl === 'None') return;
+                            
+                            const imgCache = new Image();
+                            imgCache.onload = function() {
+                                $imageElement.data('current-hd', hdUrl);
+                                $imageElement.attr('src', hdUrl);
+                            };
+                            imgCache.src = hdUrl;
+                        };
+
+                        lazyLoadAsset($frontImg, frontHd);
+                        lazyLoadAsset($reverseImg, reverseHd);
+                    } else {
+                        $frontImg.attr('src', $frontImg.data('thumb'));
+                        $reverseImg.attr('src', $reverseImg.data('thumb'));
+                    }
+                });
+
+                $('#panes-container').on('click', '.dtsp-searchPane table tbody tr', function() {
+                    const pane = $(this).closest('.dtsp-searchPane');
+                    $(this).toggleClass('selected'); 
+                    grid.addClass('filtering-active');
+                    pane.addClass('pane-processing');
+                    loader.text("Applying filters...").show();
+                });
+            },
+            drawCallback: function(settings) {
+                const api = this.api();
+                const grid = $('#visual-card-grid');
+                const targetIdx = api.column('ID:name').index(); 
+                const actualIdx = (targetIdx !== undefined && targetIdx !== null) ? targetIdx : 14;
+
+                grid.find('.card-item').hide();
+                
+                const currentPageIds = api.rows({ page: 'current', filter: 'applied', order: 'applied' })
+                                         .data().toArray().map(row => {
+                                             return row[actualIdx] ? row[actualIdx].toString() : '';
+                                         });
+
+                currentPageIds.forEach(id => {
+                    grid.find(`.card-item[data-id="${id}"]`).show().appendTo(grid);
+                });
+
+                sessionStorage.setItem('card_sequence', JSON.stringify(currentPageIds));
+                
+                setTimeout(() => { 
+                    grid.removeClass('filtering-active');
+                    $('.dtsp-searchPane').removeClass('pane-processing');
+                    if (!loadingNextPage) {
+                        $('#infinite-loader').hide(); 
+                    }
+                }, 150);
+            }
+        });
+
+        // =====================================================================
+        // SPREADSHEET-STYLE CELL EDIT INTERACTION PIPELINE
+        // =====================================================================
+        // [DEBUG LOG] Attaching change tracking to commit values on blur boundary
+        console.log("[Debug] Initializing spreadsheet focus-commit interaction loops.");
+
+        $('#card-data-engine tbody').on('change', '.dt-inline-edit', function() {
+            const $input = $(this);
+            const updatedVal = $input.val().trim();
+            const originalVal = $input.attr('data-current');
+            
+            // If the text hasn't changed, exit early without spinning up the engine
+            if (updatedVal === originalVal) return;
+
+            console.log(`[Debug] Cell value changed from "${originalVal}" to "${updatedVal}". Queueing payload execution.`);
+
+            const tableApi = $('#card-data-engine').DataTable();
+            const cellIdx = tableApi.cell($input.closest('td')).index();
+            const columnName = tableApi.column(cellIdx.column).header().textContent.trim().toLowerCase().replace(' ', '_');
+            const editedRowData = tableApi.row(cellIdx.row).data();
+            const editedCsrId = editedRowData[idxCsrId].toString().trim();
+            const activeSelectedIds = Array.from(selectedIds);
+
+            const changePayload = {
+                csrId: editedCsrId,
+                column: columnName,
+                value: updatedVal,
+                mirroredCsrIds: []
+            };
+
+            // Mirror values immediately to matching checked elements across the table grid
+            tableApi.rows().indexes().each((idx) => {
+                const rData = tableApi.row(idx).data();
+                if (activeSelectedIds.includes(rData[idxId]) && rData[idxCsrId] !== editedCsrId) {
+                    changePayload.mirroredCsrIds.push(rData[idxCsrId]);
+                    
+                    const targetedCell = tableApi.cell(idx, cellIdx.column);
+                    $(targetedCell.node()).find('.dt-inline-edit').val(updatedVal);
+                }
+            });
+
+            // Fire debounce immediately since focus has already dropped from the input node
+            clearTimeout(quickEditDebounceTimer);
+            quickEditDebounceTimer = setTimeout(() => {
+                quickEditQueue.push(changePayload);
+                processQuickEditQueue();
+            }, 100); 
+        });
+
+        // [DEBUG LOG] Initializing arrow-key & Enter navigation with image sync
+        console.log("[Debug] Attaching Enter-key navigation and tooltip sync handler.");
+
+        $('#card-data-engine tbody').on('keydown', '.dt-inline-edit', function(evt) {
+            if (evt.which === 13) { 
+                evt.preventDefault(); 
+                
+                const $currentInput = $(this);
+                const $currentTd = $currentInput.closest('td');
+                const colIdx = $currentTd.index(); 
+                const $currentRow = $currentTd.closest('tr');
+                const $nextRow = $currentRow.next('tr'); 
+
+                console.log(`[Debug] Enter pressed on row: ${$currentRow.index()}, col: ${colIdx}. Committing cell.`);
+
+                // Force input blur to trigger the 'change' commitment process cleanly
+                $currentInput.blur(); 
+
+                if ($nextRow.length) {
+                    const $nextInput = $nextRow.find(`td:eq(${colIdx}) .dt-inline-edit`);
+                    if ($nextInput.length) {
+                        console.log(`[Debug] Moving focus down to row: ${$nextRow.index()}.`);
+                        $nextInput.focus(); 
+                        $nextInput.trigger('mouseenter'); 
+                    }
+                }
+            } else if (evt.which === 27) { 
+                evt.preventDefault(); 
+                console.log("[Debug] Escape pressed. Reverting change.");
+                // Reset value back to original pristine state element marker
+                $(this).val($(this).attr('data-current')).blur(); 
+            }
+        });
+
+        $('#card-data-engine tbody').on('focus', '.dt-inline-edit', function() {
+            const $input = $(this);
+            const rowIndex = $input.closest('tr').index();
+            
+            console.log(`[Debug] Input focused on row ${rowIndex}. Queueing full text selection.`);
+            
+            // Deliberately windowed to capture cell focus targets immediately ahead of redraw loops
+            setTimeout(function() {
+                console.log(`[Debug] Forcing text selection now for row ${rowIndex}.`);
+                $input.select();
+            }, 25); 
+        });
+
+    });
+})(jQuery);
+
+</script>
+{% load static %}
+<script src="{% static 'js/collection_node.js' %}"></script>

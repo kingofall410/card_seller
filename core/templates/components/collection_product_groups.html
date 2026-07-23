@@ -1,0 +1,20 @@
+{% load custom_tags %}
+
+<div id="grouped-card-view" style="display: none;">
+    {% regroup cards|ptg_group_sort by primary_tag_group as group_lista %}
+    <div id="group-container-wrapper">
+        {% for group in group_lista %}
+            <div class="group-item-card" data-group-key="{{ group.grouper }}">
+                {% include "tag_group.html" with group=group %}
+            </div>
+        {% endfor %}
+    </div>
+    {% regroup cards by product_group_key as group_list %}
+    <div id="group-container-wrapper">
+        {% for group in group_list %}
+            <div class="group-item-card" data-group-key="{{ group.grouper }}">
+                {% include "product_group.html" with group=group %}
+            </div>
+        {% endfor %}
+    </div>
+</div>

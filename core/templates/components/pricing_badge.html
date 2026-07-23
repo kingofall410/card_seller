@@ -65,7 +65,7 @@
     background: rgba(0, 161, 108, 0.25); /* Subtle transparent green backing range */
     left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
     width: calc(((var(--avg-high) - var(--avg-low)) / var(--spread)) * 100%);
-    min-width: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%); 
+    min-width: 4px; 
     z-index: 1;
 }
 
@@ -92,7 +92,7 @@
 .pricing-badge-embed .cluster-gradient-inline {
     position: absolute;
     height: 100%; 
-    top: 0; /* Reset back to 0 since containment takes care of scaling now */
+    top: 0; 
     transform: translateX(-50%); 
     z-index: 3; 
     mix-blend-mode: screen; 
@@ -188,53 +188,8 @@
     text-decoration: underline; 
     text-underline-offset: 2px; 
 }
-/* --- TOP TRACK: Solid Offer Spectrum --- */
-.pricing-badge-embed .offers-bar {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    border-radius: 4px;
-    background: rgba(255, 123, 0, 0.25); /* Kept slightly translucent so heat maps pop */
-    left: calc(((var(--min) - var(--global-min)) / var(--spread)) * 100%);
-    width: calc(((var(--max) - var(--min)) / var(--spread)) * 100%);
-    min-width: 4px;
-    z-index: 1;
-    
-    /* 🛡️ CLIP TO OFFERS PILL ONLY */
-    overflow: hidden;
-    isolation: isolate;
-}
-
-/* --- BOTTOM TRACK: Solid Average Spectrum --- */
-.pricing-badge-embed .averages-bar {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    border-radius: 4px;
-    background: rgba(0, 161, 108, 0.25);
-    left: calc(((var(--avg-low) - var(--global-min)) / var(--spread)) * 100%);
-    width: calc(((var(--avg-high) - var(--avg-low)) / var(--spread)) * 100%);
-    min-width: calc(((var(--avg) - var(--global-min)) / var(--spread)) * 100%); 
-    z-index: 1;
-    
-    /* 🛡️ CLIP TO SOLDS/AVERAGES PILL ONLY */
-    overflow: hidden;
-    isolation: isolate;
-}
-
-/* --- GRADIENT INNER STYLE --- */
-.pricing-badge-embed .cluster-gradient-inline {
-    position: absolute;
-    height: 100%; 
-    top: 0;
-    z-index: 3; 
-    mix-blend-mode: screen; 
-    pointer-events: none;
-    
-    /* 📐 KEEP THE ORIGINAL CENTER MATH WORKING */
-    transform: translateX(-50%); 
-}
 </style>
+
 <div class="pricing-badge-embed pricing-badge-horizontal">
     
     <div class="stacked-bars-container" style="
@@ -252,35 +207,31 @@
                 <span>${{ min_offer|floatformat:2 }}</span>
             </div>
             <div class="price-lbl-h lbl-max-offer orange-lbl">
-                <span>${{ max_offer|floatformat:0 }}</span>
+                <span>${{ max_offer|floatformat:2 }}</span>
             </div>
         </div>
         
         <div class="bar-track">
-            <div class="offers-bar" style="--bar-width: calc(var(--max) - var(--min));">
-                
-                {% for cluster in offered_clusters %}
+            <div class="offers-bar">
+                {% with cluster=offered_clusters.0 %}
                 <div class="cluster-gradient-inline" 
-                     style="left: calc((( {{ cluster.center }} - var(--min)) / var(--bar-width)) * 100%); 
-                            width: max(20px, {{ cluster.size }}%);
+                     style="left: calc((( {{ cluster.center }} - var(--global-min)) / var(--spread)) * 100%); 
+                            width: max(24px, {{ cluster.size }}%);
                             background: linear-gradient(90deg, rgba(255,123,0,0) 0%, rgba(255,123,0,1) 50%, rgba(255,123,0,0) 100%);"
                      title="Offered Price Cluster: ${{ cluster.center }} ({{ cluster.size }}% volume)"></div>
-                {% endfor %}
-                
+                {% endwith %}
             </div>
         </div>
 
         <div class="bar-track">
-            <div class="averages-bar" style="--bar-width: calc(var(--avg-high) - var(--avg-low));">
-                
+            <div class="averages-bar">
                 {% for cluster in sold_clusters %}
                 <div class="cluster-gradient-inline" 
-                     style="left: calc((( {{ cluster.center }} - var(--avg-low)) / var(--bar-width)) * 100%); 
-                            width: max(20px, {{ cluster.size }}%);
+                     style="left: calc((( {{ cluster.center }} - var(--global-min)) / var(--spread)) * 100%); 
+                            width: max(24px, {{ cluster.size }}%);
                             background: linear-gradient(90deg, rgba(0,161,108,0) 0%, rgba(0,161,108,1) 50%, rgba(0,161,108,0) 100%);"
                      title="Sold Price Cluster: ${{ cluster.center }} ({{ cluster.size }}% volume)"></div>
                 {% endfor %}
-                
             </div>
         </div>
 
@@ -289,7 +240,7 @@
 
         <div class="price-labels-bottom">
             <div class="price-lbl-h lbl-avg-low green-lbl">
-                <span>${{ avg_low|floatformat:0 }}</span>
+                <span>${{ avg_low|floatformat:2 }}</span>
             </div>
 
             <div class="price-lbl-h lbl-average">
@@ -301,7 +252,7 @@
             </div>
 
             <div class="price-lbl-h lbl-max">
-                <span>${{ scale_max|default:10|floatformat:0 }}</span>
+                <span>${{ scale_max|default:10|floatformat:2 }}</span>
             </div>
         </div>
 

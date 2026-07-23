@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
 from core.models.Group import ProductGroup
+from core.models.TagGroup import TagGroup
 from core.models.ListingGroup import ListingGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.Status import StatusBase
@@ -28,30 +29,34 @@ from django.db.models.functions import Concat
 from django.conf import settings as app_settings
 import operator
 from django.core.exceptions import FieldError
-from django.db.models import OuterRef, Subquery, Count
+from django.db.models import OuterRef, Subquery, Count, Prefetch
 import traceback
 import shlex
-
 
 def card_status_monitor(request):
     """
     Returns aggregated counts of the LATEST CardSearchResult (CSR) for each card,
     grouped by: Pre-Listing, Priced, Reviewed, Listed, and Sold/Hold.
     """
-    # 1. Subquery to find the primary key of the newest CSR for each unique card
-    newest_csr_subquery = CardSearchResult.objects.filter(
-        parent_card_id=OuterRef('parent_card_id')
-    ).order_by('-id').values('id')[:1]  # Assumes 'created_at' tracks chronological order
+    # 1. Pull the overall_status value directly from the newest CSR row per card
+    latest_status_subquery = CardSearchResult.objects.filter(
+        parent_card_id=OuterRef('id')  # Targets the Card ID from the primary query layer
+    ).order_by('-id').values('overall_status')[:1]
 
-    # 2. Filter down to only these latest CSR records
-    latest_csrs = CardSearchResult.objects.filter(
-        id=Subquery(newest_csr_subquery)
+    # 2. Annotate every card in the database with its singular latest status
+    cards_with_latest_status = Card.objects.annotate(
+        latest_csr_status=Subquery(latest_status_subquery)
     )
 
-    # 3. Group and count those latest records by status
-    status_counts = latest_csrs.values('overall_status').annotate(total=Count('id'))
+    # 3. Group and count the card objects directly by that single status value
+    status_counts = cards_with_latest_status.values('latest_csr_status').annotate(
+        total=Count('id')
+    ).order_by()
     
-    # Initialize your new custom counters
+    # DEBUG PRINT: View the exact rows coming back from the database group-by clause
+    #print("[DEBUG] Raw DB aggregation payload:", list(status_counts))
+    
+    # Initialize counters
     counts_dict = {
         'pre-listing': 0,
         'priced': 0,
@@ -60,17 +65,17 @@ def card_status_monitor(request):
         'sold-hold': 0
     }
 
-    # 4. Map DB statuses to your workflow groups
+    # 4. Map the annotated statuses to your workflow groups
     for item in status_counts:
-        raw_status = item['overall_status']
+        raw_status = item['latest_csr_status']
+        # Fallback to pre-listing if a card has 0 search results recorded yet (None)
         status = raw_status.lower().replace('_', '-').strip() if raw_status else 'pre-listing'
         total = item['total']
         
-        # --- Grouping Logic ---
         if status in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.STAGED]:
             counts_dict['listed'] += total
             
-        elif status in [StatusBase.PRICED, StatusBase.AUTO_PRICED]:
+        elif status in [StatusBase.PRICED, StatusBase.AUTO_PRICED, StatusBase.UNLISTED, StatusBase.PENDING]:
             counts_dict['priced'] += total
             
         elif status in [StatusBase.REVIEWED]:
@@ -79,9 +84,11 @@ def card_status_monitor(request):
         elif status in [StatusBase.SOLD, StatusBase.HELD]:
             counts_dict['sold-hold'] += total
             
-        else:
-            # Everything else (pending, identified, error, searching) maps to Pre-Listing
+        elif status in [StatusBase.IMPORTED]:
             counts_dict['pre-listing'] += total
+
+    # DEBUG PRINT: View the finalized dictionary map before dispatching response
+    #print("[DEBUG] Final mapped counts dict:", counts_dict)
 
     return JsonResponse({
         'success': True,
@@ -161,18 +168,94 @@ def re_sku(request, card_id):
 def single_card_test(request, card_id):
     if request.method == 'POST':
         try:
-            csr = Card.objects.get(id=card_id).active_search_results
+            csr = CardSearchResult.objects.filter(parent_card_id=card_id).last()
             if not hasattr(csr.parent_card, "listed_card_info"):
                 ListedInfo.create_from_csr(csr)
+            
             for listing_group in csr.listing_groups.all():
                 listing_group.save()
-                csr.save()
             
-            #CardArchive.rehydrate({"id": 16}, 209)
+            #csr.update_value()
+            csr.save()
+            csr.parent_card.save()
+            
             return JsonResponse({"success": 'true'}, status=200)
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=400)
+
+# Card-related views
+@csrf_exempt
+def bulk_re_sku(request):
+    if request.method == 'POST':
+        try:
+            card_ids = request.POST.getlist('card_ids[]')
+            if len(card_ids):
+                print("lenny", len(card_ids))
+                card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+            else:
+                print("no cards", len(card_ids))
+                card_list = list(collection.cards.order_by('id'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': "no cards"}, status=400)
+            
+        #print(card_list)
+
+        for card in card_list:
+            card.re_sku()
+            card.save()
+        return JsonResponse({"success": 'true'}, status=200)
+            
+def do_tags(card, tags):
+    for tag in tags:
+        tg = TagGroup.create(tag)
+        tg.tagged_cards.add(card)
+        tg.save()
+        card.tags.add(tag)
+
+@csrf_exempt
+def update_tags(request, card_id):
+    if request.method == "POST":
+        # Get the specific taggable object instance
+        obj = Card.objects.get(id=card_id)
+        raw_tags = request.POST.get("new_tags", "").strip()
+        
+        if raw_tags:
+            # Debug log to verify standard string stream data format
+            #logger.debug(f"[TAG UPDATER] Appending string tokens to object ID {pk}: {raw_tags}")
+            
+            # .add() automatically parses comma separated input strings seamlessly
+            tag_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
+            obj.tags.add(*tag_list)
+
+            do_tags(obj, tag_list)
+
+    # Redirect back to the inventory viewport layout panel
+    return redirect(request.META.get('HTTP_REFERER', '/'))
+
+# Card-related views
+@csrf_exempt
+def bulk_tag(request):
+    
+    if request.method == 'POST':
+        try:
+            card_ids = request.POST.getlist('card_ids[]')
+            if len(card_ids):
+                print("lenny", len(card_ids))
+                card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+            else:
+                print("no cards", len(card_ids))
+                card_list = list(collection.cards.order_by('id'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': "no cards"}, status=400)
+            
+        tag_list = request.POST.getlist("tags[]")
+        print(tag_list)
+        for card in card_list:
+            do_tags(card, tag_list)
+
+        return JsonResponse({"success": 'true'}, status=200)
+            
 
 # Card-related views
 @csrf_exempt
@@ -189,13 +272,12 @@ def card_test(request):
         except json.JSONDecodeError:
             return JsonResponse({'error': "no cards"}, status=400)
             
-        print(card_list)
+    #print(card_list)
 
         for card in card_list:
             single_card_test(request, card.id)
             card.save()
         return JsonResponse({"success": 'true'}, status=200)
-            
 
 # Card-related views
 @csrf_exempt
@@ -221,21 +303,6 @@ def view_card(request, card_id):
     #print(card_list)
     if not first_card:
         first_card = card_list[0] if card_list else None
-
-    #print("post2")
-    page_number = request.GET.get('page')
-        
-    #at this point we know the cards in the collection and the current card
-    #no page number means just go to card_id
-    if not page_number and card_id and card_list:
-        try:
-            index = next((i for i, c in enumerate(card_list) if c.id == int(card_id)))
-            page_number = floor(index) + 1
-        except StopIteration:
-            page_number = 1
-    #print("post3")
-
-    #above is neutered for now until paging is re-implemented
 
     cc_asr = first_card.active_search_results
 
@@ -287,7 +354,7 @@ def crop_review(request, collection_id):
 
     
     card_tuples = [(card, id_) for card in card_list for id_ in (card.id, card.reverse_id) ]
-    print("CR", card_tuples)
+    #print("CR", card_tuples)
     return render(request, "crop_review.html", {"card_tuples": card_tuples})
 
 @csrf_exempt
@@ -358,7 +425,7 @@ def get_spreadsheet_data(request):
 
 def card_search_simple_ajax(request):
     search_term = request.GET.get('searchTerm', '').strip()
-    timeframe = request.GET.get('timeframe', '0')
+    timeframe = request.GET.get('timeframe', '30')
     
     # 1. Retrieve 'status' as a list of values (e.g. ['Priced', 'Reviewed'])
     # If no status parameters are passed, or it contains only ['0'], we treat it as unfiltered
@@ -376,7 +443,8 @@ def card_search_simple_ajax(request):
         qs = Card.objects.filter(search_results__listing__ebay_product_group_key=grp_id)
     elif timeframe != '0':
         start_date = timezone.now() - timedelta(days=int(timeframe))
-        qs = qs.filter(modification_date__gte=start_date)        
+        qs = qs.filter(modification_date__gte=start_date)
+    
 
     # Apply Status Filter (Using list of statuses)
     if status_list:
@@ -411,107 +479,121 @@ def card_search_simple_ajax(request):
 
 def extract_card_list(request, collection_id=None):
     card_ids = request.POST.getlist('card_ids[]')
-
+    grp_id = request.POST.get('grp_id')
     if len(card_ids):
         print("lenny", len(card_ids))
-        return Card.objects.filter(id__in=card_ids).order_by('id')
+        return Card.objects.filter(id__in=card_ids).order_by('id'), card_ids
     elif collection_id:
         print("collection", collection_id)
-        return Card.objects.filter(collection_id__in=card_ids).order_by('id')  
-
-    return
+        cards = Card.objects.filter(collection_id=collection_id).order_by('id')
+        card_ids = [card.id for card in cards]
+        return cards, card_ids
+    elif grp_id:
+        print("group", grp_id)
+        cards = Card.objects.filter(search_results__ebay_product_group__group_key=grp_id).order_by('id')
+        card_ids = [card.id for card in cards]
+        return cards, card_ids
 
 
 @csrf_exempt
 def get_flat_cards(request, card_id=None):
-    cards = extract_card_list(request)
+    cards, card_ids = extract_card_list(request)
     if cards:
         updated_flat_cards = collection_views.flatten_collection(cards)
         return JsonResponse({"success": True, "data":updated_flat_cards})
     else:
         return JsonResponse({"success": True, "data":[]})
 
+
 @csrf_exempt
 def refresh_listing_status(request, card_id=None):
     
     if card_id:
         cards = Card.objects.filter(id=card_id)
-        card = cards[0]
-        listing_ids = [card.listed_card_info.listing_id]
+        card_ids = [card_id]
+        listing_ids = [cards[0].listed_card_info.listing_id]
     else:
-        cards = extract_card_list(request)
+        cards, card_ids = extract_card_list(request)
         listing_ids = [card.listed_card_info.listing_id for card in cards if hasattr(card, "listed_card_info")]
     
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_confirm_task(name=f"confirm listings", card=cards[0], callback=lookup.bulk_order_update, params={"card_ids": card_ids, "listing_ids":listing_ids}, on_success_status=StatusBase.CONFIRMED)
+
+    #lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
+    #updated_flat_cards = collection_views.flatten_collection(cards)
+    return JsonResponse({"success": True})
     
-    lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
-    updated_flat_cards = collection_views.flatten_collection(cards)
-    return JsonResponse({"success": True, "data":updated_flat_cards})
-    
+def scope_queryset_to_latest_csr(queryset):
+    """
+    Isolates the base card query so that ANY downstream joins or filters
+    on 'search_results' are restricted to the absolute newest record.
+    """
+    latest_search_id = CardSearchResult.objects.filter(
+        parent_card=OuterRef('pk')
+    ).order_by('-id').values('id')[:1]
+
+    # Explicitly filter the baseline relationship to only the latest ID match
+    return queryset.filter(search_results__id=Subquery(latest_search_id))
 
 def card_search_ajax(request):
     query = request.GET.get('q', '').strip()
-    since_date_str = request.GET.get('since')
+    since_date_str = request.GET.get('timeframe')
     filters_json = request.GET.get('filters')
     is_update = request.GET.get('updates_only') is not None
     
-    # 1. Define the Subquery to get the 'latest' overall_status
-    latest_result_status = CardSearchResult.objects.filter(
+    # Step 1: Isolate the absolute latest CSR record ID row identity
+    latest_search_id = CardSearchResult.objects.filter(
         parent_card=OuterRef('pk')
-    ).order_by('-id').values('overall_status')[:1]
+    ).order_by('-id').values('id')[:1]
     
-    # 2. Base Query: Start with Card and annotate the latest status
+    # Step 2: Tie the baseline query to ONLY see that active row record
     cards_queryset = Card.objects.annotate(
-        latest_status=Subquery(latest_result_status)
+        latest_csr_id=Subquery(latest_search_id)
+    ).filter(
+        search_results__id=F('latest_csr_id')
     )
     
-    # 3. Base Text Filters (The 'filters' Q object you previously defined)
-    filters = Q(
-        Q(search_results__full_name__icontains=query) |
-        Q(search_results__year__icontains=query) |
-        Q(search_results__brand__icontains=query) |
-        Q(search_results__team__icontains=query) 
-    )
+    # Step 3: Apply text query parameter strictly to the isolated live join path
+    if query:
+        cards_queryset = cards_queryset.filter(
+            Q(search_results__full_name__icontains=query) |
+            Q(search_results__year__icontains=query) |
+            Q(search_results__brand__icontains=query) |
+            Q(search_results__team__icontains=query) 
+        )
     
-    # 4. Handle Filters vs Sort
+    # Step 4: Extract JSON Sidebar Filters (excluding sort parameters)
     filter_payload = json.loads(filters_json) if filters_json else {}
-    
-    # Separate filter data from sort data to prevent the 'sort__exact' error
     filter_only_data = {k: v for k, v in filter_payload.items() if k != 'sort'}
     
-    # Build Q object for filters only
+    # Build your dynamic Q filters (these will safely execute on the constrained join)
     dynamic_q = build_q_from_filters(json.dumps(filter_only_data))
-    final_q = filters & dynamic_q
+    cards_queryset = cards_queryset.filter(dynamic_q)
     
-    # 5. Add modification date constraint
+    # Step 5: Add modification date constraint if applicable
     if since_date_str:
         target_date = parse_datetime(since_date_str)
         if target_date:
-            final_q &= Q(modification_date__gte=target_date)
+            cards_queryset = cards_queryset.filter(modification_date__gte=target_date)
             
-    # Execute base filtering
-    cards_list = cards_queryset.filter(final_q)
-    
-    # 6. Handle Sorting separately from Filtering
+    # Step 6: Handle Sorting execution parameters cleanly
     sort_data = filter_payload.get('sort')
     if sort_data and isinstance(sort_data, list) and len(sort_data) > 0:
-        # Expected structure: { 'val': 'field_name', 'op': 'asc'/'desc' }
         s = sort_data[0]
         field = s.get('val')
         direction = s.get('op', 'asc').lower()
-        
-        # Add a '-' prefix for descending, ensure field is safe
         order_prefix = '-' if direction == 'desc' else ''
-        cards_list = cards_list.order_by(f"{order_prefix}{field}")
+        
+        if field in ['overall_status', 'status']:
+            field = 'search_results__overall_status'
+            
+        cards_queryset = cards_queryset.order_by(f"{order_prefix}{field}")
     else:
-        # Default sort
-        cards_list = cards_list.order_by('-id')
+        cards_queryset = cards_queryset.order_by('-id')
     
-    # Use distinct to handle potential duplicates from joins
-    cards_list = cards_list.distinct()
+    cards_list = cards_queryset.distinct()
     
-    print("SQL Query:", cards_list.query)
-    
-    # 7. UI Logic (Pagination vs Patching)
+    # Step 7: UI Layer Pagination Processing
     if is_update:
         cards_to_render = cards_list
         has_next = False
@@ -524,23 +606,22 @@ def card_search_ajax(request):
         has_next = page_obj.has_next()
         next_page = page_obj.next_page_number() if has_next else None
 
-    # 8. Generate HTML Partial
+    # Step 8: Render the safe HTML Partial
     html = render_to_string('components/search_results_partial.html', {
         'cards': cards_to_render,
         'is_refresh': is_update
     }, request=request)
 
-    # 9. Return JSON Response
     return JsonResponse({
         'html': html,
-        'table_data': [], # Add logic here if needed
+        'table_data': [], 
         'col_headers': CardSearchResult.listing_fields,
         'has_next': has_next,
         'next_page': next_page,
         'total_count': cards_list.count(),
         'server_time': timezone.now().isoformat()
     })
-    
+
 def get_card_item(request, card_id):
     card = get_object_or_404(Card, id=card_id)
         
@@ -561,11 +642,11 @@ def hold_card(request, csr_id):
     return JsonResponse({"success": 'true'}, status=200)
 
 @csrf_exempt
-def delete(request):
+def delete(request, card_id=None):
     print("delete", request)
     if request.method == 'POST':
-        print("POST")
-        card_id = request.POST.get('card_id')
+        #print("POST")
+        card_id = card_id or request.POST.get('card_id')
         collection_id = request.POST.get('collection_id')
         try:
             if card_id:
@@ -595,13 +676,13 @@ def convert_and_sanitize(field_data, csr):
 def update_csr_fields(request):
     if request.method != 'POST':
         return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
-    print("here", request)
+    #print("here", request)
     if request.body and len(request.body) > 0 :
         data = json.loads(request.body)
         csr_id = data["csrId"]
         all_fields = data["allFields"]
-        print(csr_id)
-        print(all_fields)
+        #print(csr_id)
+        #print(all_fields)
 
     if not csr_id:
         return JsonResponse({"error": True, "message": "Missing or invalid csrId"}, status=400)
@@ -626,6 +707,58 @@ def update_csr_fields(request):
     
     return JsonResponse({"success": True, "search_result":model_to_dict(csr, fields=CardSearchResult.calculated_fields) })
 
+@csrf_exempt
+def bulk_update_csr_fields(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        # Expecting a list of update objects: [{"csrId": 1, "allFields": {...}}, ...]
+        updates = data.get("updates", [])
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"error": True, "message": "Invalid JSON format"}, status=400)
+
+    results = []
+    errors = []
+    print(updates)
+    for item in updates:
+        print(item)
+        csr_id = item.get("csrId")
+        all_fields = item.get("allFields")
+
+        if not csr_id:
+            errors.append({"csrId": csr_id, "message": "Missing csrId"})
+            continue
+
+        try:
+            csr = CardSearchResult.objects.get(id=int(csr_id))
+            
+            # Apply your existing sanitization logic
+            field_data = convert_and_sanitize(all_fields, csr)
+            
+            if "group_key" in field_data:
+                csr.ebay_product_group = None
+            
+            csr.update_fields(field_data)
+            
+            # Append the successful update to results
+            results.append({
+                "csrId": csr_id,
+                "updated_data": model_to_dict(csr, fields=CardSearchResult.calculated_fields)
+            })
+            
+        except CardSearchResult.DoesNotExist:
+            errors.append({"csrId": csr_id, "message": "Not found"})
+        except Exception as e:
+            traceback.print_exc()
+            errors.append({"csrId": csr_id, "message": str(e)})
+
+    return JsonResponse({
+        "success": len(errors) == 0,
+        "results": results,
+        "errors": errors
+    })
 
 @csrf_exempt
 def refresh_lg_calcs(request, csr_id):
@@ -641,34 +774,38 @@ def update_li_fields(request):
         return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
 
     # Read form-encoded POST data
-    li_id = request.POST.get("li_id")
+    li_id = request.POST.get("li_id", None)
+    card_id = request.POST.get("card_id", None)
     fieldname = request.POST.get("field")
     fieldvalue = request.POST.get("value")
 
-    if not li_id or not fieldname:
+    if li_id:
+        listed_info = ListedInfo.objects.filter(id=int(li_id)).last()
+    elif card_id:
+        listed_info = ListedInfo.objects.filter(card_id=int(card_id)).last()
+
+    if not listed_info or not fieldname:
         return JsonResponse({"error": True, "message": "Missing parameters"}, status=400)
 
-    try:
-        listed_info = ListedInfo.objects.get(id=int(li_id))
-    except ListedInfo.DoesNotExist:
-        return JsonResponse({"error": True, "message": f"ListedInfo {li_id} not found"}, status=404)
 
     # Update the field
     if hasattr(listed_info, fieldname):
         setattr(listed_info, fieldname, fieldvalue)
         listed_info.save()
-        card = listed_info.card
-        asr = card.active_search_results
-        if asr.overall_status == StatusBase.PRICED:
-            asr.perform_status_update(StatusBase.REVIEWED)
-        card.save()
+
+        if (fieldname=="list_price"):
+            card = listed_info.card
+            asr = card.active_search_results
+            if asr.overall_status == StatusBase.PRICED:
+                asr.perform_status_update(StatusBase.REVIEWED)
+            card.save()
     else:
         return JsonResponse({"error": True, "message": f"Invalid field '{fieldname}'"}, status=400)
 
     return JsonResponse({"success": True})
 
 def async_lg_monitor(request):
-    since_str = request.GET.get('since')
+    since_str = request.GET.get('timeframe')
     group_ids = request.GET.getlist('ids[]')
     
     if not since_str or not group_ids:
@@ -795,6 +932,7 @@ def bulk_status_update(request, status_value):
 
     try:
         card_ids = request.POST.getlist('card_ids[]') 
+        force_price = request.POST.get('force_price') 
         
         if len(card_ids):    
             print("lenny", len(card_ids))       
@@ -807,7 +945,7 @@ def bulk_status_update(request, status_value):
         card_list = []
         
     for card in card_list:
-        card.active_search_results.perform_status_update(status_value)
+        card.active_search_results.perform_status_update(status_value, force_price)
 
     return JsonResponse({"success": True, "error": ""})
 

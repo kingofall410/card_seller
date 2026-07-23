@@ -3,6 +3,7 @@ from django.db import models
 from core.models.Cropping import CropParams, CroppedImage
 from core.models.Status import StatusBase
 from core.models.ListedInfo import ListedInfo
+from core.models.ListingStatus import ListingStatus
 import numpy as np
 import cv2
 from django.core.files.base import ContentFile
@@ -13,6 +14,11 @@ from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils.timezone import now
 import traceback
+from services.models.task import Task
+from django.db.models import Q
+from operator import attrgetter
+from taggit.managers import TaggableManager
+from core.models.TagGroup import TagGroup
 
 class CollectionStatus(models.TextChoices):
     
@@ -108,24 +114,65 @@ class Collection(models.Model):
         self.save(update_fields=['value'])
 
 class Card(models.Model):
-    upload_date = models.DateTimeField(auto_now_add=True)
     
-    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="cards")
+    upload_date = models.DateTimeField(auto_now_add=True)
+    modification_date = models.DateTimeField(auto_now=True)
 
-    reverse_id = models.CharField(max_length=100, blank=True)
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="cards")
+    master_card = models.ForeignKey('self', related_name='duplicates', null=True, blank=True, on_delete=models.SET_NULL)
+    
     uploaded_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_upload", null=True)
     portrait_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_cropped", null=True)
     cropped_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_portrait", null=True)
-
     reverse_image = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse", null=True)
     cropped_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_crop", null=True)
     portrait_reverse = models.OneToOneField(CroppedImage,  on_delete=models.CASCADE, related_name="card_as_reverse_portrait", null=True)
     
+    reverse_id = models.CharField(max_length=100, blank=True)    
     notes = models.TextField(blank=True)    
     value = models.FloatField(default=0.0)
-    modification_date = models.DateTimeField(auto_now=True)
 
+    tags = TaggableManager()
+    tag_groups = models.ManyToManyField(TagGroup, related_name='tagged_cards', blank=True)
 
+    @property
+    def primary_tag_group(self):
+        # Fetch the first tag group, or return a placeholder object/string if empty
+        print("hello")
+        print(",".join(x for x in self.tag_groups))
+        first_group = self.tag_groups.last()
+        return "Unassigned"
+
+    def get_tasks(self):
+        """Fetches all subclasses of Task pointing back to this specific card instance."""
+        return Task.objects.filter(
+            Q(listingtask__card=self) |
+            Q(pricingtask__card=self) |
+            Q(idtask__card=self) |
+            Q(confirmtask__card=self)
+        ).select_related(
+            'listingtask', 'pricingtask', 'idtask', 'confirmtask'
+        ).order_by('-created_at')
+
+    def get_statuses(self):
+        """Fetches all subclasses of Task pointing back to this specific card instance."""
+        return ListingStatus.objects.filter(listing_info__card=self).order_by('-create_date')
+
+    def get_combined_history(self):
+        """Interleaves tasks and statuses dynamically."""
+        
+        tasks = list(self.get_tasks())
+        for t in tasks:
+            t.history_type = 'task'
+            t.sort_date = getattr(t, 'executed_at', None) or t.scheduled_for
+            
+        statuses = list(self.get_statuses())
+        for s in statuses:
+            s.history_type = 'status'
+            s.sort_date = getattr(s, 'create_date', None) # or s.changed_at
+            
+        return sorted(tasks + statuses, key=attrgetter('sort_date'), reverse=True)
+        
     @property
     def safe_front_thumbnail_url(self):
         try:
@@ -171,7 +218,11 @@ class Card(models.Model):
     def re_sku(self):
         info = getattr(self, 'listed_card_info', None)
         if info and info.sku:
-            info.sku += "_2"
+            sku_base = f"{self.collection_id}-{self.id}-{self.active_search_results.id}"
+            if info.sku.find(sku_base) >= 0:
+                info.sku += "_2"
+            else:
+                info.sku = sku_base+"_A"
         elif info:
             info.sku = f"{self.collection_id}-{self.id}-{self.active_search_results.id}_2"
         else:
@@ -200,22 +251,23 @@ class Card(models.Model):
 
     def save(self, *args, **kwargs):
         print("Card save", self.id if self.pk else None)
+        is_new = self.pk is None
         try:
             info = getattr(self, 'listed_card_info', None)
-            asr = self.active_search_results
+            self.value = 0.0
+            if self.pk:
+                asr = self.active_search_results
+                if not self.master_card:
+                    self.master_card = self
 
-            if info and float(info.list_price) > 0.0:
-                print("if")
-                self.value = info.list_price
-                #if still moving toward listing
-                if asr.overall_status == StatusBase.PRICED:
-                    asr.perform_status_update(StatusBase.REVIEWED)
-            elif asr and asr.ebay_msrp:
-                print("else", asr.ebay_msrp)
-                self.value = asr.ebay_msrp
-            else:
-                self.value = 0.0
-            self.collection.update_value()
+                if info and float(info.list_price) > 0.0:
+                    self.value = info.list_price
+                    #if still moving toward listing
+                    if asr.overall_status == StatusBase.PRICED:
+                        asr.perform_status_update(StatusBase.REVIEWED)
+                elif asr and asr.ebay_msrp:
+                    self.value = asr.ebay_msrp
+                self.collection.update_value()
             super().save(*args, **kwargs)            
         except Exception as e:
             print(e)
@@ -320,7 +372,6 @@ class Card(models.Model):
             return None
         
     def clear_listed_info(self):
-        self.listed_card_info.clear()
         csr = self.active_search_results
         csr.ebay_product_group = None
         csr.save()

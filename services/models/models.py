@@ -25,6 +25,8 @@ class Settings(models.Model):
     ebay_user_auth_consent = models.CharField(max_length=250, blank=True, null=True)
     ebay_auth_code_unescaped = models.CharField(blank=True)
 
+    last_run_usered = models.BooleanField(default=False)
+
 
     nr_std_devs = models.FloatField(default=2.0)
 
@@ -121,8 +123,8 @@ class SettingsToken(models.Model):
             field_key=key,
             disabled_date__isnull=True
         ).filter(query).all()
-        print("JIP:", joined_input_phrases)
-        print("***", matching_tokens)
+        #print("JIP:", joined_input_phrases)
+        #print("***", matching_tokens)
         matching_tokens_sorted = sorted(
             matching_tokens,
             key=lambda token: (
@@ -222,7 +224,7 @@ class Season(SettingsToken):
     #this needs cleanup
     @classmethod    
     def match_extract(cls, input_str, current_tokens, key, applied_settings, return_first_match=True, max_len=4):
-        #print("me:", input_str)
+        print("me input:", input_str)
         title_clean = input_str.lower()
         reduced = input_str
         normalized = None
@@ -230,13 +232,26 @@ class Season(SettingsToken):
         # First: match compound years like "1996-97", "1996 97", etc.
         compound_match = re.search(r"\b(19\d{2}|20[0-2]\d)[\s\-–](\d{2})\b", title_clean)
         if compound_match:
-            main, tail = int(compound_match.group(1)), int(compound_match.group(2))
-            if 1900 <= main <= 2035 and (tail < 10 or tail > 70):
-                normalized = normalized = f"{main} {compound_match.group(2)}"
-                current_tokens[key] = [normalized]
-                reduced = re.sub(re.escape(compound_match.group(0)), "", input_str, flags=re.IGNORECASE).strip()
-                new_tokens = [Season.create(value=normalized, settings=applied_settings, field=key)]
-                return reduced, current_tokens, new_tokens
+            main = int(compound_match.group(1))
+            tail = int(compound_match.group(2))
+            
+            # Calculate what the valid expected tail should be mathematically
+            expected_next_year = main + 1
+            expected_tail = expected_next_year % 100  # Extracts the last two digits (e.g., 2000 -> 0)
+
+            # Validate that the parsed tail exactly equals the calculated expected tail
+            if tail == expected_tail:
+                if 1900 <= main <= 2035 and (tail < 10 or tail > 70):
+                    normalized = f"{main} {compound_match.group(2)}"
+                    current_tokens[key] = [normalized]
+                    
+                    console.log(f"[Debug] Compound year matched and verified sequential: {normalized}")
+                    
+                    reduced = re.sub(re.escape(compound_match.group(0)), "", input_str, flags=re.IGNORECASE).strip()
+                    new_tokens = [Season.create(value=normalized, settings=applied_settings, field=key)]
+                    return reduced, current_tokens, new_tokens
+            else:
+                print(f"[Debug] Rejected non-sequential compound year: {main}-{compound_match.group(2)}")
 
         # Second: match standalone 4-digit years
         single_match = re.search(r"\b(19\d{2}|20[0-2]\d)\b", title_clean)
@@ -271,7 +286,6 @@ class Subset(SettingsToken):
         
         return subs_obj
     
-    
 class City(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="cities")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="cities", default=1)
@@ -284,6 +298,7 @@ class Team(SettingsToken):
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="teams", default=1)
     home_city = models.ForeignKey(City, on_delete=models.CASCADE, related_name="teams", default=1)
     
+
     def __str__(self):
         return f"{self.home_city.raw_value} {self.raw_value}"
     
@@ -297,6 +312,7 @@ class Team(SettingsToken):
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key", "home_city") 
 
+
 class KnownName(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="names") 
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="names", default=1)
@@ -304,6 +320,18 @@ class KnownName(SettingsToken):
     is_first = models.BooleanField(default=False, null=True, blank=True)
     is_last = models.BooleanField(default=False, null=True, blank=True)
     
+
+    def update_team(self, team):
+        print("update_team", team, self.raw_value) 
+        self.primary_team = team
+        self.save()
+
+        
+    def update_city(self, city):
+        print("update_city", city, self.raw_value) 
+        self.primary_city = city
+        self.save()
+
     @classmethod
     def create(cls, value, settings, field, is_first=False, is_last=False):
         name_obj, _ = KnownName.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, is_full=(value.find(" ") > -1), is_first=is_first, is_last=is_last)
@@ -429,6 +457,22 @@ class CardName(SettingsToken):
     
     class Meta:
         unique_together = ("raw_value", "parent_settings", "field_key")
+
+class PlayerYearTeamCity(models.Model):
+    player_name = models.ForeignKey(KnownName, on_delete=models.CASCADE, related_name="pyt_mappings")
+    year = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="pyt_mappings")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="pyt_mappings", null=True)
+    city = models.ForeignKey(City, on_delete=models.CASCADE, related_name="pyt_mappings", null=True)
+
+    class Meta:
+        unique_together = ("player_name", "year")
+    
+    @classmethod
+    def get_team(cls, player, year):
+        pyt = PlayerYearTeamCity.objects.filter(player_name=player, year=year)
+        if pyt.exists():
+            return pyt.first()
+        return None
 
 '''
 class CardSet(models.Model):

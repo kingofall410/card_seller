@@ -1,183 +1,382 @@
 <style>
-.card-item {
-    position: relative; /* Essential for absolute positioning of the icon */
+/* --- Card Framework --- */
+.card-item { position: relative; }
+.card-checkbox { position: absolute; top: 8px; left: 8px; z-index: 100; margin: 0; line-height: 1; }
+.card-chk-input { cursor: pointer; width: 16px; height: 16px; margin: 0; }
+.image-wrapper { position: relative; }
+
+/* --- Duplicate Indicator Badge --- */
+.duplicate-qty-badge {
+    position: absolute; bottom: 6px; right: 6px; z-index: 10;
+    background: rgba(244, 244, 244, 0.95); color: #333333; border: 1px solid #bbbbbb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size: 11px; font-weight: bold;
+    padding: 0 5px; height: 18px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    letter-spacing: -0.3px; user-select: none;
 }
 
-.exclude-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
+/* --- Context Dropdown Systems --- */
+.card-menu-container { position: absolute; top: 8px; right: 8px; z-index: 100; display: flex; align-items: center; }
+.menu-trigger-btn {
+    background: transparent !important; color: #000000; border: 1px solid #dddddd; border-radius: 4px;
+    width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.2s;
+}
+.menu-trigger-btn:hover, .menu-trigger-btn.active { background: rgba(0, 0, 0, 0.05) !important; }
+
+.card-dropdown-menu {
+    display: none; position: absolute; right: 0; top: 30px;
+    background: #ffffff !important; border: 1px solid #000000;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.15); border-radius: 4px; width: 185px; overflow: hidden;
+}
+.card-dropdown-menu a { display: block; padding: 8px 12px; color: #000000; text-decoration: none; font-size: 13px; border-bottom: 1px solid #eeeeee; }
+.card-dropdown-menu a:hover { background: #000000 !important; color: #ffffff !important; }
+
+.card-menu-actions-group { border-top: 2px solid #000000; background: #fdfdfd; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+.card-menu-actions-group button {
+    background: transparent; border: none; width: 100%; text-align: left; padding: 6px 8px;
+    font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    color: #333333; border-radius: 2px; transition: all 0.15s ease;
+}
+.card-menu-actions-group button:hover { background: #000000; color: #ffffff; }
+
+/* --- Global State Modifiers --- */
+.card-item.selecting-parent { outline: 3px solid #000000; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); }
+.card-item.is-excluded { opacity: 0.4; filter: grayscale(1); }
+#header-info-mount { line-height: 1.2; min-height: 40px; display: flex; flex-direction: column; justify-content: center; }
+#header-info-mount a:hover { text-decoration: underline !important; }
+
+/* Make the quantity badge feel like a clickable button on hover */
+.duplicate-qty-badge {
+    position: absolute; bottom: 6px; right: 6px; z-index: 10;
+    background: rgba(244, 244, 244, 0.95); color: #333333; border: 1px solid #bbbbbb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size: 11px; font-weight: bold;
+    padding: 0 5px; height: 18px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    letter-spacing: -0.3px; user-select: none;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 50%;
-    width: 22px;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ff4444;
-    border: 1px solid #ddd;
-    transition: all 0.2s;
+    transition: background 0.15s, transform 0.1s;
+}
+.duplicate-qty-badge:hover {
+    background: #000000 !important;
+    color: #ffffff !important;
+    border-color: #000000;
+    transform: scale(1.05);
 }
 
-.exclude-btn:hover {
-    background: #ff4444;
-    color: #fff;
-    border-color: #ff4444;
-    transform: scale(1.1);
+/* Subtle edit trigger for items with 0 quantity */
+.qty-add-trigger {
+    position: absolute; bottom: 6px; right: 6px; z-index: 10;
+    background: rgba(244, 244, 244, 0.6); color: #888888; border: 1px dashed #cccccc;
+    font-size: 10px; font-weight: bold; width: 18px; height: 18px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.15s;
 }
-
-/* Visual cue for excluded cards (optional) */
-.card-item.is-excluded {
-    opacity: 0.4;
-    filter: grayscale(1);
-}
-
-#header-info-mount {
-    line-height: 1.2;
-    min-height: 40px; /* Prevents layout jump when exclusions appear */
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-/* Make our custom "Unhide" link look like a real link */
-#header-info-mount a:hover {
-    text-decoration: underline !important;
+.qty-add-trigger:hover {
+    background: #000000; color: #ffffff; border-style: solid; border-color: #000000;
 }
 </style>
 
+<template id="card-item-blueprint-shell">
+    <div class="card-item" data-id="" data-year="" data-brand="" data-value="" data-overall_status="">
+        <div class="card-checkbox">
+            <input type="checkbox" name="selected_cards" class="card-chk-input">
+        </div>
+        <div class="card-menu-container">
+            <button class="menu-trigger-btn" title="Card Options">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <div class="card-dropdown-menu">
+                <div class="card-menu-actions-group">
+                    <button type="button" class="btn-action" data-action="archive"><span>🗄️</span> Archive Card</button>
+                    <button type="button" class="btn-action" data-action="resku"><span>🏷️</span> Re-SKU Item</button>
+                    <button type="button" class="btn-action" data-action="refresh"><span>🔄</span> Refresh Status</button>
+                    <button type="button" class="btn-action" data-action="crop"><span>✂️</span> Crop Image</button>
+                    <button type="button" class="btn-action" data-action="price"><span>💲</span> Price Card</button>
+                    <button type="button" class="btn-action" data-action="status" data-status="held"><span>✋</span> Hold Card</button>
+                    <button type="button" class="btn-action" data-action="status" data-status="reviewed"><span>🕶️</span> Review Card</button>
+                    <button type="button" class="btn-action" data-action="test"><span>🧪</span> Run System Test</button>
+                    <!-- Quantity option removed from dropdown menu list -->
+                    <button type="button" class="btn-action action-btn-delete" data-action="delete" style="color: #dc3545; font-weight: bold;"><span>🗑️</span> Delete Card</button>
+                </div>
+            </div>
+        </div>
+        <!-- Note: We added a CSS pointer-events rule or stopped bubbling in JS so links don't fire when clicking the badge -->
+        <a href="" target="_blank" class="card-main-link">
+            <div class="card-meta node-name"><strong></strong></div>
+            <div class="card-meta node-status" style="font-size:13px; font-weight:500;"></div>
+            <div class="card-meta node-details"></div>
+            <div class="card-meta node-pricing"></div>
+            <div class="image-wrapper" onmouseenter="loadReverse(this)">
+                <img src="" class="thumbnail default" loading="lazy">
+                <img data-src="" class="thumbnail hover">
+                <div class="qty-badge-mount"></div>
+            </div>
+        </a>
+        <div class="pricing-badge-mount">
+            <div class="mini-stacked-container" style="--min: 0; --max: 0; --avg-low: 0; --avg-high: 0; --avg: 0;"></div>
+        </div>
+        <div class="node-sku-footer" style="color:#000; font-size:10px;"></div>
+    </div>
+</template>
+
 <script>
-    function toggleExclusion(cardId) {
-        console.group(`=== Exclude & Sync: Card ID ${cardId} ===`);
+    window.duplicatePairingState = window.duplicatePairingState || { isAssigning: false, childCardId: null };
+    window.excludedRowsCache = window.excludedRowsCache || {};
+
+    const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    const getCsrf = () => typeof CardLiveFeedUpdater !== 'undefined' ? CardLiveFeedUpdater.getCsrfToken() : '';
+
+    function drawOrHydrateCardComponent(card, $targetElement = null) {
+        const $el = $targetElement || $(document.getElementById('card-item-blueprint-shell').content.cloneNode(true)).find('.card-item');
         
-        const table = $('#card-data-engine').DataTable();
-        const stringId = cardId.toString().trim();
-        
-        // Fetch active exclusions list from session storage
-        let exclusions = JSON.parse(sessionStorage.getItem('exclusions') || "[]");
+        $el.attr({
+            'id': `card-${card.id}`, 'data-id': card.id, 'data-year': card.year || '',
+            'data-brand': card.brand || '', 'data-value': card.value || 0, 'data-overall_status': card.overall_status || ''
+        });
 
-        if (exclusions.includes(stringId)) {
-            // --- UNDO EXCLUSION (RESTORE CARD) ---
-            console.log(`Action: Restoring card ${stringId}`);
-            
-            const cachedRowData = window.excludedRowsCache[stringId];
-            
-            if (cachedRowData) {
-                // 1. Add the row back into the DataTable memory
-                table.row.add(cachedRowData);
-                delete window.excludedRowsCache[stringId];
-                
-                // 2. Remove from exclusions list
-                exclusions = exclusions.filter(id => id !== stringId);
-                sessionStorage.setItem('exclusions', JSON.stringify(exclusions));
-                
-                console.log(`Card ${stringId} added back to DataTable memory.`);
-            } else {
-                console.warn(`Could not find cached row data for Card ${stringId}. Was the page reloaded?`);
-            }
-
-        } else {
-            // --- APPLY EXCLUSION (REMOVE CARD) ---
-            console.log(`Action: Excluding card ${stringId}`);
-            
-            // 1. Locate the row in the DataTable memory (ID is in Column 8)
-            const row = table.row((idx, data) => data[8].toString().trim() === stringId);
-
-            if (row.any()) {
-                // 2. Cache the raw row data so we can rebuild it on Undo
-                window.excludedRowsCache[stringId] = row.data();
-                
-                // 3. Delete the row from the DataTable engine completely
-                row.remove();
-                
-                // 4. Save to session storage
-                exclusions.push(stringId);
-                sessionStorage.setItem('exclusions', JSON.stringify(exclusions));
-                
-                console.log(`Card ${stringId} purged from active memory & cached.`);
-            } else {
-                console.error(`Card row with ID ${stringId} not found in DataTable.`);
-            }
+        if (card.overall_status) {
+            $el.removeClass((i, cls) => (cls.match(/(^|\s)status-\S+/g) || []).join(' ')).addClass(`status-${card.overall_status.toLowerCase()}`);
         }
 
-        // 3. REDRAW THE TABLE
-        // This updates the grid and physical "Showing X of Y" layout
-        console.log("Redrawing Table...");
-        table.draw(false); 
+        $el.find('.card-chk-input').val(card.id).attr('id', `select-card-${card.id}`);
+        $el.find('.card-main-link').attr('href', `/card/${card.id}/`).attr('onclick', `launchSequence('${card.id}');`);
+        $el.find('.node-name strong').text(card.name || 'Unknown Card');
+        
+        const $status = $el.find('.node-status').text(card.overall_status || 'Unknown');
+        (card.task_time && card.task_time != "None") ? $status.attr('title', card.task_time).css('cursor', 'help') : $status.removeAttr('title').css('cursor', 'default');
 
-        // 4. FORCE REBUILD PANES
-        // Now that the data has been physically removed from table memory,
-        // SearchPanes is forced to decrement its counts because the card literally doesn't exist anymore.
-        console.log("Rebuilding SearchPanes...");
-        table.searchPanes.rebuildPane(undefined, true);
+        $el.find('.node-details').text(`${card.year || ''} ${card.brand || ''} ${card.subset || ''}`.trim().replace(/\s+/g, ' ') || 'N/A');
+        
+        if (card.list_price > 0) $el.find('.node-pricing').text(`List: ${usd.format(card.list_price || 0)}`)
+        else if (card.msrp > 0)  $el.find('.node-pricing').text(`MSRP: ${usd.format(card.msrp || 0)}`)
+        else $el.find('.node-pricing').text(`Value: ${usd.format(card.value || 0)}`)
+        
+        if (card.front_url) $el.find('.thumbnail.default').attr('src', card.front_url);
+        if (card.reverse_url) $el.find('.thumbnail.hover').attr('data-src', card.reverse_url);
 
-        console.groupEnd();
+        // Render quantity badge if > 0, otherwise render interactive small add badge
+        const badgeHtml = card.qty > 1 
+            ? `<div class="duplicate-qty-badge" title="Quantity: ${card.qty}">x${card.qty}</div>` 
+            : `<div class="qty-add-trigger" title="Set Quantity">+</div>`;
+        $el.find('.qty-badge-mount').html(badgeHtml);
+
+        $el.find('.node-sku-footer').text(card.sku || `${card.collection_id || 0}-${card.id}-${card.csr_id || 0}`);
+        
+        $el.find('.mini-stacked-container').css({
+            '--min': card.min_offer ?? 0, '--max': card.max_offer ?? 0,
+            '--avg-low': card.min_avg ?? 0, '--avg-high': card.max_avg ?? 0, '--avg': card.value ?? 0
+        });
+
+        return $el;
     }
-    function clearExclusions() {
-        console.log("Restoring all excluded cards to baseline...");
-        const table = $('#card-data-engine').DataTable();
-        
-        // 1. Grab all cached card objects
-        const cachedIds = Object.keys(window.excludedRowsCache || {});
-        
-        if (cachedIds.length > 0) {
-            cachedIds.forEach(id => {
-                const rowData = window.excludedRowsCache[id];
-                table.row.add(rowData); // Inject back into DT memory
-            });
+
+    $(document).ready(function() {
+        const $body = $('body');
+
+        // Context Menu Pop Trigger
+        $body.on('click', '.menu-trigger-btn', function(e) {
+            e.stopPropagation(); e.preventDefault();
+            const $btn = $(this);
+            const $menu = $btn.next('.card-dropdown-menu');
+            $('.card-dropdown-menu').not($menu).hide();
+            $('.menu-trigger-btn').not($btn).removeClass('active');
+            $menu.toggle();
+            $btn.toggleClass('active', $menu.is(':visible'));
+        });
+
+        $(document).on('click', function() {
+            $('.card-dropdown-menu').hide();
+            $('.menu-trigger-btn').removeClass('active');
+        });
+
+        // Exclusion Layer Trigger Hooks
+        $body.on('click', '.action-btn-exclude', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            toggleExclusion($(this).closest('.card-item').data('id'));
+        });
+
+        // Delete Trigger Hook
+        $body.on('click', '.action-btn-delete', function(e) {
+            e.preventDefault(); e.stopPropagation();
+        });
+
+        // Direct-Click Badge Quantity Update System
+        $body.on('click', '.qty-badge-mount .duplicate-qty-badge, .qty-badge-mount .qty-add-trigger', function(e) {
+            e.preventDefault(); e.stopPropagation(); // Stop parent anchor click execution!
             
-            // Clear local memory cache
-            window.excludedRowsCache = {};
+            const $badge = $(this);
+            const $card = $badge.closest('.card-item');
+            const $id = $card.data('id');
+            
+            // Check current qty: look at badge text or default to 0 if we hit the '+' add trigger
+            const currentQty = $badge.hasClass('qty-add-trigger') 
+                ? 0 
+                : (parseInt($badge.text().replace('x', '')) || 0);
+
+            const inputQty = prompt(`Enter new quantity for Card ${$id}:`, currentQty);
+            if (inputQty === null) return; // User cancelled
+                
+            const newQty = parseInt(inputQty);
+            if (isNaN(newQty) || newQty < 0) {
+                alert("Please enter a valid non-negative integer.");
+                return;
+            }
+
+            const targetField = "list_qty";
+            const targetValue = newQty;
+
+            console.log(`[DEBUG] Dispatching update for Card ${$id}: ${targetField} → ${targetValue}`);
+
+            $.ajax({
+                url: "/update_li_fields/",
+                method: "POST",
+                headers: { 
+                    'X-CSRFToken': getCsrf()
+                },
+                data: {
+                    card_id: $id,
+                    field: targetField,
+                    value: targetValue
+                },
+                success: (response) => {
+                    console.log(`[DEBUG] Successfully updated Card ${$id}: ${targetField} → ${targetValue}`);
+                    
+                    const $badgeMount = $card.find('.qty-badge-mount');
+                    if (targetValue > 0) {
+                        $badgeMount.html(`<div class="duplicate-qty-badge" title="Quantity: ${targetValue}">x${targetValue}</div>`);
+                    } else {
+                        $badgeMount.html(`<div class="qty-add-trigger" title="Set Quantity">+</div>`);
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error(`[ERROR] update_li_fields failed! Status: ${xhr.status}. Response:`, xhr.responseText);
+                }
+            });
+        });
+
+        // Duplicate Selection Pipeline Anchor
+        $body.on('click', '.action-btn-duplicate', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            const childId = $(this).closest('.card-item').data('id');
+            window.duplicatePairingState = { isAssigning: true, childCardId: childId };
+            $(`#card-${childId}`).addClass('selecting-parent');
+            
+            $('.card-item').on('click.pairing', function(pe) {
+                pe.preventDefault(); pe.stopPropagation();
+                const parentId = $(this).data('id');
+                if (parentId === window.duplicatePairingState.childCardId) return;
+                
+                $('.card-item').removeClass('selecting-parent').off('click.pairing');
+                $.ajax({
+                    url: 'set-duplicate/', method: 'POST', headers: { 'X-CSRFToken': getCsrf() },
+                    data: { child_ids: [window.duplicatePairingState.childCardId], parent_id: parentId },
+                    success: () => { toggleExclusion(window.duplicatePairingState.childCardId); }
+                });
+                window.duplicatePairingState = { isAssigning: false, childCardId: null };
+            });
+        });
+
+        // Unified Component Action API Pipeline Routing Hub
+        $body.on('click', '.btn-action', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            const $btn = $(this);
+            const $card = $btn.closest('.card-item');
+            const id = $card.data('id');
+            const action = $btn.data('action');
+
+            if (action === 'archive' && !confirm(`Archive card ${id}?`)) return;
+            if (action === 'crop') { location.href = `/crop/${id}/`; return; }
+            
+            if (action === 'delete') {
+                if (!confirm(`⚠️ WARNING: Are you sure you want to PERMANENTLY delete Card ID: ${id}?\nThis action cannot be undone.`)) return;
+            }
+
+            let url = `/refresh_listing_status/${id}/`;
+            let settings = { method: 'POST', headers: { 'X-CSRFToken': getCsrf() } };
+
+            if (action === 'archive') url = `/archive/${id}/`;
+            if (action === 'delete') url = `/delete_card/${id}/`; 
+            if (action === 'resku') url = `/re_sku/${id}/`;
+            if (action === 'test') url = `/single_card_test/${id}/`;
+            if (action === 'price') url = `/async_price_card/${$card.attr('data-csr_id') || 0}/`;
+            if (action === 'status') {
+                url = `/bulk_status_update/${$btn.data('status')}/`;
+                const fd = new FormData();
+                fd.append('card_ids[]', id);
+                fd.append('force_price', 'true');
+                settings = { method: 'POST', headers: { 'X-CSRFToken': getCsrf() }, body: fd };
+            }
+
+            console.log(`[DEBUG] Executing Action: ${action} via endpoint: ${url}`);
+
+            fetch(url, settings)
+                .then(res => {
+                    if (!res.ok) throw new Error(`Server returned HTTP Status Code: ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (action === 'delete' && data.success) {
+                        console.log(`[DEBUG] Card ${id} successfully deleted from backend.`);
+                        $card.fadeOut(400, function() { 
+                            try {
+                                const table = $('#card-data-engine').DataTable();
+                                const row = table.row((idx, d) => d[8].toString().trim() === id.toString().trim());
+                                if (row.any()) row.remove().draw(false);
+                            } catch(dtErr) {
+                                $card.remove();
+                            }
+                        });
+                    } else if (action === 'status' && data.success) {
+                        fetch(`/refresh_listing_status/${id}/`, { method: 'POST', headers: { 'X-CSRFToken': getCsrf() } })
+                            .then(r => r.json())
+                            .then(d => typeof patchCardUpdates === 'function' && patchCardUpdates(d));
+                    } else if (typeof patchCardUpdates === 'function') {
+                        patchCardUpdates(data);
+                    }
+                })
+                .catch(err => console.error("API Transmission Exception:", err));
+        });
+    });
+
+    // =====================================================================
+    // DATA DATA ENGINE IN-MEMORY CACHE EXCLUSION ENGINE
+    // =====================================================================
+    function toggleExclusion(cardId) {
+        const table = $('#card-data-engine').DataTable();
+        const sId = cardId.toString().trim();
+        let ex = JSON.parse(sessionStorage.getItem('exclusions') || "[]");
+
+        if (ex.includes(sId)) {
+            if (window.excludedRowsCache[sId]) {
+                table.row.add(window.excludedRowsCache[sId]);
+                delete window.excludedRowsCache[sId];
+                ex = ex.filter(id => id !== sId);
+            }
+        } else {
+            const row = table.row((idx, d) => d[8].toString().trim() === sId);
+            if (row.any()) {
+                window.excludedRowsCache[sId] = row.data();
+                row.remove();
+                ex.push(sId);
+            }
         }
-        
-        // 2. Clear Session Storage
-        sessionStorage.removeItem('exclusions');
-        
-        // 3. FORCE SearchPanes to flush selections & wipe its cache
-        if (table.searchPanes && typeof table.searchPanes.clearSelections === 'function') {
-            table.searchPanes.clearSelections(); 
-        }
-        
-        // 4. Redraw the table first to populate all rows in memory
+        sessionStorage.setItem('exclusions', JSON.stringify(ex));
         table.draw(false);
-        
-        // 5. Rebuild the panes from the fresh, complete memory state
-        // Passing (undefined, false) forces the panes to abandon any cached states
-        table.searchPanes.rebuildPane(undefined, false);
-        
-        console.log("Collection fully rebaselined and pane counts reset! 🔄");
+        if (table.searchPanes) table.searchPanes.rebuildPane(undefined, true);
+    }
+
+    function clearExclusions() {
+        const table = $('#card-data-engine').DataTable();
+        Object.keys(window.excludedRowsCache || {}).forEach(id => table.row.add(window.excludedRowsCache[id]));
+        window.excludedRowsCache = {};
+        sessionStorage.removeItem('exclusions');
+        if (table.searchPanes?.clearSelections) table.searchPanes.clearSelections();
+        table.draw(false);
+        table.searchPanes?.rebuildPane(undefined, false);
     }
 </script>
-<div id="card-{{ card.id }}" 
-     class="card-item status-{{ card.overall_status|lower }}" 
-     data-id="{{ card.id }}" 
-     data-year="{{ card.year }}" 
-     data-brand="{{ card.brand }}" 
-     data-value="{{ card.value }}" 
-     data-overall_status="{{ card.overall_status }}">
-
-    <div class="exclude-btn" onclick="toggleExclusion('{{ card.id }}')" title="Exclude from sequence">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-    </div>
-    <div class="card-checkbox">
-        <input type="checkbox" name="selected_cards" value="{{ card.id }}" id="select-card-{{ card.id }}">
-    </div>
-
-    <a href="/card/{{ card.id }}/" target="_blank" onclick="launchSequence('{{ card.id }}');" class="card-main-link">
-        <div class="card-meta"><strong>{{ card.name|default:"Unknown Card" }}</strong></div>
-        <div class="card-meta">{{ card.overall_status }}</div>
-        <div class="card-meta">
-            {{ card.year }} {{ card.brand }} {{ card.subset }}
-        </div>
-        <div class="card-meta">${{ card.value|floatformat:2 }}</div>
-        
-        <div class="image-wrapper" onmouseenter="loadReverse(this)">
-            <img src="{{ card.front_url }}" class="thumbnail default" loading="lazy">
-            <img data-src="{{ card.reverse_url }}" class="thumbnail hover">
-        </div>
-    </a>
-    {% include "components/pricing_badge_small.html" with min_offer=card.min_offer max_offer=card.max_offer avg_low=card.min_avg avg_high=card.max_avg average=card.value scale_max=card.scale_max  %}
-    <div class="card-meta" style="color:#000; font-size:10px;">{% if card.sku %} {{ card.sku }} {% else %} {{ card.collection_id }}-{{ card.id }}-{{ card.csr_id }} {% endif %}</div>
-</div>

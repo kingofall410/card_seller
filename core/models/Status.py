@@ -15,6 +15,7 @@ class StatusBase(models.TextChoices):
     REVIEWED = "reviewed", "Reviewed"
     SOLD = "sold", "Sold",
     CONFIRMED = "confirmed", "Confirmed"
+    UNKNOWN = "unknown", "Unknown"
     #pending, failed
 
     #task

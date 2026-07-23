@@ -2,8 +2,10 @@ from django.contrib import admin
 from .models.Card import Card, CardSearchResult, Collection
 from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup
 from core.models.Group import ProductGroup
-from core.models.ListedInfo import ListedInfo, ListingStatus
+from core.models.ListedInfo import ListedInfo
+from core.models.ListingStatus import ListingStatus
 from core.models.Cropping import CropParams, CroppedImage
+from core.models.TagGroup import TagGroup
 from core.models.Archive import CardArchive, CSRArchive, CroppedImageArchive, ListedInfoArchive
 
 @admin.register(Card)
@@ -42,6 +44,10 @@ admin.site.register(CroppedImageArchive)
 
 @admin.register(ProductGroup)
 class ProductGroupAdmin(admin.ModelAdmin):
+    list_display = ['id', 'group_key', 'group_title', 'size']
+
+@admin.register(TagGroup)
+class TagGroupAdmin(admin.ModelAdmin):
     list_display = ['id', 'group_key', 'group_title', 'size']
 
 

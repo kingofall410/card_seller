@@ -137,7 +137,10 @@
             🗂️ COLLECTION ▾
         </button>
         <div class="dropdown-menu" style="min-width: 400px;">
-            <a href="{% url 'manage_collection' %}" class="nav-link">🗃️ All Collections...</a>
+            <a href="{% url 'collection' '0'%}" class="nav-link">🗃️ All Collections...</a>
+            <a href="{% url 'collection' '0'%}?timeframe=7&status=listed&status=confirmed&status=sold&status=unlisted&status=failed" class="nav-link">🗃️ Latest Listings...</a>
+            <a href="{% url 'collection' '0'%}?timeframe=7&status=staged&status=failed" class="nav-link">🗃️ Recently Staged...</a>
+            <a href="{% url 'collection' '0'%}?timeframe=120&status=reviewed" class="nav-link">🗃️ Ready to List...</a>
             <a href="{% url 'new_collection' %}" class="nav-link">✨ New Collection...</a>
             <hr style="margin:0; border-color:#eee;">
             {% get_collections as collections %}
@@ -166,6 +169,15 @@
                 </div>
             </div>
             <a href="{% url 'calendar' %}" class="nav-link">📅 Task Calendar</a>
+            
+            <hr style="margin:0; border-color:#eee;">
+            <a href="#" class="nav-link" style="color: #d9534f;" onclick="triggerClearRecentTasks(event)">
+                🧹 Clear Recent Pending...
+            </a>
+            <form id="clear-tasks-form" method="POST" action="{% url 'clear_recent_tasks' %}" style="display: none;">
+                {% csrf_token %}
+                <input type="hidden" name="minutes" id="clear-tasks-minutes" value="15">
+            </form>
         </div>
     </div>
 
@@ -197,10 +209,10 @@
                 Pending: <span id="task-pending-count">0</span>
             </span>
             <span class="monitor-badge bg-success">
-                Success: <span id="task-success-count">0</span>
+                <span id="task-success-count">0</span>
             </span>
             <span class="monitor-badge bg-failed">
-                Failed: <span id="task-failed-count">0</span>
+                <span id="task-failed-count">0</span>
             </span>
         </div>
     </div>
@@ -216,6 +228,8 @@
         const allMenus = document.querySelectorAll(".dropdown-menu");
         
         if (!isButton) {
+            // Keep menu open if clicking elements inside forms/submenus within the dropdown container
+            if (e.target.closest('.dropdown-menu')) return;
             allMenus.forEach(m => m.style.display = "none");
             return;
         }
@@ -224,6 +238,25 @@
         allMenus.forEach(m => { if(m !== currentMenu) m.style.display = "none"; });
         currentMenu.style.display = currentMenu.style.display === "block" ? "none" : "block";
     });
+
+    // NEW: Action handler prompting lookback window configuration before firing clear post loop
+    function triggerClearRecentTasks(event) {
+        event.preventDefault();
+        
+        const minutesInput = prompt("Clear pending tasks created within how many minutes?", "15");
+        if (minutesInput === null) return; // Cancelled
+        
+        const minutes = parseInt(minutesInput, 10);
+        if (isNaN(minutes) || minutes <= 0) {
+            alert("Please enter a valid number of minutes.");
+            return;
+        }
+        
+        if (confirm(`Are you sure you want to permanently delete all pending tasks created within the last ${minutes} minutes?`)) {
+            document.getElementById('clear-tasks-minutes').value = minutes;
+            document.getElementById('clear-tasks-form').submit();
+        }
+    }
 
     // --- Dual Engine Monitoring System ---
     const MonitorController = {
@@ -330,7 +363,6 @@
         },
 
         init() {
-            // Trigger always-on Card monitoring
             this.fetchCardStatuses();
             this.cardIntervalId = setInterval(() => this.fetchCardStatuses(), 60000);
 

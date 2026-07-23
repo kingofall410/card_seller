@@ -10,6 +10,11 @@ class ProductGroup(models.Model):
     group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
     group_title = models.CharField(max_length=50, blank=True, null=True)
     group_image_link = models.CharField(max_length=250, null=True, blank=True)
+    replaced_by = models.ForeignKey('self', blank=False, null=True, on_delete=models.SET_NULL, related_name='replaces')
+
+    @property
+    def value(self):
+        return sum(p.parent_card.value for p in self.products)
 
     #variation_title_struct = models.ForeignKey(FieldStructure, related_name="groups", on_delete=models.DO_NOTHING)
   
@@ -98,8 +103,16 @@ class ProductGroup(models.Model):
 
     def export_to_ebay_variation_group(self, new_csrs):
         
-        csrs = new_csrs+list(self.products.filter(overall_status=StatusBase.LISTED))
-        print("csrs", csrs)
+        #if the group has been replaced since this card was staged, move it to the replacement group
+        if self.replaced_by:
+            print(f"Group {self.group_key} has been replaced by {self.replaced_by.group_key}, moving CSRs to new group")
+            for csr in new_csrs:
+                self.replaced_by.add_to_product_group_internal(csr)
+            self.replaced_by.save()
+            return self.replaced_by.export_to_ebay_variation_group(new_csrs)
+        
+        csrs = new_csrs + list(self.products.filter(Q(overall_status=StatusBase.LISTED) | Q(overall_status=StatusBase.SOLD) | Q(overall_status=StatusBase.CONFIRMED)))
+        print(f"Adding {len(new_csrs)} new csrs to '{self.group_title}' total size to be: {len(csrs)}")
         sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
         
         variant_skus = [(csr.parent_card.listed_card_info.sku) for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]

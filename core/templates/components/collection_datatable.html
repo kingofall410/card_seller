@@ -1,0 +1,74 @@
+<table id="card-data-engine" style="display:none;">
+    <thead>
+        <tr>
+            <th><input type="checkbox" id="select-all-table"></th>
+            <th>Year</th>
+            <th>Brand</th>
+            <th>Subset</th>
+            <th>Card Name</th>
+            <th>Parallel</th>
+            <th>Full Name</th>
+            <th>Card Number</th>
+            <th>City</th>
+            <th>Team</th>
+            <th>Overall Status</th>
+            <th>Group ID</th>
+            <th>Collection</th>
+            <th>Value ($)</th>
+            <th>ID</th>
+            <th>Modified</th>
+            <th>Groups</th>
+            <th>Val Range</th>
+            <th>Front URL</th>
+            <th>CSR ID</th>
+            <th>Task Time</th>
+            <th>Primary Tag Group</th>
+            <th>Reverse URL</th>
+            <th>Front HD URL</th>
+            <th>Reverse HD URL</th>
+            <th>MSRP</th>
+            <th>List Price</th>            
+            <th>Natural Sort</th>
+            <th>All Price Sort</th>
+            <th>Legacy MSRP</th>
+            <th>Qty</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for card in cards %}
+        <tr>
+            <td></td>
+            <td>{{ card.year|default:"" }}</td>
+            <td>{{ card.brand|default:"" }}</td>
+            <td>{{ card.subset|default:"" }}</td>
+            <td>{{ card.card_name|default:"" }}</td>
+            <td>{{ card.parallel|default:"" }}</td>
+            <td>{{ card.name|default:"Unknown" }}</td>
+            <td>{{ card.card_nr|default:"" }}</td>
+            <td>{{ card.city|default:"" }}</td>
+            <td>{{ card.team|default:"" }}</td>
+            <td>{{ card.overall_status|default:"Unknown" }}</td>
+            <td>{{ card.product_group_key }}</td>
+            <td>{{ card.collection_id }}</td>
+            <td>{{ card.value|default:0 }}</td>            
+            <td>{{ card.id }}</td>
+            <td>{{ card.modification_date }}</td>
+            <td>{{ card.product_group_name }}</td>
+            <td>{{ card.val_range }}</td> 
+            <td>{{ card.front_thumb_url }}</td>
+            <td>{{ card.csr_id }}</td>
+            <td>{{ card.latest_task_scheduled }}</td>
+            <td>{{ card.primary_tag_group }}</td>
+            <td>{{ card.reverse_thumb_url }}</td>
+            <td>{{ card.front_url }}</td>
+            <td>{{ card.reverse_url }}</td>
+            <td>{{ card.msrp }}</td>
+            <td>{{ card.list_price }}</td>
+            <td>{{ card.natural_sort }}</td>
+            <td>{{ card.all_price_sort }}</td>
+            <td>{{ card.legacy_msrp }}</td>
+            <td>{{ card.qty }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

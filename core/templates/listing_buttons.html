@@ -9,6 +9,26 @@
 </style>
 
 <script>
+function handleMsrpClick() {
+  cards = ['{{card_id}}'];
+  $.ajax({
+        url: "/bulk_status_update/reviewed/",
+        method: "POST", // Change to POST
+        data: {
+            'card_ids': cards,
+            'force_price': true
+        },
+        success: function(response) {
+          console.log("Response received:", response);
+          patchCardUpdates(response["data"])
+      },
+        error: function(xhr) {
+            // Since you got a 500 error, this block will now catch it
+            console.log(xhr.responseText); 
+            alert("Request failed. Check the Django terminal for the traceback.");
+        }
+  });
+}
 function showSpinnerOnButton(button) {
     button.originalText = button.textContent;
     button.disabled = true;
@@ -62,6 +82,7 @@ document.addEventListener("DOMContentLoaded", function () {
     
     const listUpBtn = document.getElementById(`list-up-btn-${cardId}`);
     const exportBtn = document.getElementById(`export-btn-${cardId}`);
+    const clearBtn = document.getElementById(`clear-listed-info-btn-${cardId}`);
 
     const groupSelect = document.getElementById(`group-select-${cardId}`);
     const scheduleInput = document.getElementById(`schedule-${cardId}`);
@@ -108,6 +129,17 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     });
 
+    clearBtn.addEventListener("click", () => {
+          
+        showSpinnerOnButton(clearBtn);
+        const url = `/clear_listed_info/${cardId}`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => onSuccess && onSuccess(data))
+            .finally(() => restoreButton(clearBtn));
+    });
+
     priceNextBtn.addEventListener("click", () => {
         showSpinnerOnButton(priceNextBtn);
 
@@ -120,6 +152,8 @@ document.addEventListener("DOMContentLoaded", function () {
           .catch(err => console.error("Pricing request failed:", err))
           .finally(() => restoreButton(priceNextBtn));
     });
+
+    
 
     holdNextBtn.addEventListener("click", () => {
         showSpinnerOnButton(holdNextBtn);
@@ -137,7 +171,7 @@ document.addEventListener("DOMContentLoaded", function () {
               handleNext();
           })
           .catch(err => console.error("Pricing request failed:", err))
-          .finally(() => restoreButton(priceNextBtn));
+          .finally(() => restoreButton(holdNextBtn));
     });
 });
 
@@ -258,6 +292,20 @@ function performAsyncPriceAction(button, priceInput, qtyInput, searchResultId, g
     </div>
 
     <div style="display:flex; flex-direction:row; gap: 20px; flex-wrap: wrap; width: 100%;">
+      <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
+        <label for="msrp-{{ card_id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          MSRP
+        </label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <span style="position: absolute; left: 10px; color: #888;">$</span>
+          <input type="text" 
+                id="msrp-{{ card_id }}" 
+                value="{{ card.listed_card_info.msrp }}"
+                onclick="handleMsrpClick()"
+                style="padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; background-color: #f9f9f9;" 
+                readonly />
+        </div>
+      </div>
       {% for group in search_result.get_pricing_groups %}
         <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
           <label for="msrp-{{ card_id }}-{{ group.id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">

@@ -1,12 +1,12 @@
 {% load custom_tags %}
 {% load static %}
 {% get_collections as collections %}
-<script src="{% static 'js/collection_node.js' %}"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.css">
-<script src="https://cdn.jsdelivr.net/npm/handsontable@13.0.0/dist/handsontable.full.min.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'js/collection_node.js' %}"></script>
 <script>
+console.log("[DEBUG] Initializing page and integrated Tag Editor dialog controllers.");
+
 // --- UI Management ---
 function switchTab(tabId, event) {
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -83,29 +83,139 @@ function syncCardView(id, updatedFields) {
     }
 }
 
-function handleBulkUpdate() {
-    // Get the dropdown element
-    const dropdown = document.getElementById('status-dropdown');
-    const selectedValue = dropdown.value;
-    
-    // Construct the URL dynamically
-    const url = `/bulk_status_update/${selectedValue}/`;
-    
-    // Call your existing function or perform the fetch
-    submitCollection(url);
+// FIXED: Added async keyword and resolved response parsing and reference scoping bugs
+async function groupSelection(element) {
+    const title = prompt("Enter a name for the new group:");
+    if (!title || title.trim() === "") {
+        element.value = ""; // Reset dropdown if cancelled
+        return;
+    }
+
+    const url = `/new_group/${encodeURIComponent(title.trim())}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json(); // FIXED: added missing await
+
+        if (data.success) {
+            // Create the option using the actual ID from the database
+            const newOption = document.createElement("option");
+            newOption.value = data.id; 
+            newOption.textContent = data.title;
+
+            // Insert before the "__new__" option
+            const newGroupOption = element.querySelector('option[value="__new__"]');
+            element.insertBefore(newOption, newGroupOption);
+
+            // Set the dropdown to the newly created group
+            element.value = data.id;
+        } else {
+            alert("Failed to create group: " + (data.error || "Unknown error"));
+            element.value = "";
+        }
+    } catch (err) {
+        console.error("Group creation failed:", err);
+        element.value = ""; // FIXED: corrected context reference from 'this.value'
+    }
 }
 
+function handleBulkUpdate(isReview) {
+    let url
+    if (isReview) {
+        url = `/bulk_status_update/reviewed/`;
+    } else {
+        // Get the dropdown element
+        const dropdown = document.getElementById('status-dropdown');
+        const selectedValue = dropdown.value;
+        
+        // Construct the URL dynamically
+        url = `/bulk_status_update/${selectedValue}/`;
+    }
+    // Call your existing function or perform the fetch
+    submitCollection(url, null, 0, isReview);
+}
+
+// FIXED: Cleaned up trailing commas and fixed syntax check for template deployment
 function handleBulkList() {
-    // Get the dropdown element
     const dropdown = document.getElementById('group-dropdown');
     const selectedValue = dropdown.value;
-    
+    const schedule = document.getElementById('listing-date');
+    const spread = document.getElementById('listing-spread');
+
     // Construct the URL dynamically
-    const url = `/bulk_list/${selectedValue}/`;
+    const url = selectedValue ? `/bulk_list/${selectedValue}/` : `/bulk_list/`;
     
     // Call your existing function or perform the fetch
-    submitCollection(url);
+    submitCollection(url, schedule.value, spread.value);
 }
+
+// --- Dialog / Modal Box Functional Controller UI Core ---
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Toggle Display Trigger Interface
+    document.querySelectorAll('.open-tag-editor-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const dialogOverlay = document.getElementById(targetId);
+            
+            if (dialogOverlay) {
+                console.log(`[DEBUG] Initializing and launching target dialog framework: #${targetId}`);
+                dialogOverlay.style.display = 'flex';
+            } else {
+                console.error(`[DEBUG] Layout breakdown: Dialog container element missing matching expected ID: #${targetId}`);
+            }
+        });
+    });
+
+    // 2. Explicit Cancel / Close Button Handlers
+    document.querySelectorAll('.close-tag-dialog').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function() {
+            const dialogOverlay = this.closest('.tag-editor-dialog-overlay');
+            if (dialogOverlay) {
+                console.log("[DEBUG] Collapsing active dialog window interface via close action hook.");
+                dialogOverlay.style.display = 'none';
+            }
+        });
+    });
+
+    // 3. Backdrop Click-Out Listener
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('tag-editor-dialog-overlay')) {
+            console.log("[DEBUG] Collapsing active dialog window overlay via background overlay click.");
+            event.target.style.display = 'none';
+        }
+    });
+
+    // 4. Form Submit Pipeline: Extracted and funneled directly to submitCollection
+    document.querySelectorAll('.tag-editor-dialog-overlay form').forEach(form => {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            console.log("[DEBUG] Intercepted integrated dialog submission layer.");
+
+            const inputElement = this.querySelector('input[name="new_tags"]');
+            if (!inputElement) {
+                console.error("[DEBUG] Extraction failure: Missing 'new_tags' input element within form payload.");
+                return;
+            }
+
+            const rawInputValue = inputElement.value;
+            const parsedTagArray = rawInputValue.split(',')
+                                                .map(tag => tag.trim())
+                                                .filter(tag => tag.length > 0);
+
+            console.log(`[DEBUG] Parsing Profile Run - Raw string: "${rawInputValue}"`);
+            console.log("[DEBUG] Output array sequence structured successfully:", parsedTagArray);
+
+            if (typeof submitCollection === 'function') {
+                console.log("[DEBUG] Dispatching transaction matching signature: submitCollection(url, startDate, spread, force, tags)");
+                
+                // Matches signature exactly: url, startDate, spread, force, tags
+                submitCollection("/bulk_tag/", null, null, null, parsedTagArray);
+            } else {
+                console.warn("[DEBUG] Integration core warning: Function hook 'submitCollection' is unavailable.");
+            }
+        });
+    });
+});
 </script>
 <style>
     /* --- Layout & Global --- */
@@ -197,7 +307,21 @@ function handleBulkList() {
     .card-item.status-listed, .card-item.status-staged, .card-item.status-confirmed { background-color: #e6f7ff; border-color: #91d5ff; }
     .card-item.status-sold { background-color: #c9bc008b; border-color: #c9bc00ff; }
     .card-item.status-reviewed { background-color: #df04db37; border-color: #df04dbbc; }
-    /*intentionally omitted  .card-item.status-unexecuted, .card-item.status-imported, .card-item.status-reyhdrated { background-color: inherit; border-color: #91d5ff; }*/
+
+    /* Card Backgrounds based on status applied to the listing variants */
+    .listing-group.one-liner .listing.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+    .listing-group.one-liner .listing.status-pending { background-color: #fffbe6; border-color: #ffe58f; }
+    .listing-group.one-liner .listing.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
+
+    .listing-group.one-liner .listing.status-priced,     
+    .listing-group.one-liner .listing.status-listed,
+    .listing-group.one-liner .listing.status-staged,
+    .listing-group.one-liner .listing.status-auto_priced { background-color: rgba(0, 123, 27, 0.13); border-color: #007b1be6; }
+    .listing-group.one-liner .listing.status-held { background-color: #999; border-color: #777; }
+ 
+    .listing-group.one-liner .listing.status-confirmed { background-color: #e6f7ff; border-color: #91d5ff; }
+    .listing-group.one-liner .listing.status-sold { background-color: rgba(201, 188, 0, 0.54); border-color: #c9bc00ff; }
+    .listing-group.one-liner .listing.status-reviewed { background-color: rgba(223, 4, 219, 0.21); border-color: #df04dbbc; }
 
     /* Badge Colors */
     .status-listed { background: #00aaff; color: #000; }
@@ -248,10 +372,24 @@ function handleBulkList() {
 
     .move-menu a:hover { background-color: #f1f1f1; }
     .handsontable td img {
-    display: block;
-    height: 250px; /* Or whatever height you want for your Mojo cards */
-    width: auto;
-}
+        display: block;
+        height: 250px;
+        width: auto;
+    }
+
+    /* --- Integrated Overlay Dialog Styles --- */
+    .tag-editor-dialog-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
 </style>
 {% include "header.html" %}
 {% get_product_groups as groups %}
@@ -263,37 +401,108 @@ function handleBulkList() {
     <button onclick="submitCollection('/identify_collection/0/')">🔍</button>
     <button onclick="submitCollection('/price_collection/0/')">💲</button>
     <button onclick="submitCollection('/bulk_hold/0/')">✋</button>
+    <button onclick="handleBulkUpdate(true)" title="Review">🕶</button>
     <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
+    <button onclick="submitCollection('/re_sku/')" title="Re-SKU">🏷️</button>
     <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>          
     <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
+    
+    <button 
+        class="open-tag-editor-btn" 
+        data-target="modal-wrapper-{{ card.id }}"
+        style="background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        Edit Tags
+    </button>
+
     <select id="status-dropdown" 
             style="padding: 4px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-weight: bold; cursor: pointer; 
                 background-color: {{ meta.color }}; transition: background-color 0.3s;">
         
         {% for value, label in StatusBase.choices %}
-            {# Optional: Filter to only show Card-related statuses #}
             <option value="{{ value }}">{{ label }}</option>
         {% endfor %}
     </select>
     <button onclick="handleBulkUpdate()">Bulk Status Update</button>
 
     <select id="group-dropdown" class="group-select"
-              data-card-id="{{ card_id }}"
-              style="padding: 8px; border-radius: 6px; min-width: 180px;">
-        <option value="-1">No Group (Single Listing)</option>
+            data-card-id="{{ card_id }}"
+            onchange="if(this.value === '__new__') groupSelection(this);"
+            style="padding: 8px; border-radius: 6px; min-width: 180px;">
+        <option value="">No Group (Single Listing)</option>
         <option value="__new__">➕ New Group…</option>
 
         {% for g in groups %}
           <option value="{{ g.key }}">{{ g.name }}</option>
         {% endfor %}
     </select>
+    {% now "Y-m-d\TH:i" as current_time %}
+      <label for="listing-date" style="font-weight:600; margin-bottom:4px;">
+        Schedule Time
+      </label>
+      <input type="datetime-local"
+             id="listing-date"
+             value="{{ current_time }}"
+             style="padding: 8px; border-radius: 6px; min-width: 200px;" />
+    {% get_spreads as spreads %}
+    <select id="listing-spread" 
+            style="padding: 8px; border-radius: 6px; min-width: 70px; font-weight: bold; cursor: pointer;">
+        {% for value, label in spreads %}
+            <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+    </select>
     <button onclick="handleBulkList()">Bulk List</button>
 
   </div>
-  
-    {% block content %}
-    {% include "components/search_bar_only.html" with q=q since=since %}
-    {% include "components/search_panes.html"  with q=q since=since%}
-    {% comment %} {% include "tabbed_collection_view.html" with StatusBase=StatusBase %} {% endcomment %}
-{% endblock %}
 
+  <div id="modal-wrapper-{{ card.id }}" class="tag-editor-dialog-overlay" style="display: none;">
+      
+      <div class="tag-editor-component" style="border: 1px solid #ccc; padding: 20px; border-radius: 6px; max-width: 500px; width: 90%; background-color: #ffffff; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); position: relative;">
+          
+          <span class="close-tag-dialog" style="position: absolute; top: 12px; right: 16px; font-size: 20px; font-weight: bold; color: #888; cursor: pointer;">&times;</span>
+          
+          <h4 style="margin-top: 0; margin-bottom: 16px;">Manage Metadata for: <strong>{{ obj.title }}</strong></h4>
+          
+          <form method="POST" action="javascript:void(0);">
+              {% csrf_token %}
+              
+              {% comment %}
+              <div style="margin-bottom: 12px;">
+                  <label style="display: block; font-weight: bold; margin-bottom: 4px;">Active Tags:</label>
+                  <textarea 
+                      readonly 
+                      rows="3" 
+                      style="width: 100%; background-color: #f5f5f5; border: 1px solid #ddd; padding: 8px; border-radius: 4px; resize: none;"
+                      placeholder="No tags applied to this item yet.">{% for tag in card.tags.all %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</textarea>
+              </div>
+              {% endcomment %}
+
+              <div style="margin-bottom: 20px;">
+                  <label for="new-tags-{{ card.id }}" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Add New Tags:</label>
+                  <input 
+                      type="text" 
+                      id="new-tags-{{ card.id }}"
+                      name="new_tags" 
+                      style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
+                      placeholder="e.g. vintage, rookie, 1989">
+                  <small style="color: #666; display: block; margin-top: 6px;">Separate multiple tags with commas.</small>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                  <button type="button" class="close-tag-dialog" style="background-color: #6c757d; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                      Cancel
+                  </button>
+                  <button type="submit" style="background-color: #007bff; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                      Apply Changes
+                  </button>
+              </div>
+          </form>
+      </div>
+      
+  </div>
+  
+  {% block content %}
+    {% include "components/search_bar_only.html" with q=q timeframe=timeframe %}
+    {% include "components/collection_display_tabs.html" with q=q timeframe=timeframe%}
+  {% endblock %}
+</div>
+</div>

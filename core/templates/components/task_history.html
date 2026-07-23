@@ -1,0 +1,84 @@
+<div class="task-history-container">
+    <div class="history-header">
+        <div class="header-title">
+            <h3>Sync & Update History</h3>
+            <span class="history-count">{{ card.get_combined_history|length }} logs recorded</span>
+        </div>
+    </div>
+
+    <div class="history-table-wrapper">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Card ID</th>
+                    <th style="width: 45%;">Action / Title</th>
+                    <th style="width: 20%;">Execution Date</th>
+                    <th style="width: 20%; text-align: right;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in card.get_combined_history %}
+                    
+                    {# --- CASE 1: TASK ITEM --- #}
+                    {% if item.history_type == 'task' %}
+                    <tr class="history-row" data-task-id="{{ item.id }}" data-card-id="{{ card.id }}">
+                        <td class="cell-card-id">
+                            <code>#{{ item.id }}</code>
+                        </td>
+                        <td class="cell-title">
+                            <div class="title-truncate" title="{{ item.name }}">
+                                {{ item.name|default:"???" }}
+                            </div>
+                        </td>
+                        <td class="cell-date">
+                            {{ item.sort_date|date:"M d, Y • H:i" }}
+                        </td>
+                        <td>
+                            {{ item.error_str|default:"No error" }}
+                        </td>
+                        <td class="cell-status" style="text-align: right;">
+                            {% if item.status == 'success' or item.status == 'completed' %}
+                                <span class="badge badge-success">Success</span>
+                            {% elif item.status == 'failed' or item.status == 'error' %}
+                                <span class="badge badge-danger" title="{{ item.error_str|default:'Unknown error' }}">Failed</span>
+                            {% elif item.status == 'pending' or item.status == 'running' %}
+                                <span class="badge badge-warning">Processing</span>
+                            {% else %}
+                                <span class="badge badge-secondary">{{ item.status|title }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    {# --- CASE 2: STATUS CHANGE ITEM --- #}
+                    {% elif item.history_type == 'status' %}
+                    <tr class="history-row status-change-row" data-status-id="{{ item.id }}" data-card-id="{{ card.id }}">
+                        <td class="cell-card-id">
+                            <code>#{{ card.id }}</code>
+                        </td>
+                        <td class="cell-title">
+                            <div class="title-truncate">
+                                Status changed to <strong>{{ item.listing_status|default:"Updated" }}</strong>
+                            </div>
+                        </td>
+                        <td class="cell-date">
+                            {{ item.sort_date|date:"M d, Y • H:i" }}
+                        </td>
+                        <td class="cell-status" style="text-align: right;">
+                            <span class="badge badge-info">{{ item.status_value|title }}</span>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                {% empty %}
+                {# --- EMPTY STATE --- #}
+                <tr>
+                    <td colspan="4" class="history-empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <p>No historical execution records or status updates found for this card context.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

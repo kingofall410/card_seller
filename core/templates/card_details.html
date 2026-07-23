@@ -7,6 +7,7 @@
             <button class="csr-tab-btn active" data-tab="csr-search">Card Info</button>
             <button class="csr-tab-btn" data-tab="csr-listing">Listing Details</button>
             <button class="csr-tab-btn" data-tab="csr-charts">Charts</button>
+            <button class="csr-tab-btn" data-tab="csr-history">Task History</button>
         </div>
     </div>
 
@@ -33,7 +34,6 @@
                         background-color: {{ meta.color }}; transition: background-color 0.3s;">
                 
                 {% for value, label in StatusBase.choices %}
-                    {# Optional: Filter to only show Card-related statuses #}
                     <option value="{{ value }}" {% if search_result.overall_status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
@@ -60,6 +60,10 @@
                 <div class="chart-container-inner">
                     {% include "price_over_time2.html" with datasetConfigs=datasetConfigs search_result=search_result %}
                 </div>
+            </div>
+
+            <div class="csr-tab-content" id="csr-history">
+                {% include "components/task_history.html" with card=search_result.parent_card %}
             </div>
 
         </div>
@@ -184,7 +188,7 @@
     /* WIDE CHART MODE */
     .csr-tab-content.wide-overlay.active {
         position: absolute;
-        top: 0; /* Sits below tabs + panel */
+        top: 0;
         left: 0;
         width: 145%;
         height: auto;
@@ -212,7 +216,7 @@
         if (activeTab && !activeTab.classList.contains('wide-overlay')) {
             wrapper.style.height = activeTab.offsetHeight + "px";
         } else if (activeTab && activeTab.classList.contains('wide-overlay')) {
-            wrapper.style.height = "550px"; // Default height for charts
+            wrapper.style.height = "550px";
         }
     }
 
@@ -231,7 +235,7 @@
         const targetDiv = document.getElementById(tabId);
         targetDiv.classList.add("active");
 
-        // Handle Wide Mode (Charts)
+        // Handle Wide Mode (Charts toggle cleanup logic)
         if (tabId === 'csr-charts') {
             grid.classList.add('charts-active');
             window.dispatchEvent(new Event('resize')); 
@@ -239,11 +243,10 @@
             grid.classList.remove('charts-active');
         }
 
-        // Adjust wrapper height
+        // Adjust wrapper height context
         setTimeout(resizeTabWrapper, 10);
     });
 
-    // Initial load height
     window.addEventListener('load', resizeTabWrapper);
 })();
 
@@ -263,7 +266,6 @@ function updateCSRStatus(csrId, newStatus) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Update the modification date text if the server sends it back
             if (data.new_mod_date && modDateDisplay) {
                 modDateDisplay.innerText = data.new_mod_date;
             }

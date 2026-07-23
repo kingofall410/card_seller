@@ -74,14 +74,12 @@ def add_token(field_key, value, all_field_data, user_settings=None):
     print("Add token: ", field_key, value, all_field_data, user_settings)
     new_obj = None
     if not user_settings:
-        print("a")
         user_settings = User.objects.first().active_settings.first()
-    print("c")
+
     if field_key == "brands" or field_key == "brand": 
         new_obj = Brand.create(value=value, settings=user_settings, field="brands")
 
     elif field_key == "subsets" or field_key == "subset":
-        print("f")
         new_obj = Subset.create(value=value, settings=user_settings, field="subsets")
 
     elif field_key == "cities" or field_key == "city":   
@@ -91,7 +89,9 @@ def add_token(field_key, value, all_field_data, user_settings=None):
 
         city_obj = None
         if all_field_data:
-            city_obj = City.objects.get(raw_value=all_field_data["city"], disabled_date=None)
+            rfv=all_field_data.get("city", "").strip()
+            if rfv:
+                city_obj = City.objects.get(raw_value=rfv, disabled_date=None)
             #print(city_obj)
         
         if city_obj:
@@ -108,19 +108,20 @@ def add_token(field_key, value, all_field_data, user_settings=None):
         new_obj = Condition.create(value=value, settings=user_settings, field=field_key)
     elif field_key == "parallel":
         
-        brand = subset = None
+        brand = subset = season = None
         if "brand" in all_field_data:
             brand_name = all_field_data["brand"]
-            brand = Brand.objects.get(raw_value=brand_name, disabled_date__isnull=True)
+            brand = Brand.objects.filter(raw_value=brand_name, disabled_date__isnull=True).last()
+        
         if "subset" in all_field_data:
             subset_name = all_field_data["subset"]
-            subset = Subset.objects.get(raw_value=subset_name, disabled_date__isnull=True)
+            subset = Subset.objects.filter(raw_value=subset_name, disabled_date__isnull=True).last()
             
         if "year" in all_field_data:
             year_name = all_field_data["year"]
             season = Season.objects.filter(raw_value=year_name, disabled_date__isnull=True).last()
 
-        print("brand and subset", season, brand, subset)
+        print("brand and subset", brand, subset)
         new_obj = Parallel.create(value=value, settings=user_settings, field=field_key, brand=brand, subset=subset, year=season)
     elif field_key == "card_name":
         new_obj = CardName.create(value=value, settings=user_settings, field=field_key)

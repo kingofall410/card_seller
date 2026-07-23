@@ -1,12 +1,12 @@
 from django.db import models
 from core.models.CardSearchResult import CardSearchResult
-from core.models.Group import ProductGroup
 from core.models.Status import StatusBase
+from services import ebay
 
 class ListedInfo(models.Model):
-    card = models.OneToOneField('Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
-    sub_cards = models.ManyToManyField('Card', null=True, blank=True, related_name="listed_subcard_info")
-    product_group = models.ForeignKey(ProductGroup, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
+    card = models.OneToOneField('core.Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
+    sub_cards = models.ManyToManyField('core.Card', null=True, blank=True, related_name="listed_subcard_info")
+    product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
 
     listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
@@ -25,6 +25,8 @@ class ListedInfo(models.Model):
 
     listing_detail_text = models.TextField(blank=True)
     listing_notes = models.TextField(blank=True) 
+
+    exportedOffer = models.JSONField(default=dict, blank=True)
     
     @classmethod
     def create_from_card(cls, card):
@@ -64,7 +66,7 @@ class ListedInfo(models.Model):
         self.sku = csr.sku
         #self.offer_id = csr.ebay_offer_id
         
-        self.msrp = csr.ebay_msrp        
+        self.msrp = round(csr.ebay_msrp + 0.01, 1) - 0.01
         #self.variation_title_base = csr.variation_title_base
         
         self.shareable_link_front=csr.shareable_link_front
@@ -93,7 +95,7 @@ class ListedInfo(models.Model):
         lci.sku = csr.sku
         lci.offer_id = csr.ebay_offer_id
         
-        lci.msrp = csr.ebay_msrp        
+        lci.msrp = round(csr.ebay_msrp + 0.01, 1) - 0.01
         #lci.variation_title_base = csr.variation_title_base
         
         lci.shareable_link_front=csr.shareable_link_front
@@ -102,33 +104,55 @@ class ListedInfo(models.Model):
         
         return lci
 
+    def export_to_offer_template(self, template, single_listing):
+        
+        data = template.copy()
+        data["sku"] = self.sku
+        data["listingDescription"] = self.listing_detail_text
+        data["availableQuantity"] = self.list_qty
+        data["pricingSummary"]["price"]["value"] = self.list_price
+        data["listingPolicies"]["fulfillmentPolicyId"] = ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if self.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND
+        
+        # Apply best offer policies only if item is standalone (not part of a variation group)
+        if single_listing:
+            listing_policies = data.setdefault("listingPolicies", {})
+            best_offer = listing_policies.setdefault("bestOfferTerms", {})
+            best_offer["bestOfferEnabled"] = True
+
+        self.exported_offer = data
+        self.save()
+        return data
+
+    def upload_listing_images(self, front, reverse):
+
+        from services import export
+        # Media Asset Upload & SKU Assembly Pipelines
+        self.shareable_link_front = export.upload_to_cloudinary(front)
+        self.shareable_link_reverse = export.upload_to_cloudinary(reverse)
+
+
+    def build_sku(self):
+
+        self.sku = self.card.active_search_results.build_sku()
+
     def save(self, *args, **kwargs):
-        if self.card:
+        if self.card and self.card.active_search_results:
             csr = self.card.active_search_results
+            
+            print("saving LI ", self.id, csr.ebay_msrp)
             self.listing_detail_text = csr.title_to_be if csr else ""
             self.card.update_mod_date()
+            self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
         if not self.listing_id:
             self.listing_id = ""
         super().save(*args, **kwargs)
+    
+    def accept_msrp(self):
+        self.list_price = self.msrp
+        self.card.save()
+        self.save()
 
     @property
     def get_sold_price(self):
         last = self.listing_statuses.last()
         return last.sold_value if last else None
-
-
-class ListingStatus(models.Model):
-    listing_info = models.ForeignKey(ListedInfo, on_delete=models.CASCADE, related_name='listing_statuses')
-
-    listing_status = models.CharField(max_length=20, choices=StatusBase.choices, default=StatusBase.LISTED)
-    is_published = models.BooleanField(default=True)
-    sold_qty = models.IntegerField(default=0)
-    sold_value = models.FloatField(default=0)
-    sold_date = models.DateTimeField(null=True)
-    available_qty = models.IntegerField(default=0)
-    create_date = models.DateTimeField(auto_now_add=True)
-    
-    @classmethod
-    #created upon request being made, not before
-    def create(cls, listed_info, avail_qty, status, sold_qty, published):
-        return cls.objects.create(listing_info=listed_info, available_qty=avail_qty, listing_status=status, sold_qty=sold_qty, is_published=published)        

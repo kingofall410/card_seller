@@ -7,9 +7,11 @@ from datetime import datetime, timedelta
 from requests.exceptions import Timeout, RequestException
 from urllib.parse import quote, quote_plus, urlencode
 from core.models.Status import StatusBase
-from core.models.ListedInfo import ListingStatus, ListedInfo
+from services.models.models import Settings
+from core.models.ListingStatus import ListingStatus
 import fcntl
 from playwright.sync_api import sync_playwright
+from django.utils.timezone import timezone
 
 
 CLIENT_ID = 'DanielCr-LatestSa-PRD-d11490c6b-277c9c6f'
@@ -61,6 +63,28 @@ ebay_item_group_template = {
     ]
     },
 }
+ebay_offer_data_template = {
+    "sku": "string",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "string",
+    "availableQuantity": "string",
+    "pricingSummary": {
+        "price": {
+            "value": "string",
+            "currency": "USD"
+        }
+    },
+    "condition": 4000,
+    "categoryId": CATEGORY_ID,
+    "listingPolicies": {    
+        "fulfillmentPolicyId": "string",
+        "paymentPolicyId": PAYMENT_POLICY_EBAY_MANAGED,
+        "returnPolicyId": RETURN_POLICY_NO_RETURNS
+    },
+    "merchantLocationKey": "Freeport"
+}
+
 ebay_item_data_template = {
     "condition":"Ungraded",
     "availability": {
@@ -159,11 +183,11 @@ def has_user_consent(settings):
     
     return settings.ebay_user_auth_code or time.time() >= settings.ebay_refresh_token_expiration
 
-def get_access_token(settings, user_auth_code=None):
+def get_access_token(settings, user_auth_code=None, force=False):
     now = time.time()
 
     if user_auth_code:
-        if now < settings.ebay_access_token_expiration:
+        if now < settings.ebay_access_token_expiration and settings.last_run_usered:
             print("Using existing access token...")
             return settings.ebay_access_token
         elif now < settings.ebay_refresh_token_expiration:#trade refresh token for access token
@@ -171,11 +195,14 @@ def get_access_token(settings, user_auth_code=None):
             data = {'grant_type': 'refresh_token', 'refresh_token':settings.ebay_refresh_token}
         else:
             print("Trading user auth code...")
-            data = {'grant_type': 'authorization_code', "code":"'v^1.1#i^1#I^3#f^0#p^3#r^1#t^Ul41XzQ6NkEwMUU4NEQ0QjNBQkIwM0VGQzk5OTkyOTFBQkQ5OEJfMl8xI0VeMjYw", "redirect_uri":RUNAME}
+            data = {'grant_type': 'authorization_code', "code":"this will not work'v^1.1#i^1#I^3#f^0#p^3#r^1#t^Ul41XzQ6NkEwMUU4NEQ0QjNBQkIwM0VGQzk5OTkyOTFBQkQ5OEJfMl8xI0VeMjYw", "redirect_uri":RUNAME}
+
+        settings.last_run_usered = True
     else:#user-less request
         print("user-less")
         data = {'grant_type': 'client_credentials', 'scope': 'https://api.ebay.com/oauth/api_scope'}
-       
+        settings.last_run_usered = False
+        
     url = 'https://api.ebay.com/identity/v1/oauth2/token'
     headers = {"Content-Type": "application/x-www-form-urlencoded"}    
 
@@ -220,54 +247,105 @@ def build_query_params(search_string, limit, offset, category_id, sort="price"):
         f"category_ids={category_id}",
         f"sort={sort}"
     ]
-
-def text_search(keyword_strings, settings, limit=50, page=3):
-    print("text_search: ", keyword_strings)
-
+def _execute_ebay_search(keyword_strings, settings, limit, page, build_params_fn):
+    """
+    Internal helper that handles authentication, URL requests, error tracking,
+    and structures the result dictionary for a list of keyword strings.
+    """
     result_data = {}
+    
+    # Handle token authentication safely
+    access_token = None
     if has_user_consent(settings):
         access_token = get_access_token(settings, None)
+        
+    if not access_token:
+        print("❌ Failed to retrieve a valid access token.")
+        return result_data
 
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
     }
+    
     category_id = get_dominant_category_id(None)
     offset = (page - 1) * limit
 
     for keywords in keyword_strings:
-        row_count = 0
-        page_num = 0
-
-        result_data[keywords[0]] = (keywords[1], [])    
-        query_params = build_query_params(keywords[0], limit, offset, category_id)
-        search_url = f"{TXT_SEARCH_URL}?{'&'.join(query_params)}"
-
-        #search_url = f"{TXT_SEARCH_URL}?q={urlencode(keywords[0].replace("#", ""))}{'&'.join(query_params)}"
-        print("Search URL:", search_url)
+        search_term = keywords[0]
+        metadata = keywords[1]
+        result_data[search_term] = (metadata, [])
+        
+        # Call the specific lambda/function passed in to build unique filters
+        params = build_params_fn(search_term, limit, offset, category_id)
 
         try:
-            response = requests.get(search_url, headers=headers, timeout=10)
+            # Let requests naturally handle parameter encoding
+            response = requests.get(TXT_SEARCH_URL, headers=headers, params=params, timeout=10)
         except Timeout:
-            print("❌ Request timed out while contacting eBay image search API.")
-            break
+            print(f"❌ Request timed out for term: {search_term}")
+            continue
         except RequestException as e:
-            print(f"❌ Request failed: {e}")
+            print(f"❌ Request failed for term: {search_term}. Error: {e}")
+            continue
         
-        if response and response.status_code == 200:
-            #print(response.json())
+        if response.status_code == 200:
             items = response.json().get("itemSummaries", [])
             if not items:
-                print("❌ No matches found.")
-                break
+                print(f"❌ No matches found for '{search_term}'.")
             else:
-                print(f"✅ Found {len(items)} matches for the input string.")
-                result_data[keywords[0]][1].extend(items)
+                print(f"✅ Found {len(items)} matches for '{search_term}'.")
+                result_data[search_term][1].extend(items)
         else:
-            raise Exception(response.json()["errors"][0]["message"])
-        
+            try:
+                error_msg = response.json()["errors"][0]["message"]
+                print(f"❌ eBay API Error for '{search_term}': {error_msg}")
+            except (KeyError, ValueError):
+                print(f"❌ HTTP Error {response.status_code}: {response.text}")
+                
     return result_data
+
+
+# =====================================================================
+# Refactored Public Methods
+# =====================================================================
+
+def text_search(keyword_strings, settings, limit=50, page=3):
+    print("text_search: ", keyword_strings)
+    
+    # Use your existing build_query_params logic adapted for dictionary output
+    def build_standard_params(term, lim, off, cat_id):
+        # Assumes build_query_params returns a dict, or you can map it here
+        params = {'q': term, 'limit': lim, 'offset': off, 'category_ids': get_dominant_category_id(None)}
+        return params
+
+    return _execute_ebay_search(keyword_strings, settings, limit, page, build_standard_params)
+
+def auction_search(keyword_strings, settings, limit=50, hours_until_end=24, page=1):
+    print(f"auction_search: {keyword_strings}, ending within {hours_until_end} hours, 0 bids")
+    settings = settings or Settings.get_default()
+    # Set up time ranges
+    now_utc = datetime.now(timezone.utc)
+    end_utc = now_utc + timedelta(hours=hours_until_end)
+    now_str = now_utc.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    end_str = end_utc.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    
+    # Define custom query filters for zero-bid auctions
+    def build_auction_params(term, lim, off, cat_id):
+        filter_query = f"buyingOptions:{{AUCTION}},endDate:[{now_str}..{end_str}]"
+        params = {
+            'q': term,
+            'limit': lim,
+            'offset': off,
+            'filter': filter_query,
+            'sort': 'endingSoonest'  # <-- Added: Ensures items ending in minutes appear first
+        }
+        if cat_id:
+            params['category_ids'] = cat_id
+        return params
+
+    return _execute_ebay_search(keyword_strings, settings, limit, page, build_auction_params)
 
 #TODO: the standard way of getting dominant category has never worked.  It's hardcoded for now
 def get_dominant_category_id(payload):
@@ -364,7 +442,7 @@ def create_inventory_item(sku, item_data, access_token, patch=False):
     else:
         response = requests.put(url, headers=headers, json=item_data)
     #print("Inventory request: ", response.request.text)
-    print("Inventory response: ", response, response.text)
+    #print("Inventory response: ", response, response.text)
     if response.status_code == 200 or response.status_code == 204:
         return True
     else:
@@ -491,6 +569,7 @@ def bulk_order_update(listing_ids, settings):
         
         # 1. Map by SKU for variations and Listing ID for singles
         # Fetch all records that match the provided listing IDs
+        from core.models.ListedInfo import ListedInfo
         infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
         
         # Create two maps: one for direct ID lookup and one for SKU lookup
@@ -515,8 +594,7 @@ def bulk_order_update(listing_ids, settings):
                 # Priority 2: Match by Legacy ID (Single Listing)
                 elif legacy_id in listing_id_map:
                     parent_info = listing_id_map[legacy_id]
-                else:
-                    print(f"Can't find listing info: {sku or legacy_id}")
+                
                 if parent_info:
                     # 3. Get latest status or create new
                     obj = ListingStatus.objects.filter(listing_info=parent_info).order_by('-id').first()
@@ -572,7 +650,7 @@ def get_sale_details(listing_id, settings, listing_status_obj, access_token=None
         # Manually find the order that contains our listing_id
         target_order = None
         for order in orders:
-            print("ORDER", order)
+            #print("ORDER", order)
             for item in order.get("lineItems", []):
                 if str(item.get("legacyItemId")) == str(listing_id):
                     target_order = order
@@ -595,6 +673,7 @@ def get_sale_details(listing_id, settings, listing_status_obj, access_token=None
 
 
 def get_offer_status(offer_id, settings, info, access_token=None):
+    settings = settings or Settings.get_default()
     access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -610,18 +689,26 @@ def get_offer_status(offer_id, settings, info, access_token=None):
         avail_qty = data["availableQuantity"]
         print(data)
         if "listing" in data:
-            list_status = StatusBase.SOLD if data["listing"]["listingStatus"] == "OUT_OF_STOCK" else StatusBase.CONFIRMED
+            ebay_listing_status = data["listing"]["listingStatus"]
+            if ebay_listing_status == "OUT_OF_STOCK":
+                list_status = StatusBase.SOLD
+            elif ebay_listing_status == "ENDED":
+                list_status = StatusBase.UNLISTED
+            else:
+                list_status = StatusBase.CONFIRMED
             sold_qty = data["listing"]["soldQuantity"]
             published = data["status"] == "PUBLISHED"
         else:
             list_status = StatusBase.UNLISTED
             sold_qty = 0
             published = False
-        print(avail_qty, list_status, sold_qty, published)
-        return ListingStatus.create(info, avail_qty, list_status, sold_qty, published), access_token        
+        #print(avail_qty, list_status, sold_qty, published)
+        ListingStatus.create(info, avail_qty, list_status, sold_qty, published)
+        return True, access_token, list_status
     else:
-        print(response)
-        raise Exception(response.json()["errors"][0]["message"])    
+        ListingStatus.create(info, 0, StatusBase.UNKNOWN, 0, False)
+        #print(response)
+        return False, access_token, StatusBase.UNKNOWN
     
 
 def get_or_create_offer(offer_data, access_token, sku=None):
