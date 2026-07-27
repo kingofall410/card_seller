@@ -5,15 +5,6 @@
 .card-chk-input { cursor: pointer; width: 16px; height: 16px; margin: 0; }
 .image-wrapper { position: relative; }
 
-/* --- Duplicate Indicator Badge --- */
-.duplicate-qty-badge {
-    position: absolute; bottom: 6px; right: 6px; z-index: 10;
-    background: rgba(244, 244, 244, 0.95); color: #333333; border: 1px solid #bbbbbb;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2); font-size: 11px; font-weight: bold;
-    padding: 0 5px; height: 18px; border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    letter-spacing: -0.3px; user-select: none;
-}
 
 /* --- Context Dropdown Systems --- */
 .card-menu-container { position: absolute; top: 8px; right: 8px; z-index: 100; display: flex; align-items: center; }
@@ -200,11 +191,6 @@
             toggleExclusion($(this).closest('.card-item').data('id'));
         });
 
-        // Delete Trigger Hook
-        $body.on('click', '.action-btn-delete', function(e) {
-            e.preventDefault(); e.stopPropagation();
-        });
-
         // Direct-Click Badge Quantity Update System
         $body.on('click', '.qty-badge-mount .duplicate-qty-badge, .qty-badge-mount .qty-add-trigger', function(e) {
             e.preventDefault(); e.stopPropagation(); // Stop parent anchor click execution!
@@ -308,10 +294,10 @@
                 url = `/bulk_status_update/${$btn.data('status')}/`;
                 const fd = new FormData();
                 fd.append('card_ids[]', id);
-                fd.append('force_price', 'true');
+                fd.append('force_price', false);
                 settings = { method: 'POST', headers: { 'X-CSRFToken': getCsrf() }, body: fd };
             }
-
+            $('.card-dropdown-menu').hide();
             console.log(`[DEBUG] Executing Action: ${action} via endpoint: ${url}`);
 
             fetch(url, settings)
@@ -331,13 +317,13 @@
                                 $card.remove();
                             }
                         });
-                    } else if (action === 'status' && data.success) {
+                    }/* else if (action === 'status' && data.success) {
                         fetch(`/refresh_listing_status/${id}/`, { method: 'POST', headers: { 'X-CSRFToken': getCsrf() } })
                             .then(r => r.json())
                             .then(d => typeof patchCardUpdates === 'function' && patchCardUpdates(d));
                     } else if (typeof patchCardUpdates === 'function') {
                         patchCardUpdates(data);
-                    }
+                    }*/
                 })
                 .catch(err => console.error("API Transmission Exception:", err));
         });

@@ -184,6 +184,7 @@ def clear_recent_tasks(request):
         messages.error(request, f"Failed to execute batch task purge: {str(e)}")
 
     return redirect(request.META.get('HTTP_REFERER', 'task_queue'))
+
 def task_calendar(request):
     start_time = time.perf_counter()
     today = date.today()
@@ -242,7 +243,7 @@ def task_calendar(request):
     # 4. Build Day Objects with highly optimized lookups
     day_objects = []
     for d in week_days:
-        tasks = sorted(day_map.get(d, []), key=lambda t: t.id)
+        tasks = sorted(day_map.get(d, []), key=lambda t: t.scheduled_for)
         
         # Helper function to extract price cleanly across polymorphic types
         def get_task_price(t):
@@ -369,3 +370,49 @@ def task_reset(request, task_id):
 
     return JsonResponse({"status": "ok"})
 
+from django.shortcuts import render, redirect
+from django.views.decorators.http import require_POST
+from django.utils import timezone
+from services.models.task import Task
+from core.models.Status import StatusBase
+
+def queue_dashboard(request):
+
+    core_config = apps.get_app_config("core")
+    # In-memory tasks currently scheduled in thread queue
+    memory_tasks = core_config.queue.tasks
+
+    # Database summary counts
+    counts = {
+        'pending': Task.objects.filter(status=StatusBase.PENDING).count(),
+        'running': Task.objects.filter(status=StatusBase.RUNNING).count(),
+        'success': Task.objects.filter(status=StatusBase.SUCCESS).count(),
+        'failed': Task.objects.filter(status=StatusBase.FAILED).count(),
+        'staged': Task.objects.filter(status=StatusBase.STAGED).count(),
+    }
+
+    # Recent completed or failed database tasks for audit table
+    recent_db_tasks = Task.objects.select_related(
+        'listingtask', 'pricingtask', 'idtask', 'uploadtask', 'confirmtask'
+    ).prefetch_related('successors').order_by('-executed_at')[:25]
+
+    context = {
+        'memory_tasks': memory_tasks,
+        'counts': counts,
+        'recent_db_tasks': recent_db_tasks,
+        'now': timezone.now(),
+    }
+    return render(request, 'services/task_queue.html', context)
+
+
+@require_POST
+def clear_recent_tasks_view(request):
+    minutes = int(request.POST.get('minutes', 15))
+    queue_instance.clear_recent_pending_tasks(minutes=minutes)
+    return redirect('queue_dashboard')
+
+
+@require_POST
+def reset_queue_view(request):
+    queue_instance.reset()
+    return redirect('queue_dashboard')

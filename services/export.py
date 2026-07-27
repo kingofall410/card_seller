@@ -257,7 +257,8 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                 group_key=group_key, 
                 publish=publish
             )
-            
+            #add_to_variation_group will throw exception if it fails, thus we can assume success here
+    
             # Update all local database objects with the single returned group listing ID
             with transaction.atomic():
                 for csr in successful_group_csrs:
@@ -266,7 +267,8 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                     
                     csr.save()
                     listed_info.save()
-                    
+                    ListingStatus.create(listed_info, listed_info.list_qty, StatusBase.LISTED, 0, True)
+
                     results_summary["success_count"] += 1
                     results_summary["details"].append({
                         "csr_id": csr.id,

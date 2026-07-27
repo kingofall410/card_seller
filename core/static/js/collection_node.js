@@ -56,7 +56,7 @@ function submitAndGo(url) {
 }
 
 function submitCollection(url, startDate, spread, force, tags) {
-    console.log("submitCollection", url, tags);
+    console.log("submitCollection", url, startDate, force, tags);
     launchSequence()
     // 1. Get the data
     const rawData = sessionStorage.getItem('card_sequence');

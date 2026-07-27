@@ -10,31 +10,38 @@
         <table class="history-table">
             <thead>
                 <tr>
-                    <th style="width: 15%;">Card ID</th>
-                    <th style="width: 45%;">Action / Title</th>
-                    <th style="width: 20%;">Execution Date</th>
-                    <th style="width: 20%; text-align: right;">Status</th>
+                    <th style="width: 10%;">Task ID</th>
+                    <th style="width: 30%;">Action / Title</th>
+                    <th style="width: 15%;">Created At</th>
+                    <th style="width: 15%;">Scheduled</th>
+                    <th style="width: 15%;">Completed</th>
+                    <th style="width: 15%; text-align: right;">Task status</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in card.get_combined_history %}
+                {% for item in card.get_combined_history|dictsortreversed:"sort_date" %}
                     
                     {# --- CASE 1: TASK ITEM --- #}
                     {% if item.history_type == 'task' %}
-                    <tr class="history-row" data-task-id="{{ item.id }}" data-card-id="{{ card.id }}">
-                        <td class="cell-card-id">
+                    <tr class="history-row {% if item.status == 'success' or item.status == 'completed' %}row-success{% elif item.status == 'failed' or item.status == 'error' %}row-failed{% elif item.status == 'pending' or item.status == 'running' %}row-processing{% endif %}" 
+                        data-task-id="{{ item.id }}" 
+                        data-card-id="{{ card.id }}">
+                        <td class="cell-task-id">
                             <code>#{{ item.id }}</code>
                         </td>
                         <td class="cell-title">
                             <div class="title-truncate" title="{{ item.name }}">
-                                {{ item.name|default:"???" }}
+                                {{ item.display_title|default:"???" }}
                             </div>
                         </td>
                         <td class="cell-date">
-                            {{ item.sort_date|date:"M d, Y • H:i" }}
+                            {{ item.created_at|date:"M d, Y • H:i"|default:"—" }}
                         </td>
-                        <td>
-                            {{ item.error_str|default:"No error" }}
+                        <td class="cell-date">
+                            {{ item.scheduled_for|date:"M d, Y • H:i"|default:"—" }}
+                        </td>
+                        <td class="cell-date">
+                            {{ item.completed_at|date:"M d, Y • H:i"|default:"—" }}
                         </td>
                         <td class="cell-status" style="text-align: right;">
                             {% if item.status == 'success' or item.status == 'completed' %}
@@ -51,18 +58,17 @@
 
                     {# --- CASE 2: STATUS CHANGE ITEM --- #}
                     {% elif item.history_type == 'status' %}
-                    <tr class="history-row status-change-row" data-status-id="{{ item.id }}" data-card-id="{{ card.id }}">
-                        <td class="cell-card-id">
-                            <code>#{{ card.id }}</code>
-                        </td>
-                        <td class="cell-title">
+                    <tr class="history-row status-change-row row-status-change" data-status-id="{{ item.id }}" data-card-id="{{ card.id }}">
+                        <td colspan="2" class="cell-title">
                             <div class="title-truncate">
-                                Status changed to <strong>{{ item.listing_status|default:"Updated" }}</strong>
+                                Card status changed to <strong>{{ item.listing_status|default:"Updated" }}</strong>
                             </div>
                         </td>
                         <td class="cell-date">
-                            {{ item.sort_date|date:"M d, Y • H:i" }}
+                            {{ item.created_at|date:"M d, Y • H:i"|default:item.sort_date|date:"M d, Y • H:i"|default:"—" }}
                         </td>
+                        <td class="cell-date">—</td>
+                        <td class="cell-date">—</td>
                         <td class="cell-status" style="text-align: right;">
                             <span class="badge badge-info">{{ item.status_value|title }}</span>
                         </td>
@@ -72,7 +78,7 @@
                 {% empty %}
                 {# --- EMPTY STATE --- #}
                 <tr>
-                    <td colspan="4" class="history-empty-state">
+                    <td colspan="6" class="history-empty-state">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                         <p>No historical execution records or status updates found for this card context.</p>
                     </td>

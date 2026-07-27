@@ -59,7 +59,7 @@ class ListedInfo(models.Model):
             last_task = csr.listing_tasks.latest("scheduled_for")
             if last_task:
                 self.listing_datetime = last_task.scheduled_for
-        self.list_price = csr.list_price
+        #self.list_price = csr.list_price
         self.list_qty = 1
         #self.listing_id = csr.ebay_listing_id
         #lci.listed_under_sku = csr.ebay_listed_under_sku
@@ -88,7 +88,7 @@ class ListedInfo(models.Model):
                 lci.product_group = csr.ebay_product_group
                 lci.listing_datetime = last_task.scheduled_for
 
-        lci.list_price = csr.list_price if not lci.list_price else 0
+        #lci.list_price = csr.list_price if not lci.list_price else 0
         lci.list_qty = 1
         lci.listing_id = csr.ebay_listing_id
         #lci.listed_under_sku = csr.ebay_listed_under_sku
@@ -142,15 +142,17 @@ class ListedInfo(models.Model):
             print("saving LI ", self.id, csr.ebay_msrp)
             self.listing_detail_text = csr.title_to_be if csr else ""
             self.card.update_mod_date()
+        if self.msrp == 0.0 or self.msrp == -69.69:
             self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
         if not self.listing_id:
             self.listing_id = ""
         super().save(*args, **kwargs)
     
     def accept_msrp(self):
+        print("accept")
         self.list_price = self.msrp
-        self.card.save()
         self.save()
+        #self.card.save()
 
     @property
     def get_sold_price(self):

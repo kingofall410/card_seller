@@ -929,10 +929,10 @@ def bulk_hold(request, collection_id):
 
 @csrf_exempt
 def bulk_status_update(request, status_value):  
-
+    
     try:
         card_ids = request.POST.getlist('card_ids[]') 
-        force_price = request.POST.get('force_price') 
+        force_price = request.POST.get('force_price').lower() == 'true'
         
         if len(card_ids):    
             print("lenny", len(card_ids))       
@@ -945,6 +945,7 @@ def bulk_status_update(request, status_value):
         card_list = []
         
     for card in card_list:
+        print(status_value, force_price)
         card.active_search_results.perform_status_update(status_value, force_price)
 
     return JsonResponse({"success": True, "error": ""})

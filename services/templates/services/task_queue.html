@@ -1,146 +1,210 @@
-{% include "header.html" %}
-{% block content %}
-<div class="container-fluid mt-3">
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex justify-content-between align-items-center bg-dark text-white rounded">
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Task Queue Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Auto-refresh every 5 seconds to observe background execution -->
+    <meta http-equiv="refresh" content="5">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Header Controls -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-                <h4 class="mb-0">⚡ Queue Monitor 
-                    <small class="text-success ms-2" style="font-size: 0.8rem;" id="heartbeat-status">● Active</small>
-                </h4>
+                <h1 class="text-2xl font-bold text-white tracking-wide">Task Queue Monitor</h1>
+                <p class="text-xs text-slate-400 mt-1">
+                    Auto-refreshing • Server time: <span class="text-slate-200 font-mono">{{ now|date:"Y-m-d H:i:s" }}</span>
+                </p>
             </div>
             
-            <div class="d-flex align-items-center gap-3">
-                <div class="d-flex gap-2 me-3">
-                    <span class="badge rounded-pill bg-primary">Pending: <span id="count-pending">0</span></span>
-                    <span class="badge rounded-pill bg-warning text-dark">Staged: <span id="count-staged">0</span></span>
-                    <span class="badge rounded-pill bg-danger">Failed: <span id="count-failed">0</span></span>
-                </div>
+            <div class="flex items-center gap-3">
+                <form action="{% url 'clear_recent_tasks' %}" method="post" class="inline flex items-center gap-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="minutes" value="15">
+                    <button type="submit" 
+                            class="px-3 py-1.5 text-xs font-semibold bg-amber-600/20 text-amber-300 border border-amber-500/30 rounded hover:bg-amber-600/30 transition">
+                        Purge Pending (15m)
+                    </button>
+                </form>
 
-                <div class="btn-group shadow-sm">
-                    <button onclick="queueAction('start_queue')" class="btn btn-sm btn-success px-3" title="Start Engine">Start</button>
-                    <button onclick="queueAction('stop_queue')" class="btn btn-sm btn-warning px-3" title="Stop Engine">Stop</button>
-                    <button onclick="queueAction('reset_queue')" class="btn btn-sm btn-outline-light px-3" title="Reload Queue from DB">Reset</button>
-                    <button onclick="queueAction('clear_tasks/pending')" class="btn btn-sm btn-danger px-3" title="Delete all Pending tasks">Flush Pending</button>
-                </div>
+                <form action="{% url 'reset_queue' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" 
+                            class="px-3 py-1.5 text-xs font-semibold bg-rose-600/20 text-rose-300 border border-rose-500/30 rounded hover:bg-rose-600/30 transition">
+                        Reset Stuck Tasks
+                    </button>
+                </form>
             </div>
         </div>
-    </div>
 
-    <div class="card shadow-sm">
-        <div id="task-grid" style="width: 100%; height: 70vh;"></div>
-    </div>
-</div>
-
-<style>
-    /* Center text in headers */
-    .handsontable th { text-align: center !important; font-weight: bold; background: #f8f9fa; }
-    
-    /* Vertically Center Content */
-    .handsontable td { vertical-align: middle !important; padding: 8px !important; font-size: 0.9rem; }
-
-    /* Action Button Styling */
-    .btn-xs { padding: 1px 6px; font-size: 0.75rem; line-height: 1.5; border-radius: 3px; }
-
-    /* Handsontable Overrides */
-    .ht_master .wtHolder { background-color: #ffffff; }
-</style>
-<script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.css">
-
-<script>
-    const container = document.getElementById('task-grid');
-    const hot = new Handsontable(container, {
-        data: [],
-        colHeaders: ['ID', 'Type', 'Name', 'Status', 'Scheduled', 'Errors'],
-        columns: [
-            { data: 'id', width: 50, readOnly: true },
-            { data: 'type', width: 100, readOnly: true },
-            { data: 'name', width: 200, readOnly: true },
-            { data: 'status', width: 100, renderer: statusRenderer, readOnly: true },
-            { data: 'scheduled', width: 150, readOnly: true },
-            { data: 'error', width: 250, readOnly: true },
-            { 
-                data: 'id', // We use ID to know which task to affect
-                width: 120, 
-                renderer: actionRenderer, 
-                readOnly: true,
-                className: 'htCenter htMiddle'
-            }
-        ],
-        rowHeaders: true,
-        filters: true,
-        dropdownMenu: true,
-        licenseKey: 'non-commercial-and-evaluation'
-    });
-
-    function statusRenderer(instance, td, row, col, prop, value, cellProperties) {
-        Handsontable.renderers.TextRenderer.apply(this, arguments);
-        td.style.textAlign = 'center';
-        
-        let color = '#6c757d'; // default staged
-        if (value === 'pending') color = '#0d6efd';
-        if (value === 'running') color = '#ffc107';
-        if (value === 'success') color = '#198754';
-        if (value === 'failed')  color = '#dc3545';
-
-        td.innerHTML = `<span style="color: ${color}; font-weight: bold;">${value.toUpperCase()}</span>`;
-    }
-
-    function actionRenderer(instance, td, row, col, prop, value, cellProperties) {
-        // value is the Task ID
-        td.innerHTML = `
-            <div class="d-flex justify-content-center gap-1">
-                <button class="btn btn-xs btn-outline-primary" onclick="taskAction('retry_task', ${value})">RETRY</button>
-                <button class="btn btn-xs btn-outline-danger" onclick="taskAction('delete_task', ${value})">DEL</button>
+        <!-- Metric Badges -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
+                <span class="text-xs text-slate-400 uppercase font-semibold">In-Memory Queued</span>
+                <div class="text-2xl font-bold text-sky-400 mt-1">{{ memory_tasks|length }}</div>
             </div>
-        `;
-        return td;
-    }
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Running</span>
+                <div class="text-2xl font-bold text-amber-400 mt-1">{{ counts.running }}</div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Pending (DB)</span>
+                <div class="text-2xl font-bold text-indigo-400 mt-1">{{ counts.pending }}</div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Success</span>
+                <div class="text-2xl font-bold text-emerald-400 mt-1">{{ counts.success }}</div>
+            </div>
+            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Failed</span>
+                <div class="text-2xl font-bold text-rose-400 mt-1">{{ counts.failed }}</div>
+            </div>
+        </div>
 
-    async function refreshData() {
-        const response = await fetch('/services/task_monitor_data/');
-        const result = await response.json();
-        hot.loadData(result.data);
-        
-        // Update counts for the "Heartbeat" section
-        document.getElementById('count-pending').innerText = result.data.filter(t => t.status === 'pending').length;
-        document.getElementById('count-failed').innerText = result.data.filter(t => t.status === 'failed').length;
-        document.getElementById('count-staged').innerText = result.data.filter(t => t.status === 'staged').length;
-    }
+        <!-- Active Memory Queue Section -->
+        <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/80 flex justify-between items-center">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+                    Live Memory Queue (`Queue.tasks`)
+                </h2>
+                <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+                    Sorted by Scheduled & Priority
+                </span>
+            </div>
 
-    // Refresh every 2 seconds to match your Queue interval
-    setInterval(refreshData, 2000);
-    refreshData();
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs font-mono">
+                    <thead class="bg-slate-900/60 text-slate-400 uppercase border-b border-slate-700">
+                        <tr>
+                            <th class="px-4 py-3">DB ID</th>
+                            <th class="px-4 py-3">Task Title</th>
+                            <th class="px-4 py-3">Scheduled For</th>
+                            <th class="px-4 py-3">Priority</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Successors</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700/50">
+                        {% for task in memory_tasks %}
+                        <tr class="hover:bg-slate-700/30 transition">
+                            <td class="px-4 py-2.5 font-bold text-slate-300">#{{ task.db_id }}</td>
+                            <td class="px-4 py-2.5 text-white font-medium">{{ task.title }}</td>
+                            <td class="px-4 py-2.5 text-slate-400">
+                                {{ task.scheduled_for|date:"H:i:s" }}
+                                {% if task.scheduled_for <= now %}
+                                    <span class="ml-1 text-[10px] text-emerald-400 font-bold">READY</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-2.5">
+                                <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-200">
+                                    {{ task.priority }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-2.5">
+                                {% if task.status == 'running' %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">RUNNING</span>
+                                {% elif task.status == 'pending' %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">PENDING</span>
+                                {% elif task.status == 'staged' %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">STAGED</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">{{ task.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-2.5 text-slate-400">
+                                {% if task.successor_ids %}
+                                    <div class="flex gap-1">
+                                        {% for succ_id in task.successor_ids %}
+                                            <span class="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-[10px] text-indigo-300">
+                                                ➜ #{{ succ_id }}
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-slate-600">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="px-4 py-6 text-center text-slate-500 font-sans">
+                                Queue is currently empty.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-    async function queueAction(action) {
-        // Add a confirmation for the destructive "Clear Pending" action
-        if (action === 'clear_tasks/pending' && !confirm('Are you sure you want to delete ALL pending tasks?')) return;
+        <!-- Recent Database Execution History -->
+        <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+            <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/80">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+                    Recent Database Executions
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs font-mono">
+                    <thead class="bg-slate-900/60 text-slate-400 uppercase border-b border-slate-700">
+                        <tr>
+                            <th class="px-4 py-3">ID</th>
+                            <th class="px-4 py-3">Task Title</th>
+                            <th class="px-4 py-3">Type</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Executed At</th>
+                            <th class="px-4 py-3">Error / Output</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700/50">
+                        {% for db_task in recent_db_tasks %}
+                        <tr class="hover:bg-slate-700/30 transition">
+                            <td class="px-4 py-2.5 text-slate-400">#{{ db_task.id }}</td>
+                            <td class="px-4 py-2.5 text-slate-200 font-medium">{{ db_task.title }}</td>
+                            <td class="px-4 py-2.5 text-slate-400">
+                                {% if db_task.listingtask %}
+                                    <span class="text-sky-400">Listing</span>
+                                {% elif db_task.bulklistingtask %}
+                                    <span class="text-indigo-400">Bulk Listing</span>
+                                {% elif db_task.pricingtask %}
+                                    <span class="text-emerald-400">Pricing</span>
+                                {% elif db_task.idtask %}
+                                    <span class="text-amber-400">ID</span>
+                                {% elif db_task.uploadtask %}
+                                    <span class="text-purple-400">Upload</span>
+                                {% elif db_task.confirmtask %}
+                                    <span class="text-teal-400">Confirm</span>
+                                {% else %}
+                                    <span class="text-slate-500">Base Task</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-2.5">
+                                {% if db_task.status == 'success' %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">SUCCESS</span>
+                                {% elif db_task.status == 'failed' %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">FAILED</span>
+                                {% else %}
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">{{ db_task.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-2.5 text-slate-400">
+                                {{ db_task.executed_at|date:"Y-m-d H:i:s"|default:"—" }}
+                            </td>
+                            <td class="px-4 py-2.5 text-rose-400 max-w-xs truncate">
+                                {{ db_task.error_str|default:"—" }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        const response = await fetch(`/services/${action}/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-        });
-        const result = await response.json();
-        if (result.success) {
-            refreshData();
-        } else {
-            alert("Error: " + result.error);
-        }
-    }
+    </div>
 
-    async function taskAction(action, taskId) {
-        if (action.includes('delete') && !confirm('Delete this task?')) return;
-        
-        const response = await fetch(`/services/${action}/${taskId}/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-        });
-        const result = await response.json();
-        if (result.success) {
-            refreshData();
-        } else {
-            alert("Error: " + result.error);
-        }
-    }
-</script>
-{% endblock %}
+</body>
+</html>

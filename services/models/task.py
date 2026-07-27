@@ -23,6 +23,25 @@ class Task(models.Model):
     error_str = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def display_title(self):
+        return self.title
+
+    @property
+    def schedule_time(self):
+        return self.scheduled_for
+
+    @property
+    def display_start_time(self):
+        return self.executed_at
+    
+    @property
+    def display_end_time(self):
+        return self.completed_at
+    
+    @property
+    def display_description(self):
+        return self.completed_at
 
     @property
     def group_key(self):
@@ -36,9 +55,9 @@ class Task(models.Model):
     @property
     def get_csr_id(self):
         if hasattr(self, 'listingtask') and self.listingtask:
-            return self.listingtask.csr.id
+            return str(self.listingtask.csr.id)
         elif self.successors:
-            return [t.listingtask.csr.id for t in self.successors.all()]
+            return ",".join(str(t.listingtask.csr.id) for t in self.successors.all())
 
 
     def reset(self, new_datetime):
@@ -78,6 +97,30 @@ class BulkListingTask(Task):
     value = models.FloatField(default=0.0)
 
     @property
+    def display_title(self):
+        return self.title
+
+    @property
+    def display_value(self):
+        return self.value
+
+    @property
+    def schedule_time(self):
+        return self.scheduled_for
+
+    @property
+    def display_start_time(self):
+        return self.successors.first().display_start_time
+    
+    @property
+    def display_end_time(self):
+        return self.successors.first().display_start_time
+
+    @property
+    def display_description(self):
+        return "Bulk list "+ self.successors.count() + " into " + self.display_group_name
+
+    @property
     def succ_status(self):
         retval = self.status
         if self.successors.filter(status=StatusBase.FAILED).exists():
@@ -85,10 +128,17 @@ class BulkListingTask(Task):
         else:
             return retval
 
-
     @property
     def group_key(self):
         return self.successors.first().group_key
+
+    @property
+    def display_group_name(self):
+        return self.successors.first().display_group_name
+
+    @property
+    def display_player_name(self):
+        return "; ".join(dict.fromkeys(x.listingtask.display_player_name for x in self.successors.all() if x.listingtask.display_player_name))
 
 class ListingTask(Task):
     
@@ -99,7 +149,22 @@ class ListingTask(Task):
     def group_key(self):
         return self.params().get('group_key')
 
+    @property
+    def display_group_name(self):
+        return self.csr.ebay_product_group.group_title if self.csr and self.csr.ebay_product_group else "N/A"
 
+    @property
+    def display_value(self):
+        return self.card.listed_card_info.list_price if self.card and self.card.listed_card_info else 0
+
+    @property
+    def display_description(self):
+        return self.csr.title_to_be if self.csr else "N/A"
+
+    @property
+    def display_player_name(self):
+        return self.csr.display_full_name if self.csr else "Unknown Player"
+        
 class PricingTask(Task):
     
     card = models.ForeignKey('core.Card', on_delete=models.CASCADE, related_name='pricing_tasks', null=True)

@@ -408,12 +408,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             return self.front_crop_params
      
     def perform_status_update(self, new_status, force=False):
+        print("Update", new_status, force, self.parent_card.listed_card_info.list_price)
         self.overall_status = new_status
-        if force and new_status == StatusBase.REVIEWED:
+        if (force or self.parent_card.listed_card_info.list_price == 0) and new_status == StatusBase.REVIEWED:
             self.parent_card.listed_card_info.accept_msrp()
-        else:
-            # Use .filter().update() to avoid re-triggering ASR.save()
-            type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
+    
+        # Use .filter().update() to avoid re-triggering ASR.save()
+        type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
 
 
     def save(self, *args, **kwargs):

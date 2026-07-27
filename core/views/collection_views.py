@@ -441,6 +441,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
 def view_collection(request, collection_id):
         
     text_query = request.GET.get('q')
+    csr_ids = request.GET.get('csr_ids', None)
     status_list = request.GET.getlist('status')
     exclude_status_list = request.GET.getlist('exclude_status')
     collection_id_list = request.GET.getlist('cid')
@@ -449,7 +450,12 @@ def view_collection(request, collection_id):
     start_listing_date = request.GET.get('start_listing_date', None)
     end_listing_date = request.GET.get('end_listing_date', None)
 
-    query_set = Card.objects.all()
+    if csr_ids:
+        csr_id_list = csr_ids.split(",")
+        query_set = Card.objects.filter(search_results__id__in=csr_id_list)
+    else:
+        query_set = Card.objects.all()
+
     if collection_id_list:
         query_set = query_set.filter(collection_id__in=collection_id_list)
 
@@ -459,7 +465,7 @@ def view_collection(request, collection_id):
     if timeframe != '0':
         start_date = timezone.now() - timedelta(days=int(timeframe))
         query_set = query_set.filter(modification_date__gte=start_date)   
-    else:
+    elif start_listing_date and end_listing_date:
         start_date = timezone.make_aware(datetime.fromisoformat(start_listing_date))
         end_date = timezone.make_aware(datetime.fromisoformat(end_listing_date))
         query_set = query_set.filter(

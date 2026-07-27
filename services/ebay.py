@@ -698,8 +698,11 @@ def get_offer_status(offer_id, settings, info, access_token=None):
                 list_status = StatusBase.CONFIRMED
             sold_qty = data["listing"]["soldQuantity"]
             published = data["status"] == "PUBLISHED"
-        else:
-            list_status = StatusBase.UNLISTED
+        else:#change this --> it should just send the actual status back and let individual cards do what they will
+            if info.card.active_search_results.overall_status == StatusBase.STAGED:
+                list_status = StatusBase.FAILED
+            else:
+                list_status = StatusBase.UNLISTED
             sold_qty = 0
             published = False
         #print(avail_qty, list_status, sold_qty, published)
@@ -779,7 +782,10 @@ def publish_inventory_group(group_name, access_token):
     response = requests.post(url, json=inventory_group_listing_data, headers=headers)
     print ("group name", group_name)
     print ("PIG response", response.text)
-    return response.json()["listingId"]
+    if response.status_code == 200 or response.status_code == 204:
+        return response.json()["listingId"]
+    else:
+        raise Exception(response.json()["errors"][0]["message"])
 
 def create_location(access_token, merchant_location_key="Freeport"):
     url = "https://api.ebay.com/sell/inventory/v1/location/"+merchant_location_key
