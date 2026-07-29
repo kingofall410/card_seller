@@ -7,10 +7,9 @@ from django.http import JsonResponse, HttpResponse
 from django.conf import settings as app_settings
 from django.core.files.storage import default_storage
 from django.utils.timezone import now
-from services import lookup
+from services import lookup, ebay
 from services.models.models import Settings
 from core.models.Card import Card, Collection
-from services import lookup
 from services.models.task import ListingTask
 from core.models.CardSearchResult import CardSearchResult
 from core.views import card_views, image_views
@@ -29,6 +28,8 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from django.utils import timezone
 from itertools import chain
+from core.models.ProductGroup import ProductGroup
+from core.models.ListedInfo import ListedInfo
 
 @require_POST
 @csrf_exempt
@@ -456,21 +457,22 @@ def view_collection(request, collection_id):
     else:
         query_set = Card.objects.all()
 
+    if grp_id_list:
+        query_set = query_set.filter(search_results__ebay_product_group__group_key__in=grp_id)
+        
+
     if collection_id_list:
         query_set = query_set.filter(collection_id__in=collection_id_list)
 
-    if grp_id_list:
-        query_set = query_set.filter(search_results__ebay_product_group__group_key__in=grp_id)
-
-    if timeframe != '0':
-        start_date = timezone.now() - timedelta(days=int(timeframe))
-        query_set = query_set.filter(modification_date__gte=start_date)   
-    elif start_listing_date and end_listing_date:
+    if start_listing_date and end_listing_date:
         start_date = timezone.make_aware(datetime.fromisoformat(start_listing_date))
         end_date = timezone.make_aware(datetime.fromisoformat(end_listing_date))
         query_set = query_set.filter(
             listed_card_info__listing_datetime__date__gte=start_date
         ).filter(listed_card_info__listing_datetime__date__lte=end_date)
+    else:
+        start_date = timezone.now() - timedelta(days=int(timeframe))
+        query_set = query_set.filter(modification_date__gte=start_date)   
     
 
     # Step 2: Pass filters down to be safely evaluated against ONLY the latest CSR
@@ -495,24 +497,32 @@ def view_collection(request, collection_id):
         "StatusBase": StatusBase
     })
 
-def view_ad_hoc_collection(request, card_ids=None):
-    cards = []
-    if card_ids:
-        cards = Card.objects.prefetch_related(
-            'search_results',
-            'listed_card_info',
-            'listing_tasks'
-        ).filter(id__in=card_ids)
+def product_group_detail(request, pk):
 
-    settings = Settings.get_default()
-    columns = []
-    rows = []
-    columns = CardSearchResult.listing_fields
-    #rows = spreadsheet_rows_from_search_result(collection.cards.all(), columns)
-    #cards = Card.objects.filter(collection_id=173)
-    #return render(request, "components/search_panes.html", {"cards":cards})
-    return render(request, "ad_hoc_collection.html", {"cards":Card.objects.all(), "settings":settings, "columns":columns, "rows":rows, "StatusBase":StatusBase})
-    
+    product_group = get_object_or_404(ProductGroup, group_key=pk)
+    query_set = Card.objects.filter(search_results__ebay_product_group__group_key=pk)
+    # Step 2: Pass filters down to be safely evaluated against ONLY the latest CSR
+    card_list = flatten_collection(
+        base_queryset=query_set
+    )
+
+    # Step 3: Sort the clean dictionary payload safely
+    card_list = sorted(
+        card_list, 
+        key=lambda x: x['product_group_key'] if x['product_group_key'] else ''
+    )
+    product_group.save()
+    for card in query_set:
+        card.listed_card_info.save()
+    return render(request, "group_view.html", {
+        "cards": card_list, 
+        "q": "", 
+        "timeframe": "7", 
+        "settings": Settings.get_default(), 
+        "StatusBase": StatusBase,
+        "group": product_group
+    })
+
 def listing_view(request):
     columns = CardSearchResult.listing_fields
 
@@ -598,3 +608,64 @@ def move_to_collection3(request, collection_id):
             return JsonResponse({'ok': False, 'message': str(e)}, status=500)
             
     return JsonResponse({'ok': False, 'message': 'Invalid method'}, status=405)
+
+'''def product_group_detail(request, pk):
+    product_group = get_object_or_404(ProductGroup, group_key=pk)
+
+    if request.method == "POST":
+        product_group.group_title = request.POST.get("group_title")
+        product_group.group_key = request.POST.get("group_key")
+        product_group.group_image_link = request.POST.get("group_image_link") or None
+        
+        replaced_by_id = request.POST.get("replaced_by")
+        product_group.replaced_by_id = replaced_by_id if replaced_by_id else None
+        
+        # Calling save triggers _calculate_summary_attribs() as defined in your model
+        product_group.save() 
+        return redirect("edit_product_group", pk=pk)
+
+    context = {
+        "product_group": product_group,
+        "all_product_groups": ProductGroup.objects.exclude(pk=pk).only("id", "group_title", "group_key"),
+    }
+    return render(request, "product_groups.html", context)'''
+
+def listings_list(request, timeframe=7):
+    
+    # Safely parse timeframe query parameter
+    try:
+        timeframe_days = int(request.GET.get('timeframe', timeframe))
+    except (ValueError, TypeError):
+        timeframe_days = 7
+
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=timeframe_days)
+
+    # 1. ProductGroup: Prevent duplicate groups & prefetch related models
+    groups = (
+        ProductGroup.objects.filter(
+            products__parent_card__listed_card_info__listing_datetime__range=(start_date, end_date)
+        )
+        .distinct()
+    )
+
+    # 2. Standalone Items: Optimize range query & prefetch foreign keys
+    standalone_items = (
+        ListedInfo.objects.filter(
+            product_group__isnull=True,
+            listing_datetime__range=(start_date, end_date)  # Replaces gte/lte/isnull combo
+        )
+        .select_related('product_group')  # Pre-loads foreign keys to avoid N+1 queries in template
+        .prefetch_related('listing_statuses')
+        .order_by('-listing_datetime')
+    )
+
+    context = {
+        'groups': groups,
+        'standalone_items': standalone_items,
+        'timeframe': timeframe_days
+    }
+    
+    #lid_list = [g.listing_id for g in groups]+[i.listing_id for i in standalone_items]
+    #ebay.bulk_order_update(lid_list, Settings.get_default())
+    return render(request, 'listing_list.html', context)

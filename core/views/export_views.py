@@ -13,7 +13,7 @@ from core.apps import CoreConfig
 from services.queue_service import Task
 from django.apps import apps
 from django.utils import timezone
-from core.models.Group import ProductGroup
+from core.models.ProductGroup import ProductGroup
 from core.models.ListingSpread import ListingSpread
 
 @csrf_exempt

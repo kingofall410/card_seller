@@ -5,7 +5,7 @@ from scipy.stats import trim_mean
 import re, requests, random, math
 from core.models.Cropping import CropParams
 from core.models.Status import *
-from core.models.Group import *
+from core.models.ProductGroup import *
 from core.models.ListingGroup import *
 from services.models.models import Brand, Subset, Team, City, KnownName, PlayerYearTeamCity, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter

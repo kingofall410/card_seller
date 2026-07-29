@@ -1,26 +1,10 @@
-<style>
-    #visual-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; padding: 15px; }
-    #visual-card-grid.filtering-active { opacity: 0.4; pointer-events: none; }
-    
-    .card-item { display: flex; flex-direction: column; align-items: center; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .image-wrapper { position: relative; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 4px; background: #eee; }
-    .thumbnail { position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover; }
-    .thumbnail.hover { opacity: 0; z-index: 2; transition: opacity 0.25s ease; }
-    .image-wrapper:hover .thumbnail.hover { opacity: 1; }
 
-    /* Theme Engine Variant Status Classes */
-    .card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
-    .card-item.status-pending { background-color: #fffbe6; border-color: #ffe58f; }
-    .card-item.status-priced { background-color: rgba(0,123,27,0.1); border-color: #007b1b; }
-    .card-item.status-listed { background-color: #e6f7ff; border-color: #91d5ff; }
-</style>
 
 <div id="tab-grid" class="tab-pane active">
     <div id="visual-card-grid">
         </div>
     <div id="infinite-loader" style="display:none; text-align:center; padding:20px;">Applying Filters...</div>
 </div>
-
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     if(typeof CardLiveFeedUpdater !== 'undefined') CardLiveFeedUpdater.init();

@@ -7,14 +7,100 @@ from datetime import timedelta
 from django.utils import timezone
 
 class ProductGroup(models.Model):
+    creation_dt = models.DateTimeField(auto_now_add=True)
+    modified_dt = models.DateTimeField(auto_now=True)
+
     group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
     group_title = models.CharField(max_length=50, blank=True, null=True)
     group_image_link = models.CharField(max_length=250, null=True, blank=True)
     replaced_by = models.ForeignKey('self', blank=False, null=True, on_delete=models.SET_NULL, related_name='replaces')
 
+    card_count = models.IntegerField(default=0)
+
+    total_qty = models.IntegerField(default=0)
+    listed_qty = models.IntegerField(default=0)
+    staged_qty = models.IntegerField(default=0)
+    avail_qty = models.IntegerField(default=0)
+    sold_qty = models.IntegerField(default=0)
+   
+    total_price = models.FloatField(default=0.0)
+    listed_price = models.FloatField(default=0.0)
+    staged_price = models.FloatField(default=0.0)
+    avail_price = models.FloatField(default=0.0)
+    sold_price = models.FloatField(default=0.0)
+
+    player_group_title = ["year","brand","subset","card_name","parallel","card_number","city","team"]
+    set_group_title = ["card_number", "full_name", "card_name","parallel","city","team"]
+    team_group_title = ["full_name","year","brand","subset","card_name","parallel","card_number","city","team"]
+
+
+    def get_title_for_group(self, csr, limit=80):
+        values = []
+        for term in self.player_group_title:
+            if hasattr(csr, term):
+                value = getattr(csr, "display_"+term)
+                if value:
+                    values.append(value)
+
+        return " ".join([x.strip() for x in values])[:limit]
+
+    def _calculate_summary_attribs(self):
+        product_list = list(self.products.all())
+        
+        self.card_count = len(product_list)
+
+        self.total_qty = sum(csr.parent_card.listed_card_info.list_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+        self.listed_qty = sum(csr.parent_card.listed_card_info.list_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.LISTED,StatusBase.CONFIRMED])
+        self.staged_qty = sum(csr.parent_card.listed_card_info.list_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.STAGED])
+        self.avail_qty = sum(csr.parent_card.listed_card_info.avail_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.LISTED,StatusBase.CONFIRMED])
+        self.sold_qty = sum(csr.parent_card.listed_card_info.sold_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+
+        self.total_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+        self.listed_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.LISTED,StatusBase.CONFIRMED])
+        self.staged_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.STAGED])
+        self.avail_price = sum(csr.parent_card.listed_card_info.avail_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+        self.sold_price = sum(csr.parent_card.listed_card_info.sold_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+
+    def save(self, *args, **kwargs):
+        self._calculate_summary_attribs()
+        super().save(*args, **kwargs)
+
+    @property
+    def listing_status(self):
+        return ";".join(set([x.overall_status for x in self.products.all()]))
+
+    @property
+    def days_listed(self):
+        start = self.listing_datetime or timezone.now()
+        end = self.listing_end_dt or timezone.now()
+        return (end - start).days
+
+    @property
+    def listing_datetime(self):
+        return self.products.last().parent_card.listed_card_info.listing_datetime if self.products.last() else timezone.now() 
+
+    @property
+    def listing_end_dt(self):
+        return timezone.now() 
+
+    @property
+    def listing_id(self):
+        return self.products.first().parent_card.listed_card_info.listing_id if self.products.first() else ""
+
+    def listed_value(self):
+        return sum(p.parent_card.listed_card_info.list_price for p in self.products.all() if p.overall_status in [StatusBase.LISTED, StatusBase.CONFIRMED])
+    
+    @property
+    def skus(self):
+        return ";".join(p.parent_card.listed_card_info.sku for p in self.products.all() if p.overall_status in [StatusBase.LISTED, StatusBase.CONFIRMED])
+
+    @property
+    def offer_ids(self):
+        return sum(p.parent_card.listed_card_info.offer_id for p in self.products.all() if p.overall_status in [StatusBase.LISTED, StatusBase.CONFIRMED])
+
     @property
     def value(self):
-        return sum(p.parent_card.value for p in self.products)
+        return sum(p.parent_card.value for p in self.products.all())
 
     #variation_title_struct = models.ForeignKey(FieldStructure, related_name="groups", on_delete=models.DO_NOTHING)
   
@@ -116,7 +202,7 @@ class ProductGroup(models.Model):
         sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
         
         variant_skus = [(csr.parent_card.listed_card_info.sku) for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]
-        variation_title_bases = [csr.variation_title_base for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]
+        variation_title_bases = [self.get_title_for_group(csr) for csr in sorted_csrs if csr.parent_card.listed_card_info.sku]
 
         # Group SKUs by title
         title_to_skus = defaultdict(list)

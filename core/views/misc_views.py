@@ -10,7 +10,7 @@ from dateutil import parser
 from django.shortcuts import render
 from django.utils import timezone
 from django.conf import settings as django_settings
-from core.models.ListingGroup import ProductListing
+from core.models.ProductListing import ProductListing
 from core.models.CardSearchResult import CardSearchResult
 
 logger = logging.getLogger(__name__)

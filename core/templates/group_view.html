@@ -1,6 +1,5 @@
 {% load custom_tags %}
 {% load static %}
-{% get_collections as collections %}
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="{% static 'js/collection_node.js' %}"></script>
@@ -78,9 +77,9 @@ function syncCardView(id, updatedFields) {
     <div class="collection-node">
         <!-- Collection Header Included Here -->
         {% include "components/collection_tools.html" %}
+        {% include "product_groups.html" with product_group=group %}
         
         {% block content %}
-            {% include "components/search_bar_only.html" with q=q timeframe=timeframe %}
             {% include "components/collection_display_tabs.html" with q=q timeframe=timeframe %}
         {% endblock %}
     </div>

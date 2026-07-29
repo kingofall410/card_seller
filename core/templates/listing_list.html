@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory List</title>
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            margin: 24px;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        /* Controls Toolbar Styling */
+        .controls-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: #ffffff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.875rem;
+        }
+
+        .control-group label.title {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .timeframe-select {
+            padding: 6px 10px;
+            font-size: 0.875rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #fff;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-right: 2px;
+        }
+        .badge-group { background-color: #dbeafe; color: #1e40af; }
+        .badge-single { background-color: #dcfce7; color: #166534; }
+        .badge-published { background-color: #e0e7ff; color: #3730a3; }
+        .badge-draft { background-color: #fef3c7; color: #92400e; }
+        .badge-status { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+        img.thumb {
+            width: 40px;
+            height: 52px;
+            object-fit: contain;
+            background: #e2e8f0;
+            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            display: block;
+        }
+
+        .thumb-placeholder {
+            width: 40px;
+            height: 52px;
+            background: #f1f5f9;
+            border-radius: 4px;
+            border: 1px solid #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        table.dataTable tbody td {
+            vertical-align: middle;
+        }
+
+        td.id-cell {
+            max-width: 140px;
+            white-space: normal;
+            word-break: break-all;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.825rem;
+            color: #334155;
+            white-space: normal;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    {% load static %}
+    {% include "header.html" %}
+    <h2>Listings</h2>
+
+    <!-- Toolbar Controls -->
+    <div class="controls-bar">
+        <div class="control-group">
+            <span class="title">Show Types:</span>
+            <label class="checkbox-label">
+                <input type="checkbox" id="toggleGroups" checked>
+                Groups
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="toggleSingles" checked>
+                Items (Singles)
+            </label>
+        </div>
+
+        <div class="control-group">
+            <label for="timeframeSelect" class="title">Timeframe Listed:</label>
+            <select id="timeframeSelect" class="timeframe-select">
+                <option value="all">All Time</option>
+                <option value="7">Last 7 Days</option>
+                <option value="14">Last 14 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="60">Last 60 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="180">Last 180 Days</option>
+                <option value="365">Last 365 Days</option>
+            </select>
+        </div>
+    </div>
+
+    <table id="inventoryTable" class="display" style="width:100%">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Image</th>
+                <th>SKU / ID</th>
+                <th>Listing ID</th>
+                <th>Title / Description</th>
+                <th>Listed Qty</th>
+                <th>Avail Qty</th>
+                <th>Sold Qty</th>
+                <th>Listed Price</th>
+                <th>Avail Price</th>
+                <th>Sold Price</th>
+                <th>Listing Start Date</th>
+                <th>Listing End Date</th>
+                <th>Days Listed</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 1. Product Groups -->
+            {% for group in groups %}
+            <tr>
+                <td data-order="Group">
+                    <span class="badge badge-group">Group</span>
+                </td>
+                <td data-order="{{ group.listing_status|default:'' }}">
+                    {% if group.listing_status %}
+                        <span class="badge badge-status">{{ group.listing_status }}</span>
+                    {% else %}
+                        --
+                    {% endif %}
+                </td>
+                <td data-order="0">
+                    {% if group.group_image_link %}
+                        <img src="{{ group.group_image_link }}" class="thumb" alt="Group image">
+                    {% else %}
+                        <div class="thumb-placeholder">N/A</div>
+                    {% endif %}
+                </td>
+                <td class="id-cell" data-order="{{ group.group_key }}">
+                    <code>{{ group.group_key }}</code>
+                </td>
+                <td data-order="{{ group.listing_id|default:'' }}">
+                    <code>{{ group.listing_id|default:"--" }}</code>
+                </td>
+                <td data-order="{{ group.group_title|default:group.group_key }}">
+                    <strong><a href="/product_group_detail/{{ group.group_key }}/" style="text-decoration:none">{{ group.group_title|default:group.group_key }}</a></strong>
+                </td>
+                <td data-order="{{ group.listed_qty|default:0 }}">{{ group.listed_qty|default:0 }}</td>
+                <td data-order="{{ group.avail_qty|default:0 }}">{{ group.avail_qty|default:0 }}</td>
+                <td data-order="{{ group.sold_qty|default:0 }}">{{ group.sold_qty|default:0 }}</td>
+                
+                <td data-order="{{ group.listed_price|default:0 }}">${{ group.listed_price|floatformat:0 }}</td>
+                <td data-order="{{ group.avail_price|default:0 }}">${{ group.avail_price|floatformat:0 }}</td>
+                <td data-order="{{ group.sold_price|default:0 }}">${{ group.sold_price|floatformat:0 }}</td>
+
+                <td data-order="{% if group.listing_datetime %}{{ group.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
+                    {{ group.listing_datetime|date:"Y-m-d H:i"|default:"--" }}
+                </td>
+                <td data-order="{% if group.listing_end_dt %}{{ group.listing_end_dt|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
+                    {{ group.listing_end_dt|date:"Y-m-d H:i"|default:"Not Listed" }}
+                </td>
+                <td data-order="{{ group.days_listed|default:0 }}">
+                    {{ group.days_listed|default:"--" }}
+                </td>
+            </tr>
+            {% endfor %}
+
+            <!-- 2. Standalone Cards -->
+            {% for item in standalone_items %}
+            {% with status=item.listing_statuses.last %}
+            <tr>
+                <td data-order="Single">
+                    <span class="badge badge-single">Single</span>
+                </td>
+                <td data-order="{{ status.listing_status|default:'' }}">
+                    {% if status %}
+                        <span class="badge badge-status">{{ status.listing_status }}</span>
+                    {% else %}
+                        --
+                    {% endif %}
+                </td>
+                <td data-order="0">
+                    {% if item.shareable_link_front %}
+                        <img src="{{ item.shareable_link_front }}" class="thumb" alt="Card image">
+                    {% else %}
+                        <div class="thumb-placeholder">N/A</div>
+                    {% endif %}
+                </td>
+                <td class="id-cell" data-order="{{ item.sku|default:'' }}">
+                    <code>{{ item.sku|default:"--" }}</code>
+                </td>
+                <td data-order="{{ item.listing_id|default:'' }}">
+                    <code>{{ item.listing_id|default:"--" }}</code>
+                </td>
+                <td data-order="{{ item.listing_detail_text|default:'' }}">
+                    <a href="/card/{{ item.card_id }}/" style="text-decoration: none;">{{ item.listing_detail_text|default:"(Untitled)" }}</a>
+                </td>
+                <td data-order="{{ item.list_qty|default:0 }}">{{ item.list_qty|default:0 }}</td>
+                <td data-order="{{ item.avail_qty|default:0 }}">{{ item.avail_qty|default:0 }}</td>
+                <td data-order="{{ item.sold_qty|default:0 }}">{{ item.sold_qty|default:0 }}</td>
+                <td data-order="{{ item.listed_price|default:0 }}">${{ item.listed_price|floatformat:0 }}</td>
+                <td data-order="{{ item.avail_price|default:0 }}">${{ item.avail_price|floatformat:0 }}</td>
+                <td data-order="{{ item.sold_price|default:0 }}">${{ item.sold_price|floatformat:0 }}</td>
+                <td data-order="{% if item.listing_datetime %}{{ item.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
+                    {{ item.listing_datetime|date:"Y-m-d H:i"|default:"Not Listed" }}
+                </td>
+                <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
+                    {{ item.listing_end_dt|date:"Y-m-d H:i"|default:"--" }}
+                </td>
+                <td data-order="{{ item.days_listed|default:0 }}">
+                    {{ item.days_listed|default:"--" }}
+                </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- jQuery & DataTables Script Imports -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+
+            // --- 1. URL Parameter Handling for Timeframe ---
+            var urlParams = new URLSearchParams(window.location.search);
+            // Checks for 'timeframe' parameter (or fallback 'days'), defaults to 'all'
+            var activeTimeframeParam = urlParams.get('timeframe') || urlParams.get('days') || 'all';
+            
+            // Set initial state of dropdown on page load
+            $('#timeframeSelect').val(activeTimeframeParam);
+
+            // Handle timeframe change: reload page with ?timeframe=<daynumber>
+            $('#timeframeSelect').on('change', function() {
+                var selectedVal = $(this).val();
+                var searchParams = new URLSearchParams(window.location.search);
+
+                if (selectedVal && selectedVal !== 'all') {
+                    searchParams.set('timeframe', selectedVal);
+                    searchParams.delete('days'); // Remove legacy key if present
+                } else {
+                    searchParams.delete('timeframe');
+                    searchParams.delete('days');
+                }
+
+                // Reload view with updated query string
+                window.location.search = searchParams.toString();
+            });
+
+
+            // --- 2. Custom Client-Side Search Extension (Type Toggles) ---
+            $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                var typeCell = data[0]; // Column 0: Type ("Group" or "Single")
+                var showGroups = $('#toggleGroups').is(':checked');
+                var showSingles = $('#toggleSingles').is(':checked');
+
+                var isGroup = typeCell.indexOf('Group') !== -1;
+                var isSingle = typeCell.indexOf('Single') !== -1;
+
+                if (isGroup && !showGroups) return false;
+                if (isSingle && !showSingles) return false;
+
+                return true;
+            });
+
+
+            // --- 3. Initialize DataTable ---
+            var table = $('#inventoryTable').DataTable({
+                order: [[12, 'desc']], // Column 12: Listing Start Date descending
+                pageLength: 25,
+                columnDefs: [
+                    { orderable: false, targets: 2 },                     // Image column non-sortable
+                    { type: 'num', targets: [6, 7, 8, 9, 10, 11, 14] }    // Qty, Prices, Days Listed numeric sort
+                ],
+                language: {
+                    search: "Global filter:"
+                }
+            });
+
+            // Redraw DataTable when toggling Groups / Singles checkboxes
+            $('#toggleGroups, #toggleSingles').on('change', function() {
+                table.draw();
+            });
+        });
+    </script>
+
+</body>
+</html>

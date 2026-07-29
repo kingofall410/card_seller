@@ -98,23 +98,6 @@ let isApplyingServerUpdate = false;
         });
     }
 
-    // --- DOUBLE-CLICK URL TARGETING ENGINE ---
-    $(document).on('dblclick', '.dtsp-searchPane table tbody tr', function (e) {
-        e.preventDefault();
-        const $row = $(this);
-        const targetValue = $row.find('.dtsp-name').text().trim();
-        const selection = targetValue || $row.find('td').first().text().trim();
-        if (!selection) return;
-
-        const currentUrl = new URL(window.location.href);
-        const basePath = currentUrl.pathname;
-        const parentSelection = currentUrl.searchParams.get('timeframe') || '30';
-        const targetTargetUrl = `${basePath}?q=${selection}&timeframe=${parentSelection}`;
-
-        console.log(`Opening Drill-Down View: ${targetTargetUrl}`);
-        window.open(targetTargetUrl, '_blank');
-    });
-
     // =====================================================================
     // CORE INITIALIZATION ENGINE PASS
     // =====================================================================

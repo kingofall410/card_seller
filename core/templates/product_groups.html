@@ -1,0 +1,76 @@
+{% extends "base.html" %} <!-- Extend your base layout if applicable, or wrap in standard HTML boilerplate -->
+
+{% block content %}
+<!-- Tailwind CSS for styling -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<div class="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 font-sans">
+
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b pb-6">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="text-3xl font-bold text-gray-900">
+          {% if product_group.group_title %}{{ product_group.group_title }}{% else %}Group #{{ product_group.id }}{% endif %}
+        </h1>
+        <span class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+          Key: {{ product_group.group_key|default:"Unset" }}
+        </span>
+      </div>
+      <p class="mt-1 text-sm text-gray-500">
+        Created on {{ product_group.creation_dt|date:"M d, Y H:i" }} &bull; Last modified {{ product_group.modified_dt|date:"M d, Y H:i" }}
+      </p>
+    </div>
+
+    <div class="mt-4 md:mt-0 flex items-center space-x-3">
+      <button type="submit" form="product-group-form" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+        Save Changes
+      </button>
+    </div>
+  </div>
+
+  <!-- Read-Only Metrics Dashboard -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Card Count & Total Items -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <dt class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Products</dt>
+      <dd class="mt-2 text-2xl font-extrabold text-gray-900">{{ product_group.card_count }}</dd>
+      <p class="text-xs text-gray-500 mt-1">Calculated group size: {{ product_group.size }}</p>
+    </div>
+
+    <!-- Inventory Counts -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <dt class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity Breakdown</dt>
+      <dd class="mt-2 flex items-baseline space-x-3 text-sm font-semibold">
+        <span class="text-blue-600" title="Total">T: {{ product_group.total_qty }}</span>
+        <span class="text-blue-600" title="Listed">L: {{ product_group.listed_qty }}</span>
+        <span class="text-blue-600" title="Staged">St: {{ product_group.staged_qty }}</span>
+        <span class="text-emerald-600" title="Available">A: {{ product_group.avail_qty }}</span>
+        <span class="text-purple-600" title="Sold">S: {{ product_group.sold_qty }}</span>
+      </dd>
+      <p class="text-xs text-gray-500 mt-1">Listed / Available / Sold</p>
+    </div>
+
+    <!-- Pricing Summary -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <dt class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Group Value Summary</dt>
+      <dd class="mt-2 flex items-baseline space-x-3 text-sm font-semibold">
+        <span class="text-blue-600" title="Total">T: ${{ product_group.total_price|floatformat:0 }}</span>
+        <span class="text-blue-600" title="Listed">L: ${{ product_group.listed_price|floatformat:0 }}</span>
+        <span class="text-blue-600" title="Staged">St: ${{ product_group.staged_price|floatformat:0 }}</span>
+        <span class="text-emerald-600" title="Available">A: ${{ product_group.avail_price|floatformat:0 }}</span>
+        <span class="text-purple-600" title="Sold">S: ${{ product_group.sold_price|floatformat:0 }}</span>
+      </dd>
+      <p class="text-xs text-gray-500 mt-1">Listed Price: ${{ product_group.listed_price|floatformat:2 }}</p>
+    </div>
+
+    <!-- Days Listed & Next Listing -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <dt class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Listing Timeline</dt>
+      <dd class="mt-2 text-2xl font-extrabold text-gray-900">{{ product_group.days_listed }} <span class="text-sm font-normal text-gray-500">days</span></dd>
+      <p class="text-xs text-gray-500 mt-1">Next: {{ product_group.next_listing_datetime|date:"M d, Y" }}</p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

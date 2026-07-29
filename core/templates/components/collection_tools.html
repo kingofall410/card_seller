@@ -1,43 +1,199 @@
 {% load custom_tags %}
-<div class="collection-header">
-    <div class="collection-title-{{ collection.id }}">
-        <h2 id="collection-title-{{ collection.id }}">
-            {{ collection.id }}. {{ collection.name }} (
-            <span id="card-count-{{ collection.id }}">
-                {{ collection.cards.count }}; ${{ collection.value|floatformat:2 }}
-            </span>)
-        </h2>
-        
-        <div class="collection-status-group" id="status-group-{{ collection.id }}">
-            {% get_choices as status_choices %}
-            {% for value, label in status_choices %}
-            <label class="status-option">
-                <input 
-                    type="radio"
-                    name="status-{{ collection.id }}"
-                    value="{{ value }}"
-                    {% if collection.status == value %}checked{% endif %}
-                    onchange="saveCollectionField({{ collection.id }}, 'status', this.value)"
-                >
-                {{ label }}
-            </label>
-            {% endfor %}
-        </div>
-        
-        <div class="collection-actions">
-            <button onclick="removeCollection({{ collection.id }})" title="Remove Collection">🗑️</button>
-            <button onclick="submitCardForm({{ collection.id }}, null, '/crop_review/{{ collection.id }}/')" title="Crop Review">✂</button>
-            <button onclick="submitCollection('/identify_collection/{{ collection.id }}/')" title="Identify">🔍</button>
-            <button onclick="submitCollection('/price_collection/{{ collection.id }}/')" title="Price">💲</button>
-            <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
-        </div>
+{% load static %}
 
-        <input type="text"
-            name="collection_name_{{ collection.id }}"
-            value="{{ collection.name }}" 
-            style="width: 50%; box-sizing: border-box; margin-top: 10px;"
-            data-id="{{ collection.id }}"
-            placeholder="Change collection name..."
-            onchange="saveCollectionField({{ collection.id }}, 'name', this.value)">
+{% get_product_groups as groups %}
+{% get_spreads as spreads %}
+{% get_spreads as spreads %}
+
+<!-- Collection Header Control Bar -->
+<div class="collection-header">
+    <button onclick="submitAndGo('/crop_review/0/')" title="Crop Review">✂</button>
+    <button onclick="submitCollection('/identify_collection/0/')" title="Identify">🔍</button>
+    <button onclick="submitCollection('/price_collection/0/')" title="Price">💲</button>
+    <button onclick="submitCollection('/bulk_hold/0/')" title="Hold">✋</button>
+    <button onclick="handleBulkUpdate(true)" title="Review">🕶</button>
+    <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
+    <button onclick="submitCollection('/re_sku/')" title="Re-SKU">🏷️</button>
+    <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>          
+    <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
+    
+    <button 
+        class="open-tag-editor-btn" 
+        data-target="modal-wrapper-{{ card.id }}"
+        style="background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+        Edit Tags
+    </button>
+
+    <!-- Bulk Status Dropdown & Action -->
+    <select id="status-dropdown" 
+            style="padding: 4px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; font-weight: bold; cursor: pointer; 
+                   background-color: {{ meta.color }}; transition: background-color 0.3s;">
+        {% for value, label in StatusBase.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkUpdate(false)">Bulk Status Update</button>
+
+    <!-- Group Dropdown & Selection -->
+    <select id="group-dropdown" class="group-select"
+            data-card-id="{{ card_id }}"
+            onchange="if(this.value === '__new__') groupSelection(this);"
+            style="padding: 8px; border-radius: 6px; min-width: 180px;">
+        <option value="">No Group (Single Listing)</option>
+        <option value="__new__">➕ New Group…</option>
+        {% for g in groups %}
+            <option value="{{ g.key }}">{{ g.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- Listing Date & Spread -->
+    {% now "Y-m-d\TH:i" as current_time %}
+    <label for="listing-date" style="font-weight:600; margin-bottom:4px;">
+        Schedule Time
+    </label>
+    <input type="datetime-local"
+           id="listing-date"
+           value="{{ current_time }}"
+           style="padding: 8px; border-radius: 6px; min-width: 200px;" />
+
+    <select id="listing-spread" 
+            style="padding: 8px; border-radius: 6px; min-width: 70px; font-weight: bold; cursor: pointer;">
+        {% for value, label in spreads %}
+            <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="handleBulkList()">Bulk List</button>
+</div>
+
+<!-- Integrated Tag Editor Modal -->
+<div id="modal-wrapper-{{ card.id }}" class="tag-editor-dialog-overlay" style="display: none;">
+    <div class="tag-editor-component" style="border: 1px solid #ccc; padding: 20px; border-radius: 6px; max-width: 500px; width: 90%; background-color: #ffffff; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); position: relative;">
+        <span class="close-tag-dialog" style="position: absolute; top: 12px; right: 16px; font-size: 20px; font-weight: bold; color: #888; cursor: pointer;">&times;</span>
+        
+        <h4 style="margin-top: 0; margin-bottom: 16px;">Manage Metadata for: <strong>{{ obj.title }}</strong></h4>
+        
+        <form method="POST" action="javascript:void(0);">
+            {% csrf_token %}
+            <div style="margin-bottom: 20px;">
+                <label for="new-tags-{{ card.id }}" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Add New Tags:</label>
+                <input 
+                    type="text" 
+                    id="new-tags-{{ card.id }}"
+                    name="new_tags" 
+                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
+                    placeholder="e.g. vintage, rookie, 1989">
+                <small style="color: #666; display: block; margin-top: 6px;">Separate multiple tags with commas.</small>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="close-tag-dialog" style="background-color: #6c757d; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    Cancel
+                </button>
+                <button type="submit" style="background-color: #007bff; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    Apply Changes
+                </button>
+            </div>
+        </form>
     </div>
 </div>
+
+<!-- Collection Header Control Handlers -->
+<script>
+async function groupSelection(element) {
+    const title = prompt("Enter a name for the new group:");
+    if (!title || title.trim() === "") {
+        element.value = "";
+        return;
+    }
+
+    const url = `/new_group/${encodeURIComponent(title.trim())}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+            const newOption = document.createElement("option");
+            newOption.value = data.id; 
+            newOption.textContent = data.title;
+
+            const newGroupOption = element.querySelector('option[value="__new__"]');
+            element.insertBefore(newOption, newGroupOption);
+            element.value = data.id;
+        } else {
+            alert("Failed to create group: " + (data.error || "Unknown error"));
+            element.value = "";
+        }
+    } catch (err) {
+        console.error("Group creation failed:", err);
+        element.value = "";
+    }
+}
+
+function handleBulkUpdate(isReview = false) {
+    let url;
+    if (isReview) {
+        url = `/bulk_status_update/reviewed/`;
+    } else {
+        const dropdown = document.getElementById('status-dropdown');
+        const selectedValue = dropdown.value;
+        url = `/bulk_status_update/${selectedValue}/`;
+    }
+    submitCollection(url, null, 0, isReview);
+}
+
+function handleBulkList() {
+    const dropdown = document.getElementById('group-dropdown');
+    const selectedValue = dropdown.value;
+    const schedule = document.getElementById('listing-date');
+    const spread = document.getElementById('listing-spread');
+
+    const url = selectedValue ? `/bulk_list/${selectedValue}/` : `/bulk_list/`;
+    submitCollection(url, schedule.value, spread.value);
+}
+
+// Dialog Controller Event Listeners
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll('.open-tag-editor-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const dialogOverlay = document.getElementById(targetId);
+            if (dialogOverlay) {
+                dialogOverlay.style.display = 'flex';
+            }
+        });
+    });
+
+    document.querySelectorAll('.close-tag-dialog').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function() {
+            const dialogOverlay = this.closest('.tag-editor-dialog-overlay');
+            if (dialogOverlay) {
+                dialogOverlay.style.display = 'none';
+            }
+        });
+    });
+
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('tag-editor-dialog-overlay')) {
+            event.target.style.display = 'none';
+        }
+    });
+
+    document.querySelectorAll('.tag-editor-dialog-overlay form').forEach(form => {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const inputElement = this.querySelector('input[name="new_tags"]');
+            if (!inputElement) return;
+
+            const parsedTagArray = inputElement.value
+                .split(',')
+                .map(tag => tag.trim())
+                .filter(tag => tag.length > 0);
+
+            if (typeof submitCollection === 'function') {
+                submitCollection("/bulk_tag/", null, null, null, parsedTagArray);
+            }
+        });
+    });
+});
+</script>

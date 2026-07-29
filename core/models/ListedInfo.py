@@ -2,6 +2,7 @@ from django.db import models
 from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 from services import ebay
+from django.utils import timezone
 
 class ListedInfo(models.Model):
     card = models.OneToOneField('core.Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
@@ -10,7 +11,15 @@ class ListedInfo(models.Model):
 
     listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
+    total_listing_value = models.FloatField(default=0.0)
+
     list_qty = models.IntegerField(default=0)
+    avail_qty = models.IntegerField(default=0)
+    sold_qty = models.IntegerField(default=0)
+    
+    listed_price = models.FloatField(default=0.0)
+    avail_price = models.FloatField(default=0.0)
+    sold_price = models.FloatField(default=0.0)
 
     listing_id = models.CharField(max_length=250, blank=True)
     #listed_under_sku = models.ForeignKey('self', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_lead_sku")
@@ -32,8 +41,24 @@ class ListedInfo(models.Model):
     def create_from_card(cls, card):
         lci = ListedInfo.objects.create(card=card)
         return lci
+    
+    @property
+    def listing_status(self):
+        return self.listing_statuses.last().listing_status
+    
+    @property
+    def listing_end_dt(self):
+        if self.listing_statuses.last():
+            return self.listing_statuses.last().sold_date
+        else:
+            return timezone.now()
 
-        
+    @property
+    def days_listed(self):
+        start = self.listing_datetime or timezone.now()
+        end = self.listing_end_dt or timezone.now()
+        return (end - start).days
+
     def clear(self):
         self.product_group = None
         self.listing_datetime = None
@@ -136,16 +161,34 @@ class ListedInfo(models.Model):
         self.sku = self.card.active_search_results.build_sku()
 
     def save(self, *args, **kwargs):
+        csr = None
         if self.card and self.card.active_search_results:
             csr = self.card.active_search_results
             
             print("saving LI ", self.id, csr.ebay_msrp)
             self.listing_detail_text = csr.title_to_be if csr else ""
             self.card.update_mod_date()
-        if self.msrp == 0.0 or self.msrp == -69.69:
+
+            #if this csr is part of a product group and there's no link, create
+            if csr.ebay_product_group and not self.product_group:
+                self.product_group = csr.ebay_product_group
+
+        if csr and self.msrp == 0.0 or self.msrp == -69.69:
             self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
         if not self.listing_id:
             self.listing_id = ""
+
+        if self.listing_statuses.exists():
+            self.sold_qty = self.listing_statuses.last().sold_qty
+            self.avail_qty = self.listing_statuses.last().available_qty
+        else:
+            self.sold_qty = 0
+            self.avail_qty = self.list_qty
+
+        self.listed_price = self.list_qty*self.list_price
+        self.avail_price = self.avail_qty*self.list_price
+        self.sold_price = self.sold_qty*self.list_price
+
         super().save(*args, **kwargs)
     
     def accept_msrp(self):

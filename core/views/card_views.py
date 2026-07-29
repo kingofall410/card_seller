@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
-from core.models.Group import ProductGroup
+from core.models.ProductGroup import ProductGroup
 from core.models.TagGroup import TagGroup
 from core.models.ListingGroup import ListingGroup
 from core.models.ListedInfo import ListedInfo
@@ -535,7 +535,7 @@ def scope_queryset_to_latest_csr(queryset):
     # Explicitly filter the baseline relationship to only the latest ID match
     return queryset.filter(search_results__id=Subquery(latest_search_id))
 
-def card_search_ajax(request):
+'''def card_search_ajax(request):
     query = request.GET.get('q', '').strip()
     since_date_str = request.GET.get('timeframe')
     filters_json = request.GET.get('filters')
@@ -621,7 +621,7 @@ def card_search_ajax(request):
         'total_count': cards_list.count(),
         'server_time': timezone.now().isoformat()
     })
-
+'''
 def get_card_item(request, card_id):
     card = get_object_or_404(Card, id=card_id)
         

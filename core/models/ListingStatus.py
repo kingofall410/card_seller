@@ -1,6 +1,6 @@
 from django.db import models
 from core.models.CardSearchResult import CardSearchResult
-from core.models.Group import ProductGroup
+from core.models.ProductGroup import ProductGroup
 from core.models.Status import StatusBase
 from core.models.ListingSpread import ListingSpread
 

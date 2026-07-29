@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models.Card import Card, CardSearchResult, Collection
-from core.models.CardSearchResult import ProductListing, ListingTitle, ListingGroup
-from core.models.Group import ProductGroup
+from core.models.Card import Card, CardSearchResult, Collection
+from core.models.ListingGroup import ListingGroup
+from core.models.ProductListing import ProductListing, ListingTitle
+from core.models.ProductGroup import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.ListingStatus import ListingStatus
 from core.models.Cropping import CropParams, CroppedImage

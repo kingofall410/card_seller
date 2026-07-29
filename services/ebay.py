@@ -748,7 +748,7 @@ def get_or_create_offer(offer_data, access_token, sku=None):
 
     return offer_id, response.status_code
 
-
+#TODO: capture insertion fee from the publish response and allocate to listing as appropriate
 def publish_offer(offer_id, access_token):
     print("publish", offer_id)
     headers = {
@@ -763,6 +763,7 @@ def publish_offer(offer_id, access_token):
     print ("Publish response", response.text)
     return response.json()["listingId"]
 
+#TODO: capture insertion fee from the publish response and allocate to listing as appropriate
 def publish_inventory_group(group_name, access_token):
     print("PIG:", group_name)
 

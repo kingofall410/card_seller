@@ -1,0 +1,414 @@
+/* ==========================================================================
+   1. LAYOUT & DASHBOARD CONTAINER
+   ========================================================================== */
+
+.dashboard-container {
+    display: grid;
+    /* Sidebar fixed at 320px; Main Content fills remaining space */
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 30px;
+    padding: 20px;
+    background-color: #fcfcfc;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.main-content {
+    width: 100%;
+    justify-self: start;
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 12px 20px;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+#header-info-mount {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+}
+
+#grouped-card-view {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.card-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 15px;
+    align-items: flex-start;
+}
+
+/* ==========================================================================
+   2. SIDEBAR & SEARCH PANES
+   ========================================================================== */
+
+.sidebar-panes {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-right: 15px;
+    border-right: 1px solid #eee;
+}
+
+#dynamic-sort-bar, 
+.dtsp-searchPane {
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+}
+
+.dtsp-panesContainer {
+    order: -1 !important;
+    margin-bottom: 10px !important;
+}
+
+/* Processing indicator for active filtering */
+.dtsp-searchPane.pane-processing {
+    position: relative;
+    opacity: 0.7;
+}
+
+.dtsp-searchPane.pane-processing::after {
+    content: "⚡ Filtering...";
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #007bff;
+    background: #eef6ff;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* --- Dynamic Sort Bar --- */
+.sort-label {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 12px;
+    color: #1a1a1a;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+
+#dynamic-sort-bar a {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    font-size: 13px;
+    text-decoration: none;
+    color: #555;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+#dynamic-sort-bar a:hover {
+    background: #f0f0f0;
+    color: #000;
+}
+
+#dynamic-sort-bar a.active {
+    background: #eef6ff;
+    color: #007bff;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   3. VISUAL CARD GRID & ITEMS
+   ========================================================================== */
+
+#visual-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+    padding: 15px;
+}
+
+/* Faded visual indicator when filtering/re-rendering */
+#visual-card-grid.filtering-active {
+    opacity: 0.4;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.card-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    position: relative;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
+
+.card-main-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    width: 100%;
+}
+
+.card-meta {
+    width: 100%;
+    font-size: 16px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #444;
+}
+
+/* --- Card Thumbnails & Hover Transitions --- */
+.image-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    margin: 8px 0;
+    border-radius: 4px;
+    background-color: #eee;
+}
+
+.thumbnail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.25s ease;
+}
+
+.thumbnail.default {
+    opacity: 1;
+    z-index: 1;
+}
+
+.thumbnail.hover {
+    opacity: 0;
+    z-index: 2;
+}
+
+.image-wrapper:hover .thumbnail.hover { opacity: 1; }
+.image-wrapper:hover .thumbnail.default { opacity: 0; }
+
+/* ==========================================================================
+   4. STATUS BADGES & VARIANT STYLES
+   ========================================================================== */
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+/* Badge Color Classes */
+.status-listed { background: #00aaff; color: #000; }
+.status-identified { background: #ff6666; }
+.status-pending { background: rgba(255, 204, 0, 0.2); color: #000; }
+.status-failed { background: rgba(255, 51, 51, 0.12); color: #000; }
+.status-success { background: rgba(51, 204, 51, 0.12); color: #000; }
+
+/* Backgrounds applied to .card-item */
+.card-item.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+.card-item.status-pending,
+.card-item.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
+.card-item.status-priced,
+.card-item.status-auto_priced { background-color: rgba(0, 123, 27, 0.13); border-color: #007b1b; }
+.card-item.status-held { background-color: #999999; border-color: #777777; }
+.card-item.status-listed,
+.card-item.status-staged,
+.card-item.status-confirmed { background-color: #e6f7ff; border-color: #91d5ff; }
+.card-item.status-sold { background-color: rgba(201, 188, 0, 0.54); border-color: #c9bc00; }
+.card-item.status-reviewed { background-color: rgba(223, 4, 219, 0.21); border-color: #df04db; }
+
+/* Backgrounds applied to .listing-group.one-liner variants */
+.listing-group.one-liner .listing.status-failed { background-color: #fff1f0; border-color: #ffa39e; }
+.listing-group.one-liner .listing.status-pending,
+.listing-group.one-liner .listing.status-ided { background-color: #fffbe6; border-color: #ffe58f; }
+.listing-group.one-liner .listing.status-priced, 
+.listing-group.one-liner .listing.status-listed,
+.listing-group.one-liner .listing.status-staged,
+.listing-group.one-liner .listing.status-auto_priced { background-color: rgba(0, 123, 27, 0.13); border-color: #007b1b; }
+.listing-group.one-liner .listing.status-held { background-color: #999999; border-color: #777777; }
+.listing-group.one-liner .listing.status-confirmed { background-color: #e6f7ff; border-color: #91d5ff; }
+.listing-group.one-liner .listing.status-sold { background-color: rgba(201, 188, 0, 0.54); border-color: #c9bc00; }
+.listing-group.one-liner .listing.status-reviewed { background-color: rgba(223, 4, 219, 0.21); border-color: #df04db; }
+
+/* ==========================================================================
+   5. DATA ENGINE & SPREADSHEET INPUTS
+   ========================================================================== */
+
+/* Hide native DataTables pagination/length and engine table on start */
+.dataTables_paginate, 
+.dataTables_length,
+#card-data-engine { 
+    display: none !important; 
+}
+
+#infinite-loader {
+    text-align: center;
+    padding: 40px;
+    font-weight: bold;
+    color: #888888;
+    display: none;
+}
+
+/* Expandable Row Images */
+table.dataTable tbody tr { cursor: pointer; }
+table.dataTable tbody tr img {
+    width: 25px;
+    height: auto;
+    transition: width 0.3s ease;
+}
+table.dataTable tbody tr.expanded-row img {
+    width: 300px;
+}
+
+.handsontable td img {
+    display: block;
+    height: 250px;
+    width: auto;
+}
+
+/* Persistent Inline Spreadsheet Inputs */
+.dt-inline-edit {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+tr:hover .dt-inline-edit {
+    border-color: #e0e0e0;
+    background: #ffffff;
+}
+
+.dt-inline-edit:focus {
+    outline: none;
+    background: #ffffff !important;
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+    color: #000000;
+}
+
+/* Success Commit Flash Animation */
+.dt-cell-committed {
+    animation: flash-success 1.2s ease;
+}
+
+@keyframes flash-success {
+    0% { background-color: rgba(40, 167, 69, 0.25); }
+    100% { background-color: transparent; }
+}
+
+/* Tooltip Image Preview */
+.dt-image-preview {
+    position: fixed;
+    display: none; /* jQuery shows/hides this dynamically */
+    z-index: 9999;
+    pointer-events: none;
+    background: #ffffff;
+    border: 1px solid #dcdcdc;
+    padding: 6px;
+    border-radius: 6px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    gap: 10px;
+}
+
+.dt-image-preview img {
+    display: block;
+    max-height: 500px;
+    width: auto;
+    border-radius: 4px;
+}
+
+/* ==========================================================================
+   6. TABS, MENUS & OVERLAYS
+   ========================================================================== */
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    color: #666666;
+}
+
+.tab-btn.active {
+    color: #007bff;
+    border-bottom: 3px solid #007bff;
+}
+
+.move-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background-color: #ffffff;
+    min-width: 180px;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
+    z-index: 1001;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.move-menu a {
+    color: #333333;
+    padding: 8px 12px;
+    text-decoration: none;
+    display: block;
+    font-size: 13px;
+}
+
+.move-menu a:hover { 
+    background-color: #f1f1f1; 
+}
+
+.tag-editor-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
