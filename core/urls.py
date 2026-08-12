@@ -87,6 +87,7 @@ urlpatterns = [
     path('card_status_monitor/', card_views.card_status_monitor, name="card_status_monitor"),
     path('product_group_detail/<str:pk>/', collection_views.product_group_detail, name="product_group_detail"),
     path('listings_list/', collection_views.listings_list, name="listings_list"),
+    path('clear_product_group/', card_views.clear_product_group, name="clear_product_group"),
     #path('pg_dash/', card_views.pg_dash, name="pg_dash")
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

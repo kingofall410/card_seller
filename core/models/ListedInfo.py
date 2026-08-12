@@ -9,6 +9,8 @@ class ListedInfo(models.Model):
     sub_cards = models.ManyToManyField('core.Card', null=True, blank=True, related_name="listed_subcard_info")
     product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
 
+    listed_sku = models.CharField(max_length=250, blank=True)
+
     listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
     total_listing_value = models.FloatField(default=0.0)
@@ -168,10 +170,6 @@ class ListedInfo(models.Model):
             print("saving LI ", self.id, csr.ebay_msrp)
             self.listing_detail_text = csr.title_to_be if csr else ""
             self.card.update_mod_date()
-
-            #if this csr is part of a product group and there's no link, create
-            if csr.ebay_product_group and not self.product_group:
-                self.product_group = csr.ebay_product_group
 
         if csr and self.msrp == 0.0 or self.msrp == -69.69:
             self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)

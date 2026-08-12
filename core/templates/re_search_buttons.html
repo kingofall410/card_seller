@@ -89,7 +89,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const clearListedInfoBtn = document.getElementById(`clear-listed-info-btn-${cardId}`);
 
     const groupSelect = document.getElementById(`group-select-${cardId}`);
-    const scheduleInput = document.getElementById(`schedule-${cardId}`);
+    const scheduleInput = document.getElementById(`schedule-${cardId}`);            
     const publishInput = document.getElementById(`publish-${cardId}`);
 
     function performListAction(button, searchResultId, groupSelect, publishInput, scheduleInput, onSuccess) {
@@ -119,12 +119,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 const groupId = this.value;
                 const cardId = "{{ card_id }}";
                 // Assuming you have access to the related ListedInfo ID
-                const liId = "{{ card.listed_card_info_id }}"; 
-
+                const liId = "{{ card.listed_card_info.id }}"; 
+                console.log(liId)
+                console.log("{{ card.id }}")
                 // Prepare the data to match your view's request.POST.get() calls
                 const formData = new URLSearchParams();
                 formData.append("li_id", liId);
-                formData.append("field", "product_group_group_key"); // Or whichever field name you are updating
+                formData.append("field", "product_group_id"); // Or whichever field name you are updating
                 formData.append("value", groupId);
                 console.log(formData)
                 try {

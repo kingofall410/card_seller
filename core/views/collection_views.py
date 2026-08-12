@@ -10,7 +10,7 @@ from django.utils.timezone import now
 from services import lookup, ebay
 from services.models.models import Settings
 from core.models.Card import Card, Collection
-from services.models.task import ListingTask
+from services.models.task import ListingTask, ConfirmTask
 from core.models.CardSearchResult import CardSearchResult
 from core.views import card_views, image_views
 from django.views.decorators.csrf import csrf_exempt
@@ -30,6 +30,7 @@ from django.utils import timezone
 from itertools import chain
 from core.models.ProductGroup import ProductGroup
 from core.models.ListedInfo import ListedInfo
+from core.models.ListingStatus import ListingStatus
 
 @require_POST
 @csrf_exempt
@@ -234,6 +235,17 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         card=OuterRef('parent_card')
     ).order_by('-scheduled_for').values('scheduled_for')[:1]
 
+
+    # Isolated Subquery to get the latest task date without causing N+1 hits
+    latest_confirmtask_scheduled_subquery = ConfirmTask.objects.filter(
+        card=OuterRef('parent_card')
+    ).order_by('-created_at').values('created_at')[:1]
+
+    # Isolated Subquery to get the latest task date without causing N+1 hits
+    latest_listingstatus_subquery = ListingStatus.objects.filter(
+        listing_info=OuterRef('parent_card__listed_card_info')
+    ).order_by('-create_date').values('create_date')[:1]
+
     # Isolated Subquery to get the primary tag group without causing N+1 hits
     ptg_scheduled_subquery = TagGroup.objects.filter(
         tagged_cards=OuterRef('parent_card')
@@ -252,6 +264,8 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         
         # Injected listing task timestamp annotation
         latest_task_scheduled=Subquery(latest_task_scheduled_subquery),
+        latest_confirmtask_scheduled=Subquery(latest_confirmtask_scheduled_subquery),
+        latest_listingstatus=Subquery(latest_listingstatus_subquery),
         primary_tag_group=Subquery(ptg_scheduled_subquery),
         
         # Local CSR Field Overrides
@@ -347,15 +361,18 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         'custom_name', 'custom_card_name', 'custom_card_nr', 'custom_parallel', 'custom_title',
         'overall_status', 'legacy_sku', 'csr_id', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
         'max_avg_val', 'scale_max_val', 'product_group_name', 'product_group_key', 'val_range_str',
-        'latest_task_scheduled', 'primary_tag_group'  # Passed through raw row generation
+        'latest_task_scheduled', 'latest_confirmtask_scheduled', 'latest_listingstatus', 'primary_tag_group'  # Passed through raw row generation
     ).order_by('-fetched_card_id')
-
+    
     if limit:
         raw_rows = list(query[:limit])
     else:
         raw_rows = list(query)
 
     cards_list = []
+
+    safe_min_dt = timezone.make_aware(datetime(1970, 1, 1))
+
     for row in raw_rows:
         # Build the natural sort components manually from the dictionary data
         
@@ -373,7 +390,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         natural_sort_title = " ".join(str(part).strip() for part in title_parts if part and str(part).strip())
 
         price_sort_val = row['fetched_list_price'] if row['fetched_list_price'] and row['fetched_list_price'] > 0 else row['fetched_msrp'] if row['fetched_msrp'] else 0
-
+        
         cards_list.append({
             'id': row['fetched_card_id'],
             'collection_id': row['fetched_collection_id'],
@@ -405,7 +422,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
             'product_group_name': row['product_group_name'],
             'product_group_key': row['product_group_key'],
             'val_range': row['val_range_str'],
-            'latest_task_scheduled': row['latest_task_scheduled'],
+            'latest_task_scheduled': max((row['latest_confirmtask_scheduled'] or safe_min_dt), (row['latest_task_scheduled'] or safe_min_dt), (row['latest_listingstatus'] or safe_min_dt)),
             'primary_tag_group': row['primary_tag_group'],
             'natural_sort': natural_sort_title,
             'all_price_sort': price_sort_val

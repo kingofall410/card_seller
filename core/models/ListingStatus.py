@@ -18,8 +18,12 @@ class ListingStatus(models.Model):
     
     @classmethod
     #created upon request being made, not before
-    def create(cls, listed_info, avail_qty, status, sold_qty, published):
-        return cls.objects.create(listing_info=listed_info, available_qty=avail_qty, listing_status=status, sold_qty=sold_qty, is_published=published, create_sku=listed_info.sku)
+    def create(cls, listed_info, avail_qty, status, sold_qty, published, create_sku=None):
+        print("create", create_sku)
+        if create_sku:
+            listed_info.listed_sku = create_sku
+            listed_info.save()
+        return cls.objects.create(listing_info=listed_info, available_qty=avail_qty, listing_status=status, sold_qty=sold_qty, is_published=published, create_sku=create_sku or listed_info.sku)
 
 
     def save(self, *args, **kwargs):

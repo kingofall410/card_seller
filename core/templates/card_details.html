@@ -104,6 +104,9 @@
                 <button type="button" title="Test" class="btn-single-test" onclick="handleTest(event, '{{ card_id }}')">
                     <i class="fas fa-sync"></i> 🧪
                 </button>
+                <button type="button" title="Clear Product Group" class="btn-clear-group" onclick="handleClearProductGroup(event, '{{ card_id }}')">
+                    <i class="fas fa-broom"></i> 🧹
+                </button>
             </div>
         </div>
     </div>
@@ -247,6 +250,29 @@
 
     window.addEventListener('load', resizeTabWrapper);
 })();
+cript
+
+function handleClearProductGroup(event, cardId) {
+    event.preventDefault();
+
+    // Support single card_id or an array of card IDs
+    const idArray = Array.isArray(cardId) ? cardId : [cardId];
+
+    const formData = new FormData();
+    idArray.forEach(id => formData.append('card_ids[]', id));
+
+    fetch('/clear_product_group/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(error => console.error('Error clearing product group:', error));
+}
 
 function updateCSRStatus(csrId, newStatus) {
     const spinner = document.getElementById('status-spinner');

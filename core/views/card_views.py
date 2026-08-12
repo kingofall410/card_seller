@@ -769,6 +769,28 @@ def refresh_lg_calcs(request, csr_id):
     return JsonResponse({"success": True})
 
 @csrf_exempt
+def clear_product_group(request):
+    card_ids = request.POST.getlist('card_ids[]', [])
+    if not card_ids:
+        return JsonResponse({"success": True})
+
+    # Query ListedInfo using the passed card IDs
+    cards = Card.objects.filter(id__in=card_ids)
+    
+    li_ids = [card.listed_card_info.id for card in cards]
+    csr_ids = [card.active_search_results.id for card in cards]
+
+    # Perform bulk updates in a single transaction
+    with transaction.atomic():
+        if li_ids:
+            ListedInfo.objects.filter(id__in=li_ids).update(product_group=None)
+        
+        if csr_ids:
+            CardSearchResult.objects.filter(id__in=csr_ids).update(ebay_product_group=None)
+
+    return JsonResponse({"success": True})
+
+@csrf_exempt
 def update_li_fields(request):
     if request.method != 'POST':
         return JsonResponse({"error": True, "message": "Invalid request method"}, status=405)
@@ -777,10 +799,12 @@ def update_li_fields(request):
     li_id = request.POST.get("li_id", None)
     card_id = request.POST.get("card_id", None)
     fieldname = request.POST.get("field")
-    fieldvalue = request.POST.get("value")
-
+    fieldvalue = request.POST.get("value", None)
+    #print("here: ", li_id)
     if li_id:
-        listed_info = ListedInfo.objects.filter(id=int(li_id)).last()
+        #print("here2: ", li_id)
+        listed_info = ListedInfo.objects.filter(id=li_id).last()
+        #print("here3: ", fieldname)
     elif card_id:
         listed_info = ListedInfo.objects.filter(card_id=int(card_id)).last()
 
@@ -790,7 +814,22 @@ def update_li_fields(request):
 
     # Update the field
     if hasattr(listed_info, fieldname):
-        setattr(listed_info, fieldname, fieldvalue)
+        # Handle ForeignKey / ID clearing or type conversion
+        if fieldname in ["product_group", "product_group_id"]:
+            if not fieldvalue or fieldvalue in ["", "None", "null"]:
+                print("[DEBUG] Clearing product_group: setting to None.")
+                listed_info.product_group = None
+                csr = listed_info.card.active_search_results
+                csr.ebay_product_group = None
+                listed_info.save()
+                csr.save()                
+            else:
+                # Ensure it's passed as an integer ID or model instance
+                print(f"[DEBUG] Setting product_group_id to integer: {int(fieldvalue)}")
+                listed_info.product_group_id = int(fieldvalue)
+        else:
+            # Standard attribute assignment for other fields
+            setattr(listed_info, fieldname, fieldvalue)
         listed_info.save()
 
         if (fieldname=="list_price"):

@@ -687,8 +687,9 @@ def get_offer_status(offer_id, settings, info, access_token=None):
     data = response.json()
     if response.status_code == 200:
         avail_qty = data["availableQuantity"]
-        print(data)
+        listed_sku=None
         if "listing" in data:
+            listed_sku = data["sku"]
             ebay_listing_status = data["listing"]["listingStatus"]
             if ebay_listing_status == "OUT_OF_STOCK":
                 list_status = StatusBase.SOLD
@@ -706,7 +707,7 @@ def get_offer_status(offer_id, settings, info, access_token=None):
             sold_qty = 0
             published = False
         #print(avail_qty, list_status, sold_qty, published)
-        ListingStatus.create(info, avail_qty, list_status, sold_qty, published)
+        ListingStatus.create(info, avail_qty, list_status, sold_qty, published, listed_sku)
         return True, access_token, list_status
     else:
         ListingStatus.create(info, 0, StatusBase.UNKNOWN, 0, False)

@@ -28,6 +28,27 @@ function switchTab(tabId, event) {
     }
 }
 
+function handleClearProductGroup(event, cardId) {
+    event.preventDefault();
+
+    // Support single card_id or an array of card IDs
+    const idArray = Array.isArray(cardId) ? cardId : [cardId];
+
+    const formData = new FormData();
+    idArray.forEach(id => formData.append('card_ids[]', id));
+
+    fetch('/clear_product_group/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(error => console.error('Error clearing product group:', error));
+}
 function filterSpreadsheet() {
     const visibleCards = document.querySelectorAll('.card-item:not(.hidden-card):not(.folder)');
     const visibleIds = Array.from(visibleCards).map(card => card.getAttribute('data-id'));

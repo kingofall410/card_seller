@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models.models import Brand, Subset, Settings, PlayerYearTeamCity, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
-from .models.task import Task, ListingTask, PricingTask, IDTask
+from .models.task import Task, ListingTask, PricingTask, IDTask, ConfirmTask
 
 class BrandAdmin(admin.ModelAdmin):
     list_display = ['raw_value', 'field_key'] 
@@ -50,6 +50,9 @@ class ListingTaskAdmin(admin.ModelAdmin):
     list_display = ['id']
 
 
+class ConfirmTaskAdmin(admin.ModelAdmin):
+    list_display = ['id']
+
 class IDTaskAdmin(admin.ModelAdmin):
     list_display = ['card']
 
@@ -59,6 +62,7 @@ class PricingTaskAdmin(admin.ModelAdmin):
 
 admin.site.register(Task, TaskAdmin)
 
+admin.site.register(ConfirmTask, ConfirmTaskAdmin)
 admin.site.register(ListingTask, ListingTaskAdmin)
 admin.site.register(IDTask, IDTaskAdmin)
 admin.site.register(PricingTask, PricingTaskAdmin)

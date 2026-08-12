@@ -3,7 +3,6 @@
 
 {% get_product_groups as groups %}
 {% get_spreads as spreads %}
-{% get_spreads as spreads %}
 
 <!-- Collection Header Control Bar -->
 <div class="collection-header">
@@ -16,7 +15,7 @@
     <button onclick="submitCollection('/re_sku/')" title="Re-SKU">🏷️</button>
     <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>          
     <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
-    
+    <button onclick="submitCollection('/clear_product_group/')" title="CPG">🧹</button>
     <button 
         class="open-tag-editor-btn" 
         data-target="modal-wrapper-{{ card.id }}"
