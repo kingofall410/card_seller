@@ -1,13 +1,14 @@
 from django.db import models
-from core.models.CardSearchResult import CardSearchResult
 from core.models.Status import StatusBase
 from services import ebay
 from django.utils import timezone
+import datetime
 
 class ListedInfo(models.Model):
     card = models.OneToOneField('core.Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
     sub_cards = models.ManyToManyField('core.Card', null=True, blank=True, related_name="listed_subcard_info")
     product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
+    is_pg = models.BooleanField(default=False)
 
     listed_sku = models.CharField(max_length=250, blank=True)
 
@@ -15,9 +16,10 @@ class ListedInfo(models.Model):
     list_price = models.FloatField(default=0.0)
     total_listing_value = models.FloatField(default=0.0)
 
+    total_qty = models.IntegerField(default=0)
     list_qty = models.IntegerField(default=0)
     avail_qty = models.IntegerField(default=0)
-    sold_qty = models.IntegerField(default=0)
+    sold_qty = models .IntegerField(default=0)
     
     listed_price = models.FloatField(default=0.0)
     avail_price = models.FloatField(default=0.0)
@@ -38,15 +40,45 @@ class ListedInfo(models.Model):
     listing_notes = models.TextField(blank=True) 
 
     exportedOffer = models.JSONField(default=dict, blank=True)
+
+    modification_date = models.DateTimeField(auto_now=True, null=True)
     
     @classmethod
     def create_from_card(cls, card):
-        lci = ListedInfo.objects.create(card=card)
+        lci = cls.objects.create(card=card)
+        return lci
+    
+    @classmethod
+    def create_from_group(cls, group):
+        print(group)
+        lci = cls.objects.create(is_pg=True)        
+        lci.product_group = group
+        print(lci)
+        lci.save()
+        print(lci, lci.product_group)
         return lci
     
     @property
+    def card_count(self):
+        if self.is_pg:
+            return self.product_group.card_count if self.product_group else 0
+        return self.list_qty
+
+    @property
     def listing_status(self):
-        return self.listing_statuses.last().listing_status
+        if self.is_pg:
+            return self.product_group.listing_status if self.product_group else None
+        else:
+            return self.card.active_search_results.overall_status
+    
+    
+    @property
+    def listing_str(self):
+        if self.is_pg:
+            return self.product_group.listing_str if self.product_group else None
+        else:
+            return self.card.active_search_results.sell_through_rate_total
+
     
     @property
     def listing_end_dt(self):
@@ -72,7 +104,7 @@ class ListedInfo(models.Model):
     def complete_listing(self, status, csr, task):
         if status is StatusBase.LISTED:
             self.listing_datetime = task.scheduled_for
-            self.product_group = csr.ebay_product_group
+            #self.product_group = csr.ebay_product_group
             #self.list_qty = task.qty already set
             self.listing_id = csr.ebay_listing_id
             #self.sku = csr.sku
@@ -80,7 +112,7 @@ class ListedInfo(models.Model):
     
     def update_from_csr(self, csr):
 
-        self.product_group = csr.ebay_product_group
+        #self.product_group = csr.ebay_product_group
         self.listing_detail_text = csr.title_to_be
         if csr.listing_tasks.exists():
             last_task = csr.listing_tasks.latest("scheduled_for")
@@ -88,10 +120,7 @@ class ListedInfo(models.Model):
                 self.listing_datetime = last_task.scheduled_for
         #self.list_price = csr.list_price
         self.list_qty = 1
-        #self.listing_id = csr.ebay_listing_id
-        #lci.listed_under_sku = csr.ebay_listed_under_sku
         self.sku = csr.sku
-        #self.offer_id = csr.ebay_offer_id
         
         self.msrp = round(csr.ebay_msrp + 0.01, 1) - 0.01
         #self.variation_title_base = csr.variation_title_base
@@ -102,35 +131,6 @@ class ListedInfo(models.Model):
 
         return self
 
-    @classmethod
-    def create_from_csr(cls, csr: CardSearchResult):
-        
-        lci = ListedInfo.create_from_card(csr.parent_card)
-        
-        #lci.product_group = csr.ebay_product_group
-        lci.listing_detail_text = csr.title_to_be
-        if csr.listing_tasks.exists():
-            last_task = csr.listing_tasks.latest("scheduled_for")
-            if last_task and last_task.status is StatusBase.SUCCESS:
-                lci.product_group = csr.ebay_product_group
-                lci.listing_datetime = last_task.scheduled_for
-
-        #lci.list_price = csr.list_price if not lci.list_price else 0
-        lci.list_qty = 1
-        lci.listing_id = csr.ebay_listing_id
-        #lci.listed_under_sku = csr.ebay_listed_under_sku
-        lci.sku = csr.sku
-        lci.offer_id = csr.ebay_offer_id
-        
-        lci.msrp = round(csr.ebay_msrp + 0.01, 1) - 0.01
-        #lci.variation_title_base = csr.variation_title_base
-        
-        lci.shareable_link_front=csr.shareable_link_front
-        lci.shareable_link_reverse=csr.shareable_link_reverse
-        lci.save()
-        
-        return lci
-
     def export_to_offer_template(self, template, single_listing):
         
         data = template.copy()
@@ -139,7 +139,6 @@ class ListedInfo(models.Model):
         data["availableQuantity"] = self.list_qty
         data["pricingSummary"]["price"]["value"] = self.list_price
         data["listingPolicies"]["fulfillmentPolicyId"] = ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if self.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND
-        
         # Apply best offer policies only if item is standalone (not part of a variation group)
         if single_listing:
             listing_policies = data.setdefault("listingPolicies", {})
@@ -162,31 +161,48 @@ class ListedInfo(models.Model):
 
         self.sku = self.card.active_search_results.build_sku()
 
-    def save(self, *args, **kwargs):
-        csr = None
-        if self.card and self.card.active_search_results:
-            csr = self.card.active_search_results
-            
-            print("saving LI ", self.id, csr.ebay_msrp)
-            self.listing_detail_text = csr.title_to_be if csr else ""
-            self.card.update_mod_date()
-
-        if csr and self.msrp == 0.0 or self.msrp == -69.69:
-            self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
-        if not self.listing_id:
-            self.listing_id = ""
-
-        if self.listing_statuses.exists():
+    def _secondary_calcs(self):
+        print("LI_secondary ", self.id)
+        if self.pk and self.listing_statuses.exists():
             self.sold_qty = self.listing_statuses.last().sold_qty
             self.avail_qty = self.listing_statuses.last().available_qty
         else:
             self.sold_qty = 0
             self.avail_qty = self.list_qty
 
-        self.listed_price = self.list_qty*self.list_price
-        self.avail_price = self.avail_qty*self.list_price
-        self.sold_price = self.sold_qty*self.list_price
-
+        if self.is_pg and self.product_group:
+            self.total_qty = self.product_group.total_qty
+            self.list_price = self.product_group.listed_price
+            self.total_listing_value = self.product_group.total_price
+            self.listed_price = self.product_group.listed_price
+            self.avail_price = self.product_group.avail_price
+            self.sold_price = self.product_group.sold_price
+        else:   
+            #list_price, list_qty set manually
+            self.total_qty = self.list_qty
+            self.listed_price = self.list_qty*self.list_price
+            self.avail_price = self.avail_qty*self.list_price
+            self.sold_price = self.sold_qty*self.list_price
+            self.total_listing_value = self.list_price
+            
+            
+    def save(self, *args, **kwargs):
+        csr = None
+        print("saving LI ", self.id)
+        if self.card and self.card.active_search_results:
+            csr = self.card.active_search_results
+            self.listing_detail_text = csr.title_to_be if csr else ""
+            self.card.update_mod_date()
+        
+        if csr and self.msrp == 0.0 or self.msrp == -69.69:
+            self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
+        if not self.listing_id:
+            self.listing_id = ""
+        if self.is_pg and hasattr(self, "product_group") and self.product_group:
+            self.product_group.save()    
+        self._secondary_calcs()
+        if not self.sold_price or self.sold_price == '':
+            self.sold_price = 0.0
         super().save(*args, **kwargs)
     
     def accept_msrp(self):
@@ -198,4 +214,10 @@ class ListedInfo(models.Model):
     @property
     def get_sold_price(self):
         last = self.listing_statuses.last()
-        return last.sold_value if last else None
+        return last.sold_value if last else 0
+
+        
+    @property
+    def get_min_listing_price(self):
+        last = self.listing_statuses.last()
+        return max(last.sold_value, self.listed_price) if last else self.listed_price

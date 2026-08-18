@@ -21,6 +21,14 @@ def calculate_group_value(group_list):
         return 0.00
 
 @register.filter
+def sell_through_rate_total(csr):
+    return csr.sell_through_rate_total
+
+@register.filter
+def sell_through_rate_recent(csr):
+    return csr.sell_through_rate_recent
+
+@register.filter
 def ptg_group_sort(cards):
     return sorted(cards, key=lambda x:x["primary_tag_group"] or "Unassigned")
 

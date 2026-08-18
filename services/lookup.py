@@ -110,12 +110,7 @@ def bulk_order_update(card_ids, listing_ids, settings=None):
     cards = Card.objects.filter(id__in=card_ids)
     for card in cards:
         csr = card.active_search_results
-        
-        if hasattr(card, "listed_card_info"):
-            listing_info = card.listed_card_info
-        else:
-            listing_info = ListedInfo.create_from_csr(csr)
-        
+        listing_info = card.listed_card_info
         offer_id = listing_info.offer_id
         token = None
         if offer_id:
@@ -123,9 +118,11 @@ def bulk_order_update(card_ids, listing_ids, settings=None):
             if success: 
                 print("SUCCESS", status)
                 csr.perform_status_update(status)
-    
+    print("A", status)
     ebay.bulk_order_update(listing_ids, settings or Settings.get_default())
-
+    print("B", status)
+    ebay.bulk_fetch_listing_info(listing_ids, settings or Settings.get_default())
+    print("C", status)
     for card in cards:
         card.active_search_results.save()
     return True

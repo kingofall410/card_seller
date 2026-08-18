@@ -260,9 +260,10 @@ class ListingGroup(models.Model):
                         l_date_str = l.display_date
                         if l_date_str:
                             l_date = datetime.fromisoformat(l_date_str.replace("Z", "+00:00")).date()
-                            if l_date >= six_months_ago:
+                            if l_date >= self.recent_date:
                                 recent_listings.append(l)
-
+                                
+                self.recent_listings_rel.set(recent_listings)
                 # Extract recent prices from the recent_listings (which are still sorted)
                 float_prices_recent = [float(l.ebay_price) for l in recent_listings]
                 #print("float", float_prices_all)

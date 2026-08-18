@@ -7,6 +7,7 @@ from core.models.Cropping import CropParams
 from core.models.Status import *
 from core.models.ProductGroup import *
 from core.models.ListingGroup import *
+from core.models.ProductListing import ProductListing
 from services.models.models import Brand, Subset, Team, City, KnownName, PlayerYearTeamCity, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from collections import defaultdict, Counter
 from services import settings_management as app_settings
@@ -270,6 +271,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     shareable_link_front=models.CharField(max_length=250, null=True, blank=True)
     shareable_link_reverse=models.CharField(max_length=250, null=True, blank=True)
 
+    sell_through_rate_recent = models.FloatField(default=0.0)
+    sell_through_rate_total = models.FloatField(default=0.0)
 
     #combine all this into field_definition
     readonly_fields = ["response_count", "sku",  "ebay_listing_id", "ebay_offer_id"]
@@ -416,7 +419,6 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         # Use .filter().update() to avoid re-triggering ASR.save()
         type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
 
-
     def save(self, *args, **kwargs):
         print("saving csr", self.id, self.title_to_be)
         #print("stack trace: ")
@@ -485,16 +487,25 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             if not available:
                 available = self.listing_groups.filter(label__icontains="ID").first()
 
+            avail_count = 0
             if available:
                 self.min_offer = available.min_price
                 self.max_offer = available.last_5_max_price
+                avail_count = available.listings.count()
+
 
             if raw_sold:
                 self.min_avg = raw_sold.last_5_min_price
                 self.max_avg = raw_sold.last_5_max_price
                 if hasattr(self.parent_card, "listed_card_info"):
                     self.ebay_msrp = raw_sold.recent_avg_price
-                    self.parent_card.listed_card_info.save()            
+                    self.parent_card.listed_card_info.save()
+
+                recent_sold_count = raw_sold.recent_listings_rel.count()
+                sold_count = raw_sold.listings.count()
+
+                self.sell_through_rate_recent = 100*recent_sold_count/max(1, avail_count+recent_sold_count)
+                self.sell_through_rate_total = 100*sold_count/max(1, avail_count+sold_count)        
 
         super().save(*args, **kwargs)
 
@@ -1064,7 +1075,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
  
         return csr_fields
     
-    def export_to_template(self, sku, template, image_links):
+    def export_to_template(self, sku, template, image_links, group_key):
         
         def resolve(value):
             if isinstance(value, str) and value:
@@ -1082,9 +1093,13 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #TODO: this is a fucking disaster
         
         filled_template = traverse(template)
-        if filled_template["product"]["aspects"]["Card Name"] == "":
-            filled_template["product"]["aspects"]["Card Name"] == []
+
+        if group_key:
+            group = ProductGroup.objects.get(id=group_key)
+            filled_template["product"]["aspects"]["Card"] = group.get_title_for_group(self)
         
+        if filled_template["product"]["aspects"]["Card Name"] == "":
+            filled_template["product"]["aspects"]["Card Name"] = []
         if filled_template["product"]["aspects"]["Parallel/Variety"] == "" or \
             filled_template["product"]["aspects"]["Parallel/Variety"] == " ":
             del filled_template["product"]["aspects"]["Parallel/Variety"]

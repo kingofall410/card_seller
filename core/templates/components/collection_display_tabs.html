@@ -56,7 +56,8 @@ let isApplyingServerUpdate = false;
         { label: 'Modified', attrName: 'modified' },
         { label: 'Task Time', attrName: 'task time' },
         { label: 'MSRP Only', attrName: 'msrp' },
-        { label: 'List$ Only', attrName: 'list price' }
+        { label: 'List$ Only', attrName: 'list price' },
+        { label: 'Total STR', attrName: 'str total' }
     ];
     
     let currentSort = { attrName: 'natural sort', attrIdx: null, dir: 'asc' };
@@ -153,6 +154,7 @@ let isApplyingServerUpdate = false;
         const idxAllPriceSort = headerMap['all price sort'] !== undefined ? headerMap['all price sort'] : 28;
         const idxLegacyMSRP = headerMap['legacy msrp'] !== undefined ? headerMap['legacy msrp'] : 29;
         const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 30;
+        const idxStrt = headerMap['strr'] !== undefined ? headerMap['strr'] : 31;
         
         currentSort.attrIdx = idxId;
 
@@ -192,6 +194,7 @@ let isApplyingServerUpdate = false;
                 task_time: $tds.eq(20).text().trim(),
                 legacy_msrp: $tds.eq(idxLegacyMSRP).text().trim(),
                 qty: $tds.eq(idxQty).text().trim(),
+                strt: $tds.eq(idxStrt).text().trim(),
             });
         });
 

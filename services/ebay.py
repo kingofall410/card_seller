@@ -579,6 +579,7 @@ def bulk_order_update(listing_ids, settings):
         updated_count = 0
 
         for order in orders:
+            print(order)
             for item in order.get("lineItems", []):
                 legacy_id = str(item.get("legacyItemId"))
                 # Variation SKU usually lives inside the 'sku' field of the line item directly
@@ -628,6 +629,162 @@ def bulk_order_update(listing_ids, settings):
         return access_token
     else:
         raise Exception(data.get("errors")[0].get("message"))
+
+
+def bulk_fetch_listing_info(listing_ids, settings):
+    print(f"[DEBUG] {datetime.utcnow()} - Starting bulk_listing_info_update for {len(listing_ids)} listing IDs.")
+    
+    access_token = get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Accept-Language": "en-US"
+    }
+    from core.models.ListedInfo import ListedInfo
+    # Fetch local records to map SKUs and Listing IDs
+    infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
+    listing_id_map = {str(info.listing_id): info for info in infos}
+    sku_map = {str(info.sku): info for info in infos if info.sku}
+    
+    print(f"[DEBUG] Found {len(infos)} local ListedInfo records matching provided IDs.")
+    
+    updated_count = 0
+    errors = []
+
+    # eBay Inventory API endpoint to fetch offers/listing data by SKU
+    base_url = "https://api.ebay.com/sell/inventory/v1/offer"
+
+    for sku, parent_info in sku_map.items():
+        url = f"{base_url}?sku={sku}"
+        print(f"[DEBUG] Requesting offer/listing info for SKU: {sku} from {url}")
+        
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        
+        if response.status_code == 200:
+            offers = data.get("offers", [])
+            print(f"[DEBUG] Retrieved {len(offers)} offer(s) for SKU: {sku}")
+            
+            for offer in offers:
+                print(f"[DEBUG] Processing offer ID: {offer.get('offerId')} for SKU: {sku}")
+                
+                # Get or create local status record
+                '''obj = ListingStatus.objects.filter(listing_info=parent_info).order_by('-id').first()
+                if not obj:
+                    obj = ListingStatus(
+                        listing_info=parent_info,
+                        available_qty=0,
+                        listing_status=StatusBase.ACTIVE,
+                        is_published=True
+                    )
+                    print(f"[DEBUG] Creating new ListingStatus record for SKU: {sku}")
+
+                # Update listing and offer metadata
+                obj.listing_id = offer.get("listingId")
+                obj.available_qty = offer.get("availableQuantity", 0)
+                obj.status = offer.get("status")
+                
+                # Extract pricing information from the offer summary
+                price_val = offer.get("pricingSummary", {}).get("price", {}).get("value")
+                if price_val:
+                    obj.sold_value = price_val
+
+                # Capture listing-specific details if available in response
+                listing_details = offer.get("listing", {})
+                if listing_details:
+                    print(f"[DEBUG] Found listing details for offer {offer.get('offerId')}")
+                    # Map start/end dates if fields exist in your model/schema
+                    # obj.start_date = listing_details.get("listingStartDate")
+                    # obj.end_date = listing_details.get("listingEndDate")
+
+                obj.save()
+                parent_info.card.active_search_results.save()'''
+                updated_count += 1
+                print(f"[DEBUG] Successfully synced listing info for SKU {sku}: {offer}")
+                
+        else:
+            err_msg = f"Failed to fetch offers for SKU {sku}: {response.status_code} - {response.text}"
+            print(f"[DEBUG] {err_msg}")
+            errors.append(err_msg)
+
+    if errors and updated_count == 0:
+        print(f"[DEBUG] Bulk update failed completely. Errors: {errors}")
+        raise Exception(f"Failed to fetch listing information. Errors: {errors}")
+
+    print(f"[DEBUG] Finished bulk listing fetch. Successfully updated {updated_count} records.")
+    return access_token
+
+def bulk_fetch_inventory_item_info(listing_ids, settings):
+    print(f"[DEBUG] {datetime.utcnow()} - Starting bulk_fetch_listing_info for {len(listing_ids)} listing IDs.")
+    
+    access_token = get_access_token(settings, settings.ebay_user_auth_code)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    from core.models.ListedInfo import ListedInfo
+    # Fetch local records to map SKUs and Listing IDs
+    infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
+    listing_id_map = {str(info.listing_id): info for info in infos}
+    sku_map = {str(info.sku): info for info in infos if info.sku}
+    
+    print(f"[DEBUG] Found {len(infos)} local ListedInfo records matching provided IDs.")
+    
+    fetched_count = 0
+    errors = []
+
+    # Iterate over unique SKUs first (preferred for eBay Inventory API), or fallback to listing IDs
+    # eBay Inventory API endpoint pattern: GET /sell/inventory/v1/inventory_item/{sku}
+    base_url = "https://api.ebay.com/sell/inventory/v1/inventory_item"
+
+    for sku, parent_info in sku_map.items():
+        url = f"{base_url}/{sku}"
+        print(f"[DEBUG] Requesting inventory item for SKU: {sku}")
+        
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"[DEBUG] Successfully retrieved inventory data for SKU: {sku}")
+            print(data)
+            
+            # Process and update local model fields with retrieved listing info
+            # e.g., product details, available quantity, pricing, etc.
+            '''obj, created = ListingStatus.objects.get_or_create(
+                listing_info=parent_info,
+                defaults={
+                    "available_qty": data.get("availability", {}).get("shipToLocationAvailability", {}).get("quantity", 0),
+                    "listing_status": StatusBase.ACTIVE,
+                    "is_published": True
+                }
+            )
+            
+            if not created:
+                obj.available_qty = data.get("availability", {}).get("shipToLocationAvailability", {}).get("quantity", 0)
+                obj.save()'''
+            
+            fetched_count += 1
+            print(f"Synced listing info for SKU {sku}")
+            
+        elif response.status_code == 404:
+            print(f"[DEBUG] SKU {sku} not found in eBay Inventory API.")
+        else:
+            err_msg = f"Failed to fetch SKU {sku}: {response.status_code} - {response.text}"
+            print(f"[DEBUG] {err_msg}")
+            errors.append(err_msg)
+
+    # For items without SKUs that only have legacy listing IDs, you can query via Trading API or alternative endpoints if required
+    missing_skus = [lid for lid, info in listing_id_map.items() if not info.sku]
+    if missing_skus:
+        print(f"[DEBUG] {len(missing_skus)} listings found without SKUs. Legacy ID lookup can be handled here if needed.")
+
+    if errors and fetched_count == 0:
+        raise Exception(f"Failed to fetch listing information. Errors: {errors}")
+
+    print(f"[DEBUG] Finished bulk fetch. Successfully updated {fetched_count} records.")
+    return access_token
 
 def get_sale_details(listing_id, settings, listing_status_obj, access_token=None):
     access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
@@ -683,9 +840,12 @@ def get_offer_status(offer_id, settings, info, access_token=None):
     }
 
     url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}"
+    print(url)
     response = requests.get(url, headers=headers)
     data = response.json()
+    print(response)
     if response.status_code == 200:
+        print(data)
         avail_qty = data["availableQuantity"]
         listed_sku=None
         if "listing" in data:
@@ -698,6 +858,7 @@ def get_offer_status(offer_id, settings, info, access_token=None):
             else:
                 list_status = StatusBase.CONFIRMED
             sold_qty = data["listing"]["soldQuantity"]
+            sold_price = data["pricingSummary"]["price"]["value"]
             published = data["status"] == "PUBLISHED"
         else:#change this --> it should just send the actual status back and let individual cards do what they will
             if info.card.active_search_results.overall_status == StatusBase.STAGED:
@@ -705,9 +866,10 @@ def get_offer_status(offer_id, settings, info, access_token=None):
             else:
                 list_status = StatusBase.UNLISTED
             sold_qty = 0
+            sold_price = 0 
             published = False
         #print(avail_qty, list_status, sold_qty, published)
-        ListingStatus.create(info, avail_qty, list_status, sold_qty, published, listed_sku)
+        ListingStatus.create(info, avail_qty, list_status, sold_qty, published, listed_sku, sold_price)
         return True, access_token, list_status
     else:
         ListingStatus.create(info, 0, StatusBase.UNKNOWN, 0, False)

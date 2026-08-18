@@ -169,15 +169,7 @@ def single_card_test(request, card_id):
     if request.method == 'POST':
         try:
             csr = CardSearchResult.objects.filter(parent_card_id=card_id).last()
-            if not hasattr(csr.parent_card, "listed_card_info"):
-                ListedInfo.create_from_csr(csr)
-            
-            for listing_group in csr.listing_groups.all():
-                listing_group.save()
-            
-            #csr.update_value()
             csr.save()
-            csr.parent_card.save()
             
             return JsonResponse({"success": 'true'}, status=200)
         except Exception as e:
@@ -276,7 +268,6 @@ def card_test(request):
 
         for card in card_list:
             single_card_test(request, card.id)
-            card.save()
         return JsonResponse({"success": 'true'}, status=200)
 
 # Card-related views
@@ -811,7 +802,7 @@ def update_li_fields(request):
     if not listed_info or not fieldname:
         return JsonResponse({"error": True, "message": "Missing parameters"}, status=400)
 
-
+    #TODO: this is a messy disaster that needs to be moved into LI
     # Update the field
     if hasattr(listed_info, fieldname):
         # Handle ForeignKey / ID clearing or type conversion
@@ -824,9 +815,25 @@ def update_li_fields(request):
                 listed_info.save()
                 csr.save()                
             else:
+                pg = ProductGroup.objects.filter(id=fieldvalue).last()
+                
+                #temp due to data migration: if the ProductGroup doesn't have a LI (should no longer happen) create one here
+                if not pg.listed_products_info or not pg.listed_products_info.filter(is_pg=True).exists():
+                    ListedInfo.create_from_group(pg)
+
+                old_pg = ProductGroup.objects.filter(id=listed_info.product_group_id).last()
+                print(pg, old_pg)
                 # Ensure it's passed as an integer ID or model instance
                 print(f"[DEBUG] Setting product_group_id to integer: {int(fieldvalue)}")
                 listed_info.product_group_id = int(fieldvalue)
+                csr = listed_info.card.active_search_results
+                csr.ebay_product_group_id = int(fieldvalue)
+                #listed_info.save()
+                csr.save()         
+                #ugh this is a mess because it could be a pg or non-pg, meaning pg-->LI relation could a single or a group
+                if old_pg:
+                    old_pg.listed_products_info.filter(is_pg=True).last().save()       #dubious at best
+                pg.listed_products_info.filter(is_pg=True).last().save()       #dubious at best
         else:
             # Standard attribute assignment for other fields
             setattr(listed_info, fieldname, fieldvalue)

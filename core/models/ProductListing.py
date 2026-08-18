@@ -1,6 +1,8 @@
 from django.db import models
 from core.models.ListingGroup import ListingGroup
 from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
+from datetime import datetime
+from django.utils import timezone
 
 #TODO:needs to be split further into types of listings (ebay, psa, etc) and merged with the mess that CSRs has become
 class ProductListing(models.Model):
@@ -18,6 +20,7 @@ class ProductListing(models.Model):
     #legacy
     search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, null=True, related_name="listings")    
     listing_group = models.ForeignKey(ListingGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="listings")
+    as_recent_listing = models.ForeignKey(ListingGroup, on_delete=models.CASCADE, null=True, blank=True, related_name="recent_listings_rel")
 
     @property
     def display_date(self):

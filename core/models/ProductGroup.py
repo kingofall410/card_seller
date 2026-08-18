@@ -3,6 +3,7 @@ from django.db.models import Q
 from collections import defaultdict
 from core.models.Utilities import FieldStructure
 from core.models.Status import StatusBase
+from core.models.ListedInfo import ListedInfo
 from datetime import timedelta
 from django.utils import timezone
 
@@ -34,6 +35,13 @@ class ProductGroup(models.Model):
     team_group_title = ["full_name","year","brand","subset","card_name","parallel","card_number","city","team"]
 
 
+    @property
+    def listing_str(self):
+        if self.card_count > 0:    
+            return sum(csr.sell_through_rate_total for csr in self.products.all() if hasattr(csr.parent_card, 'listed_card_info'))/self.card_count
+        else:
+            return 0
+
     def get_title_for_group(self, csr, limit=80):
         values = []
         for term in self.player_group_title:
@@ -45,7 +53,8 @@ class ProductGroup(models.Model):
         return " ".join([x.strip() for x in values])[:limit]
 
     def _calculate_summary_attribs(self):
-        product_list = list(self.products.all())
+        print("_csa", self.id)
+        product_list = list(self.products.all()) if self.pk else []
         
         self.card_count = len(product_list)
 
@@ -56,12 +65,15 @@ class ProductGroup(models.Model):
         self.sold_qty = sum(csr.parent_card.listed_card_info.sold_qty for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
 
         self.total_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
-        self.listed_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.LISTED,StatusBase.CONFIRMED])
-        self.staged_price = sum(csr.parent_card.listed_card_info.total_listing_value for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.STAGED])
+        self.listed_price = sum(csr.parent_card.listed_card_info.list_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.LISTED,StatusBase.CONFIRMED])
+        self.staged_price = sum(csr.parent_card.listed_card_info.list_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info') if csr.overall_status in [StatusBase.STAGED])
         self.avail_price = sum(csr.parent_card.listed_card_info.avail_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
         self.sold_price = sum(csr.parent_card.listed_card_info.sold_price for csr in product_list if hasattr(csr.parent_card, 'listed_card_info'))
+        print("_csa", self.card_count)
 
     def save(self, *args, **kwargs):
+        
+        print("saving PG ", self.id)
         self._calculate_summary_attribs()
         super().save(*args, **kwargs)
 
@@ -137,6 +149,7 @@ class ProductGroup(models.Model):
         if created:
             group.group_title = group_key
             group.group_image_link = group_image or csrs[0].shareable_link_front
+            listed_products_info = ListedInfo.create_from_group(group)
 
         for csr in csrs:
             csr.ebay_product_group = group
@@ -145,9 +158,11 @@ class ProductGroup(models.Model):
         group.save()
         return group
 
+    #below is used to create from UI
     @classmethod
     def create(cls, name):
         group = ProductGroup.objects.create(group_title=name)
+        ListedInfo.create_from_group(group)
         group.group_key=str(group.id)
         group.save()
         return group

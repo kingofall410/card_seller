@@ -162,6 +162,8 @@
                 <th>SKU / ID</th>
                 <th>Listing ID</th>
                 <th>Title / Description</th>
+                <th>Card Count</th>
+                <th>Total Qty</th>
                 <th>Listed Qty</th>
                 <th>Avail Qty</th>
                 <th>Sold Qty</th>
@@ -171,71 +173,24 @@
                 <th>Listing Start Date</th>
                 <th>Listing End Date</th>
                 <th>Days Listed</th>
+                <th>STR Total</th>
             </tr>
         </thead>
         <tbody>
-            <!-- 1. Product Groups -->
-            {% for group in groups %}
-            <tr>
-                <td data-order="Group">
-                    <span class="badge badge-group">Group</span>
-                </td>
-                <td data-order="{{ group.listing_status|default:'' }}">
-                    {% if group.listing_status %}
-                        <span class="badge badge-status">{{ group.listing_status }}</span>
-                    {% else %}
-                        --
-                    {% endif %}
-                </td>
-                <td data-order="0">
-                    {% if group.group_image_link %}
-                        <img src="{{ group.group_image_link }}" class="thumb" alt="Group image">
-                    {% else %}
-                        <div class="thumb-placeholder">N/A</div>
-                    {% endif %}
-                </td>
-                <td class="id-cell" data-order="{{ group.group_key }}">
-                    <code>{{ group.group_key }}</code>
-                </td>
-                <td data-order="{{ group.listing_id|default:'' }}">
-                    <code>{{ group.listing_id|default:"--" }}</code>
-                </td>
-                <td data-order="{{ group.group_title|default:group.group_key }}">
-                    <strong><a href="/product_group_detail/{{ group.group_key }}/" style="text-decoration:none">{{ group.group_title|default:group.group_key }}</a></strong>
-                </td>
-                <td data-order="{{ group.listed_qty|default:0 }}">{{ group.listed_qty|default:0 }}</td>
-                <td data-order="{{ group.avail_qty|default:0 }}">{{ group.avail_qty|default:0 }}</td>
-                <td data-order="{{ group.sold_qty|default:0 }}">{{ group.sold_qty|default:0 }}</td>
-                
-                <td data-order="{{ group.listed_price|default:0 }}">${{ group.listed_price|floatformat:0 }}</td>
-                <td data-order="{{ group.avail_price|default:0 }}">${{ group.avail_price|floatformat:0 }}</td>
-                <td data-order="{{ group.sold_price|default:0 }}">${{ group.sold_price|floatformat:0 }}</td>
-
-                <td data-order="{% if group.listing_datetime %}{{ group.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
-                    {{ group.listing_datetime|date:"Y-m-d H:i"|default:"--" }}
-                </td>
-                <td data-order="{% if group.listing_end_dt %}{{ group.listing_end_dt|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
-                    {{ group.listing_end_dt|date:"Y-m-d H:i"|default:"Not Listed" }}
-                </td>
-                <td data-order="{{ group.days_listed|default:0 }}">
-                    {{ group.days_listed|default:"--" }}
-                </td>
-            </tr>
-            {% endfor %}
-
             <!-- 2. Standalone Cards -->
             {% for item in standalone_items %}
-            {% with status=item.listing_statuses.last %}
             <tr>
-                <td data-order="Single">
-                    <span class="badge badge-single">Single</span>
-                </td>
-                <td data-order="{{ status.listing_status|default:'' }}">
-                    {% if status %}
-                        <span class="badge badge-status">{{ status.listing_status }}</span>
-                    {% else %}
-                        --
-                    {% endif %}
+                {% if item.is_pg %}
+                    <td data-order="Group">
+                        <span class="badge badge-group">Group</span>
+                    </td>
+                {% else %}
+                    <td data-order="Single">
+                        <span class="badge badge-single">Single</span>
+                    </td>
+                {% endif %}
+                <td data-order="{{ item.listing_status|default:'' }}">
+                    <span class="badge badge-status">{{ item.listing_status }}</span>
                 </td>
                 <td data-order="0">
                     {% if item.shareable_link_front %}
@@ -244,22 +199,39 @@
                         <div class="thumb-placeholder">N/A</div>
                     {% endif %}
                 </td>
-                <td class="id-cell" data-order="{{ item.sku|default:'' }}">
-                    <code>{{ item.sku|default:"--" }}</code>
-                </td>
+                
+                {% if item.is_pg %}
+                    <td data-order="{{ item.product_group.group_key|default:'-' }}">
+                        <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_key|default:"-" }}</a></strong>
+                    </td>
+                {% else %}
+                    <td class="id-cell" data-order="{{ item.sku|default:'-' }}">
+                        <code>{{ item.sku|default:'-' }}</code>
+                    </td>
+                {% endif %}
+                
                 <td data-order="{{ item.listing_id|default:'' }}">
                     <code>{{ item.listing_id|default:"--" }}</code>
                 </td>
-                <td data-order="{{ item.listing_detail_text|default:'' }}">
-                    <a href="/card/{{ item.card_id }}/" style="text-decoration: none;">{{ item.listing_detail_text|default:"(Untitled)" }}</a>
-                </td>
+                
+                {% if item.is_pg %}
+                    <td data-order="{{ item.product_group.group_title|default:'-' }}">
+                        <strong><a href="/product_group_detail/{{ item.product_group.group_title }}/" style="text-decoration:none">{{ item.product_group.group_title|default:"-" }}</a></strong>
+                    </td>
+                {% else %}
+                    <td data-order="{{ item.listing_detail_text|default:'' }}">
+                        <a href="/card/{{ item.card_id }}/" style="text-decoration: none;">{{ item.listing_detail_text|default:"(Untitled)" }}</a>
+                    </td>
+                {% endif %}
+                <td data-order="{{ item.card_count|default:0 }}">{{ item.card_count|default:0 }}</td>
+                <td data-order="{{ item.total_qty|default:0 }}">{{ item.total_qty|default:0 }}</td>
                 <td data-order="{{ item.list_qty|default:0 }}">{{ item.list_qty|default:0 }}</td>
                 <td data-order="{{ item.avail_qty|default:0 }}">{{ item.avail_qty|default:0 }}</td>
                 <td data-order="{{ item.sold_qty|default:0 }}">{{ item.sold_qty|default:0 }}</td>
-                <td data-order="{{ item.listed_price|default:0 }}">${{ item.listed_price|floatformat:0 }}</td>
+                <td data-order="{{ item.get_min_listing_price|default:0 }}">${{ item.get_min_listing_price|floatformat:0 }}</td>
                 <td data-order="{{ item.avail_price|default:0 }}">${{ item.avail_price|floatformat:0 }}</td>
-                <td data-order="{{ item.sold_price|default:0 }}">${{ item.sold_price|floatformat:0 }}</td>
-                <td data-order="{% if item.listing_datetime %}{{ item.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
+                <td data-order="{{ item.get_sold_price|default:0 }}">${{ item.get_sold_price|floatformat:0 }}</td>
+                  <td data-order="{% if item.listing_datetime %}{{ item.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
                     {{ item.listing_datetime|date:"Y-m-d H:i"|default:"Not Listed" }}
                 </td>
                 <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
@@ -268,8 +240,10 @@
                 <td data-order="{{ item.days_listed|default:0 }}">
                     {{ item.days_listed|default:"--" }}
                 </td>
+                <td data-order="">
+                    {{ item.listing_str|floatformat:0|default:"--" }}
+                </td>
             </tr>
-            {% endwith %}
             {% endfor %}
         </tbody>
     </table>

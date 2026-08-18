@@ -225,8 +225,6 @@ class Card(models.Model):
                 info.sku = sku_base+"_A"
         elif info:
             info.sku = f"{self.collection_id}-{self.id}-{self.active_search_results.id}_2"
-        else:
-            info = ListedInfo.create_from_csr(self.active_search_results)
         info.save()
 
     @property

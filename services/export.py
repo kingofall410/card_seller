@@ -89,10 +89,10 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
     group = ProductGroup.get_or_create(group_key, csrs)
     if group.replaced_by:
         group = group.replaced_by
-        
-
+    
     inventory_group_data = group.export_to_ebay_variation_group(new_csrs=csrs)
     
+    #this sequence is a bit overkill but it supports all types of changes without incurring additional insertion
     listing_id = None
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
@@ -102,7 +102,7 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
 
 def clear_inventory_group(group_key):
 
-    group, _ = ProductGroup.objects.get_or_create(group_key=group_key)
+    group, _ = ProductGroup.get_or_create(group_key=group_key)
     csrs = [csr for csr in group.products.all()]
     inventory_group_data = {
         "aspects": {"Sport": ["Baseball"]},
@@ -178,7 +178,8 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                 item_data = csr.export_to_template(
                     listed_info.sku, 
                     ebay.ebay_item_data_template, 
-                    [listed_info.shareable_link_front, listed_info.shareable_link_reverse]
+                    [listed_info.shareable_link_front, listed_info.shareable_link_reverse],
+                    group_key
                 )
                 offer_data = listed_info.export_to_offer_template(ebay.ebay_offer_data_template, (not group_key))
 

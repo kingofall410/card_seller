@@ -337,6 +337,8 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         # Map straight projections from existing CSR model fields
         legacy_sku=F('sku'),
         csr_id=F('id'),
+        strr=F('sell_through_rate_recent'),
+        strt=F('sell_through_rate_total'),
         legacy_msrp=F('ebay_msrp'),
         product_group_name=F('ebay_product_group__group_title'),
         product_group_key=F('ebay_product_group__group_key'),
@@ -359,7 +361,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         'fetched_sku', 'fetched_msrp', 'fetched_qty', 'fetched_list_price',
         'custom_year', 'custom_brand', 'custom_subset', 'custom_city', 'custom_team', 
         'custom_name', 'custom_card_name', 'custom_card_nr', 'custom_parallel', 'custom_title',
-        'overall_status', 'legacy_sku', 'csr_id', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
+        'overall_status', 'legacy_sku', 'csr_id', 'strr', 'strt', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
         'max_avg_val', 'scale_max_val', 'product_group_name', 'product_group_key', 'val_range_str',
         'latest_task_scheduled', 'latest_confirmtask_scheduled', 'latest_listingstatus', 'primary_tag_group'  # Passed through raw row generation
     ).order_by('-fetched_card_id')
@@ -414,6 +416,8 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
             'overall_status': row['overall_status'],
             'legacy_sku': row['legacy_sku'],
             'csr_id': row['csr_id'],
+            'strr': row['strr'],
+            'strt': row['strt'],
             'min_offer': row['min_offer_val'],
             'max_offer': row['max_offer_val'],
             'min_avg': row['min_avg_val'],
@@ -658,31 +662,23 @@ def listings_list(request, timeframe=7):
     end_date = timezone.now()
     start_date = end_date - timedelta(days=timeframe_days)
 
-    # 1. ProductGroup: Prevent duplicate groups & prefetch related models
-    groups = (
-        ProductGroup.objects.filter(
-            products__parent_card__listed_card_info__listing_datetime__range=(start_date, end_date)
-        )
-        .distinct()
-    )
-
     # 2. Standalone Items: Optimize range query & prefetch foreign keys
     standalone_items = (
         ListedInfo.objects.filter(
-            product_group__isnull=True,
-            listing_datetime__range=(start_date, end_date)  # Replaces gte/lte/isnull combo
+            Q(is_pg=True) |
+            Q(listing_datetime__range=(start_date, end_date))  # Replaces gte/lte/isnull combo
         )
         .select_related('product_group')  # Pre-loads foreign keys to avoid N+1 queries in template
         .prefetch_related('listing_statuses')
-        .order_by('-listing_datetime')
+        .order_by('listing_datetime')
     )
 
     context = {
-        'groups': groups,
+        'groups': [],
         'standalone_items': standalone_items,
         'timeframe': timeframe_days
     }
-    
+
     #lid_list = [g.listing_id for g in groups]+[i.listing_id for i in standalone_items]
     #ebay.bulk_order_update(lid_list, Settings.get_default())
     return render(request, 'listing_list.html', context)

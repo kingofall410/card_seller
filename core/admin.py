@@ -36,7 +36,6 @@ admin.site.register(ListingTitle)
 admin.site.register(CropParams)
 admin.site.register(CroppedImage) 
 admin.site.register(Collection)
-admin.site.register(ListedInfo)
 admin.site.register(ListingStatus)
 admin.site.register(ListedInfoArchive)
 admin.site.register(CardArchive)
@@ -51,5 +50,8 @@ class ProductGroupAdmin(admin.ModelAdmin):
 class TagGroupAdmin(admin.ModelAdmin):
     list_display = ['id', 'group_key', 'group_title', 'size']
 
-
+@admin.register(ListedInfo)
+class ListedInfoAdmin(admin.ModelAdmin):
+    readonly_fields = ('modification_date',)
+    list_display = ('__str__', 'modification_date')
 #-gold -chrome -yellow -green -red -blue -refractor -psa -sgc -cgc -purple -rainbow -foil -aqua -wave -raywave -logofractor -x-fractor

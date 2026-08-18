@@ -293,6 +293,30 @@ function performAsyncPriceAction(button, priceInput, qtyInput, searchResultId, g
 
     <div style="display:flex; flex-direction:row; gap: 20px; flex-wrap: wrap; width: 100%;">
       <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
+        <label for="strr-{{ card_id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          STR Recent
+        </label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <input type="text" 
+                id="strr-{{ card_id }}" 
+                value="{{ search_result.sell_through_rate_recent|floatformat:0 }}"
+                style="padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; background-color: #f9f9f9;" 
+                readonly />
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
+        <label for="strt-{{ card_id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          STR Total
+        </label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <input type="text" 
+                id="strt-{{ card_id }}" 
+                value="{{ search_result.sell_through_rate_total|floatformat:0 }}"
+                style="padding: 8px 8px 8px 20px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; background-color: #f9f9f9;" 
+                readonly />
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; flex: 0 0 calc(25% - 15px); min-width: 0;">
         <label for="msrp-{{ card_id }}" style="font-weight:600; margin-bottom:4px; font-size: 0.85rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
           MSRP
         </label>
