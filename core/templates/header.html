@@ -98,6 +98,8 @@
     .clr-priced { color: #007b1be6; }  /* Green */
     .clr-reviewed { color: #db38d8bc; }/* Pinkish-Purple */
     .clr-listed { color: #91d5ff; }    /* Light Blue */
+    .clr-total { color: #ffffff; }    /* White */
+    .clr-sold { color: #f4bc07; }    /* Gold */
 
     /* Original Pill Badges for Task Monitor */
     .monitor-badge {
@@ -138,7 +140,7 @@
             🗂️ COLLECTION ▾
         </button>
         <div class="dropdown-menu" style="min-width: 400px;">
-            <a href="{% url 'collection' '0'%}?q=''&timeframe=7" class="nav-link">🗃️ All Collections...</a>
+            <a href="{% url 'collection' '0'%}?cid=-1&cid=-2&cid=-3&timeframe=120" class="dec">🗃️ Recent Collections...</a>
             <a href="{% url 'collection' '0'%}?timeframe=7&status=listed&status=confirmed&status=sold&status=unlisted&status=failed" class="nav-link">🗃️ Latest Listings...</a>
             <a href="{% url 'collection' '0'%}?timeframe=7&status=staged&status=failed" class="nav-link">🗃️ Recently Staged...</a>
             <a href="{% url 'collection' '0'%}?timeframe=120&status=reviewed" class="nav-link">🗃️ Ready to List...</a>
@@ -186,15 +188,18 @@
     <div id="card-monitor-container" class="monitor-group">
         <span id="card-spinner" class="spinner" style="display:none; margin-right: 4px;"></span>
         
-        <span class="clr-pre" title="Pre-Listing"><span id="card-pre-listing-count">0</span></span>
-        <span class="monitor-slash">/</span>
-        <span class="clr-priced" title="Priced"><span id="card-priced-count">0</span></span>
-        <span class="clr-reviewed" title="Reviewed"><span id="card-reviewed-count">0</span></span>
-        <span class="monitor-slash">/</span>
-        <span class="clr-listed" title="Listed / Staged"><span id="card-listed-count">0</span></span>
+        <span class="clr-total" title="Total"><span id="card-total-count">0</span></span>
+        <a href="{% url 'collection' '0'%}?s?status=imported&status=held&status=unknown&timeframe=120" style="text-decoration:none"><span class="clr-pre" title="Pre-Listing" id="card-pre-listing-count">0</span></a>
+        <span class="monitor-slash"> / </span>
+        <a href="{% url 'collection' '0'%}?status=priced&status=unlisted&status=pending&timeframe=120" style="text-decoration:none"><span class="clr-priced" title="Priced" id="card-priced-count">0</span></a>
+        <a href="{% url 'collection' '0'%}?status=reviewed&timeframe=120" style="text-decoration:none"><span class="clr-reviewed" title="Reviewed" id="card-reviewed-count">0</span></a>
+        <span class="monitor-slash"> / </span>
+        <a href="{% url 'collection' '0'%}?status=listed&status=confirmed&status=staged&timeframe=120" style="text-decoration:none"><span class="clr-listed" title="Listed / Staged" id="card-listed-count">0</span></a>
+        <a href="{% url 'collection' '0'%}?status=sold&timeframe=120" style="text-decoration:none"><span class="clr-sold" title="Sold" id="card-sold-count">0</span></a>
     </div>
 
     <!-- Moved ADMIN & TEST links (Left of Settings gear) -->
+    <a href="{% url 'import_new_orders' %}" class="navbar-link"> Import Orders</a>
     <a href="{% url 'admin:index' %}" target="_blank" class="navbar-link">🛠️ ADMIN</a>
     <a href="{% url 'test_view' %}" class="navbar-link">🧪 TEST</a>
     
@@ -249,4 +254,32 @@
             .then(r => r.json())
             .then(d => d.success ? location.reload() : alert("Fail: " + d.message));
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const spinner = document.getElementById("card-spinner");
+        spinner.style.display = "inline-block";
+
+        // Replace '/api/card-monitor/' with your actual Django url path
+        fetch("/card_status_monitor/")
+            .then(response => response.json())
+            .then(data => {
+                spinner.style.display = "none";
+                if (data.success && data.counts) {
+                    document.getElementById("card-total-count").textContent = data.counts["total"] || 0;
+                    document.getElementById("card-pre-listing-count").textContent = data.counts["pre-listing"] || 0;
+                    document.getElementById("card-pre-listing-count").title = "Imported: "+data.counts["imported"]+"\nHeld: "+data.counts["held"]+"\nConfirmed: "+data.counts["confirmed"] || 0;
+
+                    document.getElementById("card-priced-count").textContent = data.counts["priced"] || 0;
+                    document.getElementById("card-reviewed-count").textContent = data.counts["reviewed"] || 0;
+                    
+                    document.getElementById("card-listed-count").textContent = data.counts["listed_bucket"] || 0;
+                    document.getElementById("card-listed-count").title = "Listed: "+data.counts["listed"]+"\nStaged: "+data.counts["staged"]+"\nConfirmed: "+data.counts["confirmed"] || 0;
+                    document.getElementById("card-sold-count").textContent = data.counts["sold"] || 0;
+                }
+            })
+            .catch(error => {
+                spinner.style.display = "none";
+                console.error("Failed to load card status monitor counts:", error);
+            });
+});
 </script>

@@ -117,6 +117,18 @@
             white-space: normal;
             word-break: break-all;
         }
+
+        /* Column Header Search Inputs Styling */
+        thead tr:nth-child(2) input {
+            width: 100%;
+            padding: 4px 6px;
+            box-sizing: border-box;
+            font-size: 0.8rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            outline: none;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body>
@@ -155,7 +167,9 @@
 
     <table id="inventoryTable" class="display" style="width:100%">
         <thead>
+            <!-- Row 1: Column Titles -->
             <tr>
+                <th>ID</th>
                 <th>Type</th>
                 <th>Status</th>
                 <th>Image</th>
@@ -171,6 +185,32 @@
                 <th>Avail Price</th>
                 <th>Sold Price</th>
                 <th>Listing Start Date</th>
+                <th>Last Updated Date</th>
+                <th>Next Renewal Date</th>
+                <th>Listing End Date</th>
+                <th>Days Listed</th>
+                <th>STR Total</th>
+            </tr>
+            <!-- Row 2: Filter Inputs placeholder -->
+            <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Image</th>
+                <th>SKU / ID</th>
+                <th>Listing ID</th>
+                <th>Title / Description</th>
+                <th>Card Count</th>
+                <th>Total Qty</th>
+                <th>Listed Qty</th>
+                <th>Avail Qty</th>
+                <th>Sold Qty</th>
+                <th>Listed Price</th>
+                <th>Avail Price</th>
+                <th>Sold Price</th>
+                <th>Listing Start Date</th>
+                <th>Last Updated Date</th>
+                <th>Next Renewal Date</th>
                 <th>Listing End Date</th>
                 <th>Days Listed</th>
                 <th>STR Total</th>
@@ -180,6 +220,7 @@
             <!-- 2. Standalone Cards -->
             {% for item in standalone_items %}
             <tr>
+                <td data-order="{{ item.id|default:0 }}">{{ item.id }}</td>
                 {% if item.is_pg %}
                     <td data-order="Group">
                         <span class="badge badge-group">Group</span>
@@ -210,13 +251,13 @@
                     </td>
                 {% endif %}
                 
-                <td data-order="{{ item.listing_id|default:'' }}">
-                    <code>{{ item.listing_id|default:"--" }}</code>
+                <td data-order="{{ item.get_listing_id|default:'' }}">
+                    <code>{{ item.get_listing_id|default:"--" }}</code>
                 </td>
                 
                 {% if item.is_pg %}
                     <td data-order="{{ item.product_group.group_title|default:'-' }}">
-                        <strong><a href="/product_group_detail/{{ item.product_group.group_title }}/" style="text-decoration:none">{{ item.product_group.group_title|default:"-" }}</a></strong>
+                        <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_title|default:"-" }}</a></strong>
                     </td>
                 {% else %}
                     <td data-order="{{ item.listing_detail_text|default:'' }}">
@@ -228,19 +269,25 @@
                 <td data-order="{{ item.list_qty|default:0 }}">{{ item.list_qty|default:0 }}</td>
                 <td data-order="{{ item.avail_qty|default:0 }}">{{ item.avail_qty|default:0 }}</td>
                 <td data-order="{{ item.sold_qty|default:0 }}">{{ item.sold_qty|default:0 }}</td>
-                <td data-order="{{ item.get_min_listing_price|default:0 }}">${{ item.get_min_listing_price|floatformat:0 }}</td>
+                <td data-order="{{ item.list_price|default:0 }}">${{ item.list_price|floatformat:0 }}</td>
                 <td data-order="{{ item.avail_price|default:0 }}">${{ item.avail_price|floatformat:0 }}</td>
-                <td data-order="{{ item.get_sold_price|default:0 }}">${{ item.get_sold_price|floatformat:0 }}</td>
-                  <td data-order="{% if item.listing_datetime %}{{ item.listing_datetime|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
-                    {{ item.listing_datetime|date:"Y-m-d H:i"|default:"Not Listed" }}
+                <td data-order="{{ item.sold_price|default:0 }}">${{ item.sold_price|floatformat:0 }}</td>
+                <td data-order="{% if item.listing_start_dt %}{{ item.listing_start_dt|date:'U' }}{% else %}0{% endif %}">
+                    {{ item.listing_start_dt|date:"Y-m-d"|default:"--" }}
                 </td>
-                <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'Y-m-d H:i:s' }}{% else %}0000-00-00 00:00:00{% endif %}">
-                    {{ item.listing_end_dt|date:"Y-m-d H:i"|default:"--" }}
+                <td data-order="{% if item.last_updated %}{{ item.last_updated|date:'U' }}{% else %}0{% endif %}">
+                    {% if item.listing_start_dt == item.last_updated %}--{% else %}{{ item.last_updated|date:"Y-m-d"|default:"--" }}{% endif %}
+                </td>
+                <td data-order="{% if item.next_renewal %}{{ item.next_renewal|date:'U' }}{% else %}0{% endif %}">
+                    {% if item.listing_end_dt %}--{% else %}{{ item.next_renewal|date:"Y-m-d"|default:"--" }}{% endif %}
+                </td>
+                <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'U' }}{% else %}0{% endif %}">
+                    {{ item.listing_end_dt|date:"Y-m-d"|default:"--" }}
                 </td>
                 <td data-order="{{ item.days_listed|default:0 }}">
                     {{ item.days_listed|default:"--" }}
                 </td>
-                <td data-order="">
+                <td data-order="{{ item.listing_str|default:0 }}">
                     {{ item.listing_str|floatformat:0|default:"--" }}
                 </td>
             </tr>
@@ -257,33 +304,29 @@
 
             // --- 1. URL Parameter Handling for Timeframe ---
             var urlParams = new URLSearchParams(window.location.search);
-            // Checks for 'timeframe' parameter (or fallback 'days'), defaults to 'all'
             var activeTimeframeParam = urlParams.get('timeframe') || urlParams.get('days') || 'all';
             
-            // Set initial state of dropdown on page load
             $('#timeframeSelect').val(activeTimeframeParam);
 
-            // Handle timeframe change: reload page with ?timeframe=<daynumber>
             $('#timeframeSelect').on('change', function() {
                 var selectedVal = $(this).val();
                 var searchParams = new URLSearchParams(window.location.search);
 
                 if (selectedVal && selectedVal !== 'all') {
                     searchParams.set('timeframe', selectedVal);
-                    searchParams.delete('days'); // Remove legacy key if present
+                    searchParams.delete('days');
                 } else {
                     searchParams.delete('timeframe');
                     searchParams.delete('days');
                 }
 
-                // Reload view with updated query string
                 window.location.search = searchParams.toString();
             });
 
 
             // --- 2. Custom Client-Side Search Extension (Type Toggles) ---
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-                var typeCell = data[0]; // Column 0: Type ("Group" or "Single")
+                var typeCell = data[1]; // Column index 1: Type ("Group" or "Single")
                 var showGroups = $('#toggleGroups').is(':checked');
                 var showSingles = $('#toggleSingles').is(':checked');
 
@@ -297,16 +340,43 @@
             });
 
 
-            // --- 3. Initialize DataTable ---
+            // --- 3. Setup Second Header Row Inputs for Column Filtering ---
+            $('#inventoryTable thead tr:eq(1) th').each(function(i) {
+                var title = $('#inventoryTable thead tr:eq(0) th').eq($(this).index()).text();
+                // Exclude Image column (index 3) from input filtering
+                if (i !== 3) {
+                    $(this).html('<input type="text" placeholder="Filter ' + title + '" />');
+                } else {
+                    $(this).html('');
+                }
+            });
+
+
+            // --- 4. Initialize DataTable ---
             var table = $('#inventoryTable').DataTable({
-                order: [[12, 'desc']], // Column 12: Listing Start Date descending
+                order: [[15, 'desc']], // Column 15 is Listing Start Date index
+                orderCellsTop: true,   // Ensures sorting binds to top header row
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: 2 },                     // Image column non-sortable
-                    { type: 'num', targets: [6, 7, 8, 9, 10, 11, 14] }    // Qty, Prices, Days Listed numeric sort
+                    { orderable: false, targets: 3 }, // Image column non-sortable
+                    { type: 'num', targets: [0, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] } 
                 ],
                 language: {
                     search: "Global filter:"
+                },
+                initComplete: function() {
+                    // Apply individual column searching targeting the second header row inputs safely
+                    var api = this.api();
+                    api.columns().every(function() {
+                        var that = this;
+                        var inputSelector = $('#inventoryTable thead tr:eq(1) th').eq(this.index()).find('input');
+                        
+                        inputSelector.on('keyup change clear', function() {
+                            if (that.search() !== this.value) {
+                                that.search(this.value).draw();
+                            }
+                        });
+                    });
                 }
             });
 

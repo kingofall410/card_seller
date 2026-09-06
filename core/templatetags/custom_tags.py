@@ -1,7 +1,7 @@
 from django import template
 import json
 from core.models.CardSearchResult import CardSearchResult
-from core.models.ProductGroup import ProductGroup
+from core.models.ProductGroup import ProductGroup, TitleFormat
 from core.models.Card import Collection, CollectionStatus
 from core.models.Status import StatusBase
 from core.models.ListingSpread import ListingSpread
@@ -44,6 +44,11 @@ def get_attribute(obj, attr):
 @register.simple_tag
 def get_choices():
     return CollectionStatus.choices
+    
+@register.simple_tag
+def get_title_formats():
+    print(TitleFormat.choices)
+    return TitleFormat.choices
 
 @register.filter
 def str_replace(value, arg):

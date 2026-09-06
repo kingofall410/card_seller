@@ -66,10 +66,10 @@ class ListingGroup(models.Model):
         return self.get_search_string(self.search_result.build_search_string())
 
     def get_search_string(self, id_string=""):
+        print("gss", self.id)
         if id_string:
+            ListingGroup.objects.filter(pk=self.pk).update(id_string=id_string)
             self.id_string = id_string
-            self.save()
-        print(self.search_result.display_filter_terms, self.search_result.display_parallel_filter_terms)
         all_terms = (self.search_result.display_filter_terms.split() if self.search_result.display_filter_terms else []) \
             + (self.search_result.display_parallel_filter_terms.split() if self.search_result.display_parallel_filter_terms else []) \
             + (self.filter_terms.split() if self.filter_terms else [])
@@ -160,7 +160,7 @@ class ListingGroup(models.Model):
         if not search_result.id:
             print("❌ Parent SearchResult has no ID. Cannot create group.")
             return None
-
+        print(search_result, label, filter_terms, id_string)
         # 2. Use ONLY the absolute unique identifiers to find the record
         # If these match, we update. If not, we create.
         try:
@@ -362,6 +362,8 @@ class ListingGroup(models.Model):
             
         self.search_string = " ".join(filter(None, [self.id_string, self.filter_terms]))
         self.search_result.update_value()
+        self.search_result.save()
+        self.search_result.parent_card.save()
         super().save(*args, **kwargs)
 
     def serialize_listings(self):

@@ -26,13 +26,14 @@
             <th>Reverse URL</th>
             <th>Front HD URL</th>
             <th>Reverse HD URL</th>
-            <th>MSRP</th>
-            <th>List Price</th>            
-            <th>Natural Sort</th>
+            <th>List Price</th>    
+            <th>MSRP</th>        
+            <th>Condition</th>
             <th>All Price Sort</th>
             <th>Legacy MSRP</th>
             <th>Qty</th>
             <th>STR Total</th>
+            <th>Natural Sort</th>
         </tr>
     </thead>
     <tbody>
@@ -63,13 +64,14 @@
             <td>{{ card.reverse_thumb_url }}</td>
             <td>{{ card.front_url }}</td>
             <td>{{ card.reverse_url }}</td>
-            <td>{{ card.msrp }}</td>
             <td>{{ card.list_price }}</td>
-            <td>{{ card.natural_sort }}</td>
+            <td>{{ card.msrp }}</td>
+            <td>{{ card.condition }}</td>
             <td>{{ card.all_price_sort }}</td>
             <td>{{ card.legacy_msrp }}</td>
             <td>{{ card.qty }}</td>
             <td>{{ card.strt }}</td>
+            <td>{{ card.natural_sort }}</td>
         </tr>
         {% endfor %}
     </tbody>

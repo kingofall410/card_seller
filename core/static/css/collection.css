@@ -345,6 +345,10 @@ tr:hover .dt-inline-edit {
     border-radius: 6px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     gap: 10px;
+
+    display: flex; 
+    flex-direction: row; 
+    align-items: center;
 }
 
 .dt-image-preview img {

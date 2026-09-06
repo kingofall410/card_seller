@@ -3,6 +3,7 @@ from core.models.ListingGroup import ListingGroup
 from services.models.models import Brand, Subset, Team, City, KnownName, CardAttribute, Settings, CardNumber, Season, SerialNumber, Condition, Parallel, CardName
 from datetime import datetime
 from django.utils import timezone
+import re
 
 #TODO:needs to be split further into types of listings (ebay, psa, etc) and merged with the mess that CSRs has become
 class ProductListing(models.Model):
@@ -143,8 +144,8 @@ class ProductListing(models.Model):
         #print(listing.img_url)
         #print(listing.format)
         listing.save()
-        listing.title = ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
-        listing.save()        
+        ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
+        #listing.save()        
         #TODO:ultimately this will need to be updated to handle multiple settings objects
         if tokenize:
             listing.title.tokenize(Settings.get_default())
@@ -156,7 +157,7 @@ class ListingTitle(models.Model):
     title = models.CharField(max_length=500, blank=True, null=True)
     tokens = models.JSONField(default=dict, blank=True)
     
-    parent_listing = models.OneToOneField(ProductListing, on_delete=models.CASCADE, default=1, related_name="title")  
+    parent_listing = models.OneToOneField(ProductListing, on_delete=models.CASCADE, null=True, related_name="title")  
     
     #TODO: needs condensing down in to a generic token reference at least
     brand_tokens = models.ManyToManyField(Brand, blank=True, related_name="listing_titles")

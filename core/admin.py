@@ -16,7 +16,7 @@ class CardAdmin(admin.ModelAdmin):
 
 @admin.register(CardSearchResult)
 class CardSearchResultAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status', 'ebay_msrp', 'ebay_listing_id', 'sku', 'list_price']
+    list_display = ['id', 'title_to_be', 'ebay_product_group', 'overall_status', 'variation_title_base']
     def get_form(self, request, obj=None, **kwargs):
         model_fields = [f.name for f in self.model._meta.many_to_many]
         print("Model fields:", model_fields)
@@ -53,5 +53,5 @@ class TagGroupAdmin(admin.ModelAdmin):
 @admin.register(ListedInfo)
 class ListedInfoAdmin(admin.ModelAdmin):
     readonly_fields = ('modification_date',)
-    list_display = ('__str__', 'modification_date')
+    list_display = ('__str__', 'modification_date', 'listing_id')
 #-gold -chrome -yellow -green -red -blue -refractor -psa -sgc -cgc -purple -rainbow -foil -aqua -wave -raywave -logofractor -x-fractor

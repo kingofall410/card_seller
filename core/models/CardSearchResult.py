@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Avg
 from django.utils import timezone
 from scipy.stats import trim_mean
@@ -21,7 +21,7 @@ class OverrideableFieldsMixin(models.Model):
         abstract = True
 
     def add_token_link(self, field, value, select=False, all_field_data={}):
-        print("add token link: ", field, value, select)
+        #print("add token link: ", field, value, select)
         #available_tokens_fieldname = f"{field}_available_tokens"#legacy remove when able
         selected_token_fieldname = f"{field}_selected_token"    
         selected_token = None
@@ -44,7 +44,7 @@ class OverrideableFieldsMixin(models.Model):
 
 
     def set_ovr_attribute(self, field, new_field_value, is_manual, all_field_data={}):
-        print("setting over: ", field)
+        #print("setting over: ", field)
         field_to_set = f"{field}_m" if is_manual else field
         is_manual_fieldname = f"{field}_is_manual"
 
@@ -342,22 +342,21 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def reset_listing_groups(self, include_graded=False):
         print("reset")
-        sold = self.listing_groups.exclude(label__icontains="ID")
-        if sold:
-            sold.delete()
+        with transaction.atomic():
+            sold = self.listing_groups.exclude(label__icontains="ID").delete()
 
-        self.create_listing_group(label="Available", is_sold=False, is_img=False, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")
-        self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")    
-        #if there's a condition already specified, use that, otherwise do a PSA by default
-        if self.condition:
-            self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
-        
-        if include_graded:
-            self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
-            self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
-            self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
+            self.create_listing_group(label="Available", is_sold=False, is_img=False, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")
+            self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")    
+            #if there's a condition already specified, use that, otherwise do a PSA by default
+            if self.condition:
+                self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
             
-        self.save()
+            if include_graded:
+                self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
+                self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
+                self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
+            #print("done resetting")
+            #self.save()
 
     def create_listing_group(self, label, filter_terms="", id_string="", is_img=False, is_refined=False, is_wide=False, is_sold=False):
         return ListingGroup.create(search_result=self, label=label, filter_terms=filter_terms, id_string=id_string, is_img=is_img, is_refined=is_refined, is_wide=is_wide, is_sold=is_sold)
@@ -420,11 +419,12 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         type(self).objects.filter(pk=self.pk).update(overall_status=new_status)
 
     def save(self, *args, **kwargs):
+        
         print("saving csr", self.id, self.title_to_be)
         #print("stack trace: ")
         #traceback.print_stack()
         self.title_to_be = self.build_title(condition_sensitive=True)
-        self.variation_title_base = self.build_title(short=True, condition_sensitive=True)
+       
         if not self.filter_terms_is_manual:
             self.filter_terms = " -box -pack -lot -auto -autograph -signed -refractor -chrome" 
         
@@ -444,14 +444,14 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             pyt,_ = PlayerYearTeamCity.objects.get_or_create(player_name=self.full_name_selected_token, year=self.year_selected_token)
 
             if pyt.city and not self.city_is_manual:
-                print("setting city from db")                
+                #print("setting city from db")                
                 self.set_ovr_attribute("city", pyt.city.primary_value, False)
             elif not pyt.city:
                 pyt.city = self.city_selected_token
 
 
             if pyt.team and not self.team_is_manual:
-                print("setting team from db")                
+                #print("setting team from db")                
                 self.set_ovr_attribute("team", pyt.team.primary_value, False)
             elif not pyt.team:
                 pyt.team = self.team_selected_token
@@ -469,16 +469,20 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #this is all a crutch for shitty code
         #check to see if we have been sold
         #I do the listed check so that I can force any card back to listing to unfuck it (p(h)uckett?)
-        if hasattr(self.parent_card, "listed_card_info") and self.overall_status != StatusBase.LISTED:
+        '''if hasattr(self.parent_card, "listed_card_info") and self.overall_status != StatusBase.LISTED:
             lci = self.parent_card.listed_card_info
-            print(", ".join(f"{ls.listing_status}-{ls.create_sku}-{ls.id}" for ls in lci.listing_statuses.all()))
+            #print(", ".join(f"{ls.listing_status}-{ls.create_sku}-{ls.id}" for ls in lci.listing_statuses.all()))
             listing_status = lci.listing_statuses.filter(create_sku=lci.sku).last()
-            if listing_status:
-                self.overall_status = listing_status.listing_status
+            if listing_status and self.overall_status:
+                self.overall_status = listing_status.listing_status'''
 
         
         #calculate pricing badge values
+        condition_sold = None
         if self.pk:
+            if self.condition:
+                condition_sold = self.listing_groups.filter(label__icontains=self.condition).first()
+
             raw_sold = self.listing_groups.filter(label__icontains="Raw").first()
             if not raw_sold:
                 raw_sold = self.listing_groups.filter(label__icontains="Sold").first()
@@ -493,14 +497,35 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 self.max_offer = available.last_5_max_price
                 avail_count = available.listings.count()
 
+            #print("CS", condition_sold, condition_sold.listings)
+            #print("RS", condition_sold, condition_sold.listings)
+            if condition_sold and condition_sold.listings.count() > 0:
+                #print("A")
+                self.min_avg = condition_sold.last_5_min_price
+                self.max_avg = condition_sold.last_5_max_price
+                if hasattr(self.parent_card, "listed_card_info"):
+                    #print("B")
+                    self.ebay_msrp = condition_sold.recent_avg_price
+                    self.parent_card.listed_card_info.msrp = self.ebay_msrp
+                    self.parent_card.save()
+                    self.parent_card.value = self.ebay_msrp
+                    self.parent_card.listed_card_info.save()
 
-            if raw_sold:
+            elif raw_sold:
+                #print("C")
                 self.min_avg = raw_sold.last_5_min_price
                 self.max_avg = raw_sold.last_5_max_price
                 if hasattr(self.parent_card, "listed_card_info"):
+                    #print("D")
                     self.ebay_msrp = raw_sold.recent_avg_price
+                    self.parent_card.listed_card_info.msrp = self.ebay_msrp
+                    self.parent_card.value = self.ebay_msrp
+                    self.parent_card.save()
                     self.parent_card.listed_card_info.save()
-
+            
+            #print("E")        
+            if raw_sold:
+                #print("F")
                 recent_sold_count = raw_sold.recent_listings_rel.count()
                 sold_count = raw_sold.listings.count()
 
@@ -720,7 +745,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                             self.attribute_flags[field_name] = field_value
 
                 else:
-                    print("setting: ", field_name, field_value)
+                    #print("setting: ", field_name, field_value)
                     setattr(self, field_name, field_value)
 
             elif hasattr(self.parent_card, field_name):
@@ -774,19 +799,22 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def update_listings(cls, matches_map, is_refined=False):
         #print("UPDATE", matches_map)
         results = []
-        for keywords in matches_map:
-            #print(matches_map[keywords])
-            listing_group, listings = matches_map[keywords]
-            print(listing_group, listings)
-            if len(listing_group.listings.all()) > 0:
+        with transaction.atomic():
+            for keywords in matches_map:
+                #print(matches_map[keywords])
+                listing_group, listings = matches_map[keywords]
+                print("Updating LG",listing_group, len(listings), "records")
                 listing_group.listings.all().delete()
 
-            results = [ProductListing.from_search_results(item, listing_group.search_result, tokenize=False) for item in listings]
-            #print("RESULTS", results)
-            listing_group.listings.set(results)
-            listing_group.search_string = keywords
-            listing_group.modification_date = timezone.now()
-            listing_group.save()
+                results = [ProductListing.from_search_results(item, listing_group.search_result, tokenize=False) for item in listings]
+                #print("RESULTS", results)
+                listing_group.listings.set(results)
+                listing_group.search_string = keywords
+                listing_group.modification_date = timezone.now()
+                if listing_group.search_result.overall_status not in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.SOLD, StatusBase.STAGED]:
+                    listing_group.search_result.overall_status = StatusBase.PRICED
+                    #listing_group.search_result.update_value() 
+                listing_group.save()
 
     @classmethod
     def from_graded_card_record(cls, pcard, record, csr=None, tokenize=True):
@@ -921,8 +949,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         
     #this has become a disaster and needs to be phased out
     def build_title(self, condition_sensitive=False, short=False):
-        print("build title", condition_sensitive, short)
-        
+
         if short:
 
             subset_or_card_name = self.display_value("subset") if (self.display_value("subset") != " " and self.display_value("subset") != "") \
@@ -942,21 +969,17 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 self.display_value("subset") if (self.display_value("subset") and self.display_value("subset") != " ") else None,
                 self.display_value("card_name") if (self.display_value("card_name") and self.display_value("card_name") != " ") else None,
                 self.display_value("full_name"),                
-                "1st" if len(self.attribute_flags) > 0 and self.attribute_flags.get("1st") else None,
-                "RC" if len(self.attribute_flags) > 0 and self.attribute_flags.get("RC") else None,
-                "HOF" if len(self.attribute_flags) > 0 and self.attribute_flags.get("HOF") else None,
-                "Auto" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Auto") else None,
                 self.display_value("parallel") if  (self.display_value("parallel") and self.display_value("parallel") != " ") else None,
                 #self.display_value("serial_number") if self.display_value("serial_number") != "-" else None,
                 f"#{self.display_value('card_number')}" if self.display_value("card_number") else None,
                 self.display_value("city"),
                 self.display_value("team"),
                 self.condition if condition_sensitive else None,
-                "Oddball" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else None
+                #"Oddball" if len(self.attribute_flags) > 0 and self.attribute_flags.get("Oddball") else None
             ]
         title = " ".join(part.strip() for part in title_parts if part and part.strip())
-        print("condition:", self.condition)
-        print("titles:", title)
+        #print("condition:", self.condition)
+        print("build title end:", title)
         return title
     
     
@@ -1096,7 +1119,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         if group_key:
             group = ProductGroup.objects.get(id=group_key)
-            filled_template["product"]["aspects"]["Card"] = group.get_title_for_group(self)
+            filled_template["product"]["aspects"]["Card"] = group.set_title_for_group(self)
         
         if filled_template["product"]["aspects"]["Card Name"] == "":
             filled_template["product"]["aspects"]["Card Name"] = []
@@ -1191,7 +1214,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         #print(raw_group.id, condition_group.id)
         val = 0.0
         val2 = 0.0
-        if condition_group:
+        if condition_group and condition_group.listings.exists():
             print("really?")
             val = condition_group.recent_avg_price
             val2 = condition_group.modified_avg
@@ -1201,7 +1224,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             val2 = raw_group.modified_avg
         print("UV", val, val2, hasattr(self.parent_card, "listed_card_info"))
         self.ebay_msrp = val
-        self.save()
+        #self.save()
 
 #TODO: needs to be refactored into ProductGroup
 

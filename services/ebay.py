@@ -570,7 +570,12 @@ def bulk_order_update(listing_ids, settings):
         # 1. Map by SKU for variations and Listing ID for singles
         # Fetch all records that match the provided listing IDs
         from core.models.ListedInfo import ListedInfo
-        infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
+        
+        # Handle conditional lookup for listing_ids
+        if listing_ids is not None:
+            infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
+        else:
+            infos = ListedInfo.objects.order_by('-id')[:1000]
         
         # Create two maps: one for direct ID lookup and one for SKU lookup
         listing_id_map = {str(info.listing_id): info for info in infos}
@@ -629,205 +634,6 @@ def bulk_order_update(listing_ids, settings):
         return access_token
     else:
         raise Exception(data.get("errors")[0].get("message"))
-
-
-def bulk_fetch_listing_info(listing_ids, settings):
-    print(f"[DEBUG] {datetime.utcnow()} - Starting bulk_listing_info_update for {len(listing_ids)} listing IDs.")
-    
-    access_token = get_access_token(settings, settings.ebay_user_auth_code)
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Accept-Language": "en-US"
-    }
-    from core.models.ListedInfo import ListedInfo
-    # Fetch local records to map SKUs and Listing IDs
-    infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
-    listing_id_map = {str(info.listing_id): info for info in infos}
-    sku_map = {str(info.sku): info for info in infos if info.sku}
-    
-    print(f"[DEBUG] Found {len(infos)} local ListedInfo records matching provided IDs.")
-    
-    updated_count = 0
-    errors = []
-
-    # eBay Inventory API endpoint to fetch offers/listing data by SKU
-    base_url = "https://api.ebay.com/sell/inventory/v1/offer"
-
-    for sku, parent_info in sku_map.items():
-        url = f"{base_url}?sku={sku}"
-        print(f"[DEBUG] Requesting offer/listing info for SKU: {sku} from {url}")
-        
-        response = requests.get(url, headers=headers)
-        data = response.json()
-        
-        if response.status_code == 200:
-            offers = data.get("offers", [])
-            print(f"[DEBUG] Retrieved {len(offers)} offer(s) for SKU: {sku}")
-            
-            for offer in offers:
-                print(f"[DEBUG] Processing offer ID: {offer.get('offerId')} for SKU: {sku}")
-                
-                # Get or create local status record
-                '''obj = ListingStatus.objects.filter(listing_info=parent_info).order_by('-id').first()
-                if not obj:
-                    obj = ListingStatus(
-                        listing_info=parent_info,
-                        available_qty=0,
-                        listing_status=StatusBase.ACTIVE,
-                        is_published=True
-                    )
-                    print(f"[DEBUG] Creating new ListingStatus record for SKU: {sku}")
-
-                # Update listing and offer metadata
-                obj.listing_id = offer.get("listingId")
-                obj.available_qty = offer.get("availableQuantity", 0)
-                obj.status = offer.get("status")
-                
-                # Extract pricing information from the offer summary
-                price_val = offer.get("pricingSummary", {}).get("price", {}).get("value")
-                if price_val:
-                    obj.sold_value = price_val
-
-                # Capture listing-specific details if available in response
-                listing_details = offer.get("listing", {})
-                if listing_details:
-                    print(f"[DEBUG] Found listing details for offer {offer.get('offerId')}")
-                    # Map start/end dates if fields exist in your model/schema
-                    # obj.start_date = listing_details.get("listingStartDate")
-                    # obj.end_date = listing_details.get("listingEndDate")
-
-                obj.save()
-                parent_info.card.active_search_results.save()'''
-                updated_count += 1
-                print(f"[DEBUG] Successfully synced listing info for SKU {sku}: {offer}")
-                
-        else:
-            err_msg = f"Failed to fetch offers for SKU {sku}: {response.status_code} - {response.text}"
-            print(f"[DEBUG] {err_msg}")
-            errors.append(err_msg)
-
-    if errors and updated_count == 0:
-        print(f"[DEBUG] Bulk update failed completely. Errors: {errors}")
-        raise Exception(f"Failed to fetch listing information. Errors: {errors}")
-
-    print(f"[DEBUG] Finished bulk listing fetch. Successfully updated {updated_count} records.")
-    return access_token
-
-def bulk_fetch_inventory_item_info(listing_ids, settings):
-    print(f"[DEBUG] {datetime.utcnow()} - Starting bulk_fetch_listing_info for {len(listing_ids)} listing IDs.")
-    
-    access_token = get_access_token(settings, settings.ebay_user_auth_code)
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
-    from core.models.ListedInfo import ListedInfo
-    # Fetch local records to map SKUs and Listing IDs
-    infos = ListedInfo.objects.filter(listing_id__in=listing_ids)
-    listing_id_map = {str(info.listing_id): info for info in infos}
-    sku_map = {str(info.sku): info for info in infos if info.sku}
-    
-    print(f"[DEBUG] Found {len(infos)} local ListedInfo records matching provided IDs.")
-    
-    fetched_count = 0
-    errors = []
-
-    # Iterate over unique SKUs first (preferred for eBay Inventory API), or fallback to listing IDs
-    # eBay Inventory API endpoint pattern: GET /sell/inventory/v1/inventory_item/{sku}
-    base_url = "https://api.ebay.com/sell/inventory/v1/inventory_item"
-
-    for sku, parent_info in sku_map.items():
-        url = f"{base_url}/{sku}"
-        print(f"[DEBUG] Requesting inventory item for SKU: {sku}")
-        
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code == 200:
-            data = response.json()
-            print(f"[DEBUG] Successfully retrieved inventory data for SKU: {sku}")
-            print(data)
-            
-            # Process and update local model fields with retrieved listing info
-            # e.g., product details, available quantity, pricing, etc.
-            '''obj, created = ListingStatus.objects.get_or_create(
-                listing_info=parent_info,
-                defaults={
-                    "available_qty": data.get("availability", {}).get("shipToLocationAvailability", {}).get("quantity", 0),
-                    "listing_status": StatusBase.ACTIVE,
-                    "is_published": True
-                }
-            )
-            
-            if not created:
-                obj.available_qty = data.get("availability", {}).get("shipToLocationAvailability", {}).get("quantity", 0)
-                obj.save()'''
-            
-            fetched_count += 1
-            print(f"Synced listing info for SKU {sku}")
-            
-        elif response.status_code == 404:
-            print(f"[DEBUG] SKU {sku} not found in eBay Inventory API.")
-        else:
-            err_msg = f"Failed to fetch SKU {sku}: {response.status_code} - {response.text}"
-            print(f"[DEBUG] {err_msg}")
-            errors.append(err_msg)
-
-    # For items without SKUs that only have legacy listing IDs, you can query via Trading API or alternative endpoints if required
-    missing_skus = [lid for lid, info in listing_id_map.items() if not info.sku]
-    if missing_skus:
-        print(f"[DEBUG] {len(missing_skus)} listings found without SKUs. Legacy ID lookup can be handled here if needed.")
-
-    if errors and fetched_count == 0:
-        raise Exception(f"Failed to fetch listing information. Errors: {errors}")
-
-    print(f"[DEBUG] Finished bulk fetch. Successfully updated {fetched_count} records.")
-    return access_token
-
-def get_sale_details(listing_id, settings, listing_status_obj, access_token=None):
-    access_token = access_token or get_access_token(settings, settings.ebay_user_auth_code)
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-
-    start_date = (datetime.utcnow() - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%S.000Z')
-    
-    # Filter by creation date range
-    url = f"https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[{start_date}..]"
-    
-    response = requests.get(url, headers=headers)
-    data = response.json()
-    #print(response)
-    if response.status_code == 200:
-        orders = data.get("orders", [])
-        #print(orders)
-        # Manually find the order that contains our listing_id
-        target_order = None
-        for order in orders:
-            #print("ORDER", order)
-            for item in order.get("lineItems", []):
-                if str(item.get("legacyItemId")) == str(listing_id):
-                    target_order = order
-                    break
-            if target_order: break
-
-        if not target_order:
-            print(f"No orders found for listing {listing_id} in the last 30 days.")
-            return None
-
-        # Process the found order
-        order_id = target_order["orderId"]
-        status = target_order["orderFulfillmentStatus"]
-        listing_status_obj.sold_value = target_order["pricingSummary"]["priceSubtotal"]["value"]
-        listing_status_obj.sold_date = target_order["creationDate"]
-        listing_status_obj.save()
-        return access_token
-    else:
-        raise Exception(data.get("errors")[0].get("message"))
-
 
 def get_offer_status(offer_id, settings, info, access_token=None):
     settings = settings or Settings.get_default()
@@ -1106,8 +912,19 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=1095):
                         print("URL:", url)
                         
                         page = browser.pages[0]
-                        page.goto(url, timeout=60000)
-
+                        
+                        try:
+                            resp = page.goto(url, timeout=60000)
+                            print(page.url, resp, resp.request)
+                            if "exceeded" in page.url:
+                                #this is a daily limit or auth problem
+                                print(f"Daily limit/auth problem 1 {page_num}.")
+                                return result_data    
+                        except Exception:
+                            #this is a daily limit or auth problem
+                            print(f"Daily limit/auth problem 2 {page_num}.")
+                            return result_data
+                        
                         try:
                             page.wait_for_selector("table, h2.page-notice__title", timeout=60000)
                         except Exception:

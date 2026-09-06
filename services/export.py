@@ -96,8 +96,10 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
     listing_id = None
     if ebay.create_inventory_group(group.group_key, inventory_group_data, access_token):
         if publish:
-            listing_id = ebay.publish_inventory_group(group.group_key, access_token)
-    return listing_id
+            group.listing_id = ebay.publish_inventory_group(group.group_key, access_token)
+            #if group.listing_datetime
+            group.save()
+    return group.listing_id
 
 
 def clear_inventory_group(group_key):
@@ -167,10 +169,6 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
             with transaction.atomic():
                 csr = get_object_or_404(CardSearchResult, id=csr_id)
                 listed_info = csr.parent_card.listed_card_info
-
-                if listed_info.list_price <= 0:
-                    raise Exception("List price not valid")
-
                 listed_info.upload_listing_images(csr.get_latest_front(), csr.get_latest_reverse())
                 listed_info.build_sku()                
 
@@ -183,6 +181,9 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                 )
                 offer_data = listed_info.export_to_offer_template(ebay.ebay_offer_data_template, (not group_key))
 
+                print(listed_info.sku)
+                print(item_data)
+                print(offer_data)
                 # If preview/dry-run mode, save assets locally and move to next item
                 if not publish:
                     csr.save()
@@ -262,6 +263,7 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
     
             # Update all local database objects with the single returned group listing ID
             with transaction.atomic():
+                
                 for csr in successful_group_csrs:
                     listed_info = csr.parent_card.listed_card_info
                     listed_info.listing_id = batch_listing_id

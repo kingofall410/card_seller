@@ -150,7 +150,7 @@ let isApplyingServerUpdate = false;
         const idxReverseHdUrl = headerMap['reverse hd url'] !== undefined ? headerMap['reverse hd url'] : 24;
         const idxMSRP = headerMap['MSRP'] !== undefined ? headerMap['MSRP'] : 25;
         const idxListPrice = headerMap['list price'] !== undefined ? headerMap['list price'] : 26;
-        const idxNaturalSort = headerMap['natural sort'] !== undefined ? headerMap['natural sort'] : 27;
+        const idxCondition = headerMap['condition'] !== undefined ? headerMap['condition'] : 27;
         const idxAllPriceSort = headerMap['all price sort'] !== undefined ? headerMap['all price sort'] : 28;
         const idxLegacyMSRP = headerMap['legacy msrp'] !== undefined ? headerMap['legacy msrp'] : 29;
         const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 30;
@@ -195,6 +195,7 @@ let isApplyingServerUpdate = false;
                 legacy_msrp: $tds.eq(idxLegacyMSRP).text().trim(),
                 qty: $tds.eq(idxQty).text().trim(),
                 strt: $tds.eq(idxStrt).text().trim(),
+                condition: $tds.eq(idxCondition).text().trim(),
             });
         });
 
@@ -226,6 +227,12 @@ let isApplyingServerUpdate = false;
                 if (selectedIds.has($(this).data('id'))) checkedCount++;
             });
 
+
+            // 2. Directly update the text of the info element
+            $('.dataTables_info').text(
+                `Showing ${total} (${checkedCount} selected)`
+            );
+            
             const $masterChk = $('#select-all-table');
             if (total === 0) {
                 $masterChk.prop('checked', false).prop('indeterminate', false);
@@ -236,6 +243,7 @@ let isApplyingServerUpdate = false;
             } else {
                 $masterChk.prop('checked', false).prop('indeterminate', true);
             }
+            
         }
 
         /* --- Unified Checkbox Core Event Actions --- */
@@ -620,7 +628,9 @@ let isApplyingServerUpdate = false;
                 }
             ],
             infoCallback: function(settings, start, end, max, total, pre) {
-                return `Showing ${total} card${total !== 1 ? 's' : ''} of ${max}`;
+                const checkedBoxes = document.querySelectorAll('input[name="selected_cards"]:checked');
+                let count = checkedBoxes.length;
+                return `Showing ${total} card${total !== 1 ? 's' : ''} of ${max} (${count} selected)`;
             },
             initComplete: function() {
                 const api = this.api();
@@ -701,9 +711,35 @@ let isApplyingServerUpdate = false;
                     }
                 })
                 .on('mousemove', 'tr', function(e) {
+                    const offset = 15;
+                    let posX = e.clientX + offset;
+                    let posY = e.clientY + offset;
+
+                    // Cache window and preview box dimensions
+                    const winWidth = $(window).width();
+                    const winHeight = $(window).height();
+                    
+                    // Temporarily ensure it's visible or use outerWidth/outerHeight if hidden
+                    // Since it's already shown on mouseenter, dimensions are available:
+                    const boxWidth = $previewBox.outerWidth();
+                    const boxHeight = $previewBox.outerHeight();
+
+                    // Check right edge overflow
+                    if (posX + boxWidth > winWidth) {
+                        // Flip to the left of the cursor instead
+                        posX = e.clientX - boxWidth - offset;
+                    }
+
+                    // Check bottom edge overflow
+                    if (posY + boxHeight > winHeight) {
+                        // Flip above the cursor instead
+                        posY = e.clientY - boxHeight - offset;
+                    }
+
+                    // Apply the adjusted coordinates
                     $previewBox.css({
-                        top: (e.clientY + 15) + 'px',
-                        left: (e.clientX + 15) + 'px'
+                        top: posY + 'px',
+                        left: posX + 'px'
                     });
                 })
                 .on('mouseleave', 'tr', function() {

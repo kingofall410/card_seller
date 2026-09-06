@@ -2,12 +2,19 @@ from django.db import models
 from core.models.Status import StatusBase
 from services import ebay
 from django.utils import timezone
+from dateutil.relativedelta import relativedelta
 import datetime
 
 class ListedInfo(models.Model):
+    
+    #owner relation
     card = models.OneToOneField('core.Card', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_card_info")
-    sub_cards = models.ManyToManyField('core.Card', null=True, blank=True, related_name="listed_subcard_info")
-    product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="listed_products_info")
+    product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.CASCADE, related_name="listed_products_info")
+
+    #membership relation 
+    #reverse relation from CARD's LI to LI of Product Group card is assigned to
+    assigned_product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_group_member")
+
     is_pg = models.BooleanField(default=False)
 
     listed_sku = models.CharField(max_length=250, blank=True)
@@ -58,6 +65,77 @@ class ListedInfo(models.Model):
         print(lci, lci.product_group)
         return lci
     
+    
+    def _secondary_calcs(self):
+        print("LI_secondary ", self.id)
+        if self.pk and self.listing_statuses.exists():
+            self.sold_qty = self.listing_statuses.last().sold_qty
+            self.avail_qty = self.listing_statuses.last().available_qty
+        else:
+            self.sold_qty = 0
+            self.avail_qty = self.list_qty
+            print(self.list_qty, self.list_price)
+        if self.is_pg and self.product_group:
+            self.total_qty = self.product_group.total_qty
+            self.list_qty = self.product_group.listed_qty
+            self.avail_qty = self.product_group.avail_qty
+            self.sold_qty = self.product_group.sold_qty
+            self.list_price = self.product_group.listed_price
+            self.total_listing_value = self.product_group.total_price
+            self.listed_price = self.product_group.listed_price
+            self.avail_price = self.product_group.avail_price
+            self.sold_price = self.product_group.sold_price
+        else:   
+            #list_price, list_qty set manually
+            self.total_qty = self.list_qty
+            self.listed_price = int(self.list_qty)*float(self.list_price) or 0.0
+            self.avail_price = int(self.avail_qty)*float(self.list_price) or 0.0
+            self.sold_price = int(self.sold_qty)*float(self.list_price) or 0.0
+            self.total_listing_value = float(self.list_price)
+            self.assigned_product_group = self.card.active_search_results.ebay_product_group if self.pk and self.card.active_search_results else None
+            
+            
+    def save(self, *args, **kwargs):
+        csr = None
+        print("saving LI ", self.id)
+        if self.card and self.card.active_search_results:
+            csr = self.card.active_search_results
+            self.listing_detail_text = csr.title_to_be if csr else ""
+            self.card.update_mod_date()
+        
+        if csr:
+            self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
+        if not self.listing_id:
+            self.listing_id = ""
+        if self.is_pg and hasattr(self, "product_group") and self.product_group:
+            self.product_group.save()    
+        self._secondary_calcs()
+        if not self.sold_price or self.sold_price == '':
+            self.sold_price = 0.0
+        super().save(*args, **kwargs)
+        
+    @property
+    def last_updated(self):
+        if self.is_pg:
+            return self.product_group.last_updated
+        else:
+            return self.listing_start_dt
+
+    @property
+    def next_renewal(self):
+        """Calculates eBay's actual calendar-month GTC renewal date."""
+        if not self.listing_start_dt:
+            return None
+        
+        now = timezone.now()
+        renewal = self.listing_start_dt
+        
+        # Step forward by 1 calendar month at a time until we pass 'now'
+        while renewal <= now:
+            renewal += relativedelta(months=1)
+            
+        return renewal
+
     @property
     def card_count(self):
         if self.is_pg:
@@ -69,8 +147,7 @@ class ListedInfo(models.Model):
         if self.is_pg:
             return self.product_group.listing_status if self.product_group else None
         else:
-            return self.card.active_search_results.overall_status
-    
+            return self.card.active_search_results.overall_status    
     
     @property
     def listing_str(self):
@@ -79,17 +156,31 @@ class ListedInfo(models.Model):
         else:
             return self.card.active_search_results.sell_through_rate_total
 
-    
+    @property
+    def get_listing_id(self):
+        if self.is_pg:
+            return self.product_group.listing_id
+        else:
+            return self.listing_id
+
     @property
     def listing_end_dt(self):
-        if self.listing_statuses.last():
-            return self.listing_statuses.last().sold_date
+        if self.is_pg:
+            return None
         else:
-            return timezone.now()
+            return self.listing_statuses.last().sold_date if hasattr(self, "listing_statuses") and self.listing_statuses.exists() else None
+
+    @property
+    def listing_start_dt(self):
+        
+        if self.is_pg:
+            return self.product_group.listing_datetime
+        else:
+            return self.listing_datetime
 
     @property
     def days_listed(self):
-        start = self.listing_datetime or timezone.now()
+        start = self.listing_start_dt or timezone.now()
         end = self.listing_end_dt or timezone.now()
         return (end - start).days
 
@@ -132,12 +223,13 @@ class ListedInfo(models.Model):
         return self
 
     def export_to_offer_template(self, template, single_listing):
-        
+        if self.list_price == 0:
+            self.list_price = self.msrp
         data = template.copy()
         data["sku"] = self.sku
         data["listingDescription"] = self.listing_detail_text
         data["availableQuantity"] = self.list_qty
-        data["pricingSummary"]["price"]["value"] = self.list_price
+        data["pricingSummary"]["price"]["value"] = self.list_price 
         data["listingPolicies"]["fulfillmentPolicyId"] = ebay.SHIPPING_POLICY_STANDARD_ENVELOPE if self.list_price <= 20.0 else ebay.SHIPPING_POLICY_USPS_GROUND
         # Apply best offer policies only if item is standalone (not part of a variation group)
         if single_listing:
@@ -161,49 +253,7 @@ class ListedInfo(models.Model):
 
         self.sku = self.card.active_search_results.build_sku()
 
-    def _secondary_calcs(self):
-        print("LI_secondary ", self.id)
-        if self.pk and self.listing_statuses.exists():
-            self.sold_qty = self.listing_statuses.last().sold_qty
-            self.avail_qty = self.listing_statuses.last().available_qty
-        else:
-            self.sold_qty = 0
-            self.avail_qty = self.list_qty
-
-        if self.is_pg and self.product_group:
-            self.total_qty = self.product_group.total_qty
-            self.list_price = self.product_group.listed_price
-            self.total_listing_value = self.product_group.total_price
-            self.listed_price = self.product_group.listed_price
-            self.avail_price = self.product_group.avail_price
-            self.sold_price = self.product_group.sold_price
-        else:   
-            #list_price, list_qty set manually
-            self.total_qty = self.list_qty
-            self.listed_price = self.list_qty*self.list_price
-            self.avail_price = self.avail_qty*self.list_price
-            self.sold_price = self.sold_qty*self.list_price
-            self.total_listing_value = self.list_price
-            
-            
-    def save(self, *args, **kwargs):
-        csr = None
-        print("saving LI ", self.id)
-        if self.card and self.card.active_search_results:
-            csr = self.card.active_search_results
-            self.listing_detail_text = csr.title_to_be if csr else ""
-            self.card.update_mod_date()
-        
-        if csr and self.msrp == 0.0 or self.msrp == -69.69:
-            self.msrp = max((round(csr.ebay_msrp + 0.01, 1) - 0.01 if csr and csr.ebay_msrp and csr.ebay_msrp > 0 else -69.69), 0.99)
-        if not self.listing_id:
-            self.listing_id = ""
-        if self.is_pg and hasattr(self, "product_group") and self.product_group:
-            self.product_group.save()    
-        self._secondary_calcs()
-        if not self.sold_price or self.sold_price == '':
-            self.sold_price = 0.0
-        super().save(*args, **kwargs)
+    
     
     def accept_msrp(self):
         print("accept")
@@ -215,9 +265,3 @@ class ListedInfo(models.Model):
     def get_sold_price(self):
         last = self.listing_statuses.last()
         return last.sold_value if last else 0
-
-        
-    @property
-    def get_min_listing_price(self):
-        last = self.listing_statuses.last()
-        return max(last.sold_value, self.listed_price) if last else self.listed_price

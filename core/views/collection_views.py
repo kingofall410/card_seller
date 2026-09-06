@@ -51,13 +51,12 @@ def price_collection(request, collection_id):
     print(card_list)
 
 
-
-    lgs = list(chain.from_iterable(card.active_search_results.get_pricing_groups for card in card_list))
+    lgs = list(chain.from_iterable(card.active_search_results.listing_groups.all() for card in card_list))
     lgids = [lg.id for lg in lgs]
 
 
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_pricing_task(name=f"refresh lgs", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.refresh_listing_groups, params={"lg_ids":lgids}, on_success_status=StatusBase.PRICED)
+    core_config.queue.schedule_pricing_task(name=f"refresh lgs", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.price_only_collection, params={"lg_ids":lgids,"settings_id":2}, on_success_status=StatusBase.PRICED)
     
     return JsonResponse({"success": True, "error": ""})
 
@@ -337,6 +336,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         # Map straight projections from existing CSR model fields
         legacy_sku=F('sku'),
         csr_id=F('id'),
+        fetched_condition=F('condition'),
         strr=F('sell_through_rate_recent'),
         strt=F('sell_through_rate_total'),
         legacy_msrp=F('ebay_msrp'),
@@ -361,7 +361,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         'fetched_sku', 'fetched_msrp', 'fetched_qty', 'fetched_list_price',
         'custom_year', 'custom_brand', 'custom_subset', 'custom_city', 'custom_team', 
         'custom_name', 'custom_card_name', 'custom_card_nr', 'custom_parallel', 'custom_title',
-        'overall_status', 'legacy_sku', 'csr_id', 'strr', 'strt', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
+        'overall_status', 'legacy_sku', 'csr_id', 'fetched_condition', 'strr', 'strt', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
         'max_avg_val', 'scale_max_val', 'product_group_name', 'product_group_key', 'val_range_str',
         'latest_task_scheduled', 'latest_confirmtask_scheduled', 'latest_listingstatus', 'primary_tag_group'  # Passed through raw row generation
     ).order_by('-fetched_card_id')
@@ -416,6 +416,7 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
             'overall_status': row['overall_status'],
             'legacy_sku': row['legacy_sku'],
             'csr_id': row['csr_id'],
+            'condition': row['fetched_condition'],
             'strr': row['strr'],
             'strt': row['strt'],
             'min_offer': row['min_offer_val'],
@@ -483,7 +484,18 @@ def view_collection(request, collection_id):
         
 
     if collection_id_list:
-        query_set = query_set.filter(collection_id__in=collection_id_list)
+        print(collection_id_list)
+        resolved_cids = []
+        for cid in collection_id_list:
+            cid_int = int(cid)
+            if cid_int < 0:
+                limit = abs(cid_int)
+                recent_cids = Collection.objects.order_by('-id').values_list('id', flat=True).distinct()[:limit]
+                resolved_cids.extend(recent_cids)
+            else:
+                resolved_cids.append(cid_int)
+        print(resolved_cids)
+        query_set = query_set.filter(collection_id__in=resolved_cids)
 
     if start_listing_date and end_listing_date:
         start_date = timezone.make_aware(datetime.fromisoformat(start_listing_date))
@@ -532,9 +544,7 @@ def product_group_detail(request, pk):
         card_list, 
         key=lambda x: x['product_group_key'] if x['product_group_key'] else ''
     )
-    product_group.save()
-    for card in query_set:
-        card.listed_card_info.save()
+    
     return render(request, "group_view.html", {
         "cards": card_list, 
         "q": "", 
@@ -650,9 +660,8 @@ def move_to_collection3(request, collection_id):
         "all_product_groups": ProductGroup.objects.exclude(pk=pk).only("id", "group_title", "group_key"),
     }
     return render(request, "product_groups.html", context)'''
-
-def listings_list(request, timeframe=7):
     
+def listings_list(request, timeframe=7):
     # Safely parse timeframe query parameter
     try:
         timeframe_days = int(request.GET.get('timeframe', timeframe))
@@ -662,23 +671,31 @@ def listings_list(request, timeframe=7):
     end_date = timezone.now()
     start_date = end_date - timedelta(days=timeframe_days)
 
-    # 2. Standalone Items: Optimize range query & prefetch foreign keys
-    standalone_items = (
-        ListedInfo.objects.filter(
-            Q(is_pg=True) |
-            Q(listing_datetime__range=(start_date, end_date))  # Replaces gte/lte/isnull combo
+    # Base queryset for date and status filtering
+    base_query = (
+        Q(is_pg=True) |
+        (
+            Q(card__search_results__overall_status__in=[StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.SOLD]) &
+            Q(listing_datetime__date__gte=start_date) & 
+            Q(listing_datetime__date__lte=end_date)
         )
-        .select_related('product_group')  # Pre-loads foreign keys to avoid N+1 queries in template
+    )
+
+    common_optimization = (
+        ListedInfo.objects.filter(base_query)
+        .select_related('product_group')
         .prefetch_related('listing_statuses')
         .order_by('listing_datetime')
     )
 
+    # Filter at the database level instead of in Python memory
+    standalone_items = common_optimization.filter(assigned_product_group__isnull=True)
+    group_members = common_optimization.filter(assigned_product_group__isnull=False)
+
     context = {
-        'groups': [],
         'standalone_items': standalone_items,
+        'group_members': group_members,
         'timeframe': timeframe_days
     }
 
-    #lid_list = [g.listing_id for g in groups]+[i.listing_id for i in standalone_items]
-    #ebay.bulk_order_update(lid_list, Settings.get_default())
     return render(request, 'listing_list.html', context)

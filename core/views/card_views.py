@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from core.models.Card import Card, Collection
-from core.models.ProductGroup import ProductGroup
+from core.models.ProductGroup import ProductGroup, TitleFormat
 from core.models.TagGroup import TagGroup
 from core.models.ListingGroup import ListingGroup
 from core.models.ListedInfo import ListedInfo
@@ -61,8 +61,14 @@ def card_status_monitor(request):
         'pre-listing': 0,
         'priced': 0,
         'reviewed': 0,
+        'listed_bucket': 0,
         'listed': 0,
-        'sold-hold': 0
+        'confirmed': 0,
+        'staged': 0,
+        'sold': 0,
+        'held': 0,
+        'imported': 0,
+        'total': 0,
     }
 
     # 4. Map the annotated statuses to your workflow groups
@@ -73,7 +79,15 @@ def card_status_monitor(request):
         total = item['total']
         
         if status in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.STAGED]:
-            counts_dict['listed'] += total
+            counts_dict['listed_bucket'] += total
+            if status in [StatusBase.LISTED]:
+                counts_dict['listed'] += total
+                
+            if status in [StatusBase.CONFIRMED]:
+                counts_dict['confirmed'] += total
+                
+            if status in [StatusBase.STAGED]:
+                counts_dict['staged'] += total
             
         elif status in [StatusBase.PRICED, StatusBase.AUTO_PRICED, StatusBase.UNLISTED, StatusBase.PENDING]:
             counts_dict['priced'] += total
@@ -81,11 +95,18 @@ def card_status_monitor(request):
         elif status in [StatusBase.REVIEWED]:
             counts_dict['reviewed'] += total
             
-        elif status in [StatusBase.SOLD, StatusBase.HELD]:
-            counts_dict['sold-hold'] += total
+        elif status in [StatusBase.SOLD]:
+            counts_dict['sold'] += total
             
-        elif status in [StatusBase.IMPORTED]:
-            counts_dict['pre-listing'] += total
+        elif status in [StatusBase.IMPORTED, StatusBase.HELD]:
+            counts_dict['pre-listing'] += total    
+            if status in [StatusBase.IMPORTED]:
+                counts_dict['imported'] += total
+                
+            if status in [StatusBase.HELD]:
+                counts_dict['held'] += total
+        
+        counts_dict['total'] += total
 
     # DEBUG PRINT: View the finalized dictionary map before dispatching response
     #print("[DEBUG] Final mapped counts dict:", counts_dict)
@@ -168,9 +189,10 @@ def re_sku(request, card_id):
 def single_card_test(request, card_id):
     if request.method == 'POST':
         try:
-            csr = CardSearchResult.objects.filter(parent_card_id=card_id).last()
-            csr.save()
-            
+            pg = Card.objects.get(id=card_id)
+            pg.active_search_results.save()
+            pg.save()
+
             return JsonResponse({"success": 'true'}, status=200)
         except Exception as e:
             traceback.print_exc()
@@ -508,7 +530,17 @@ def refresh_listing_status(request, card_id=None):
         listing_ids = [card.listed_card_info.listing_id for card in cards if hasattr(card, "listed_card_info")]
     
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_confirm_task(name=f"confirm listings", card=cards[0], callback=lookup.bulk_order_update, params={"card_ids": card_ids, "listing_ids":listing_ids}, on_success_status=StatusBase.CONFIRMED)
+    core_config.queue.schedule_confirm_task(name=f"confirm listings", card=cards[0], callback=lookup.bulk_offer_and_order_update, params={"card_ids": card_ids, "listing_ids":listing_ids}, on_success_status=StatusBase.CONFIRMED)
+
+    #lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
+    #updated_flat_cards = collection_views.flatten_collection(cards)
+    return JsonResponse({"success": True})
+
+@csrf_exempt
+def import_new_orders(request):
+    
+    core_config = apps.get_app_config("core")
+    core_config.queue.schedule_confirm_task(name=f"import new orders", card=None, callback=lookup.bulk_order_update, params={})
 
     #lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
     #updated_flat_cards = collection_views.flatten_collection(cards)
@@ -791,7 +823,7 @@ def update_li_fields(request):
     card_id = request.POST.get("card_id", None)
     fieldname = request.POST.get("field")
     fieldvalue = request.POST.get("value", None)
-    #print("here: ", li_id)
+    print("here: ", fieldname, fieldvalue)
     if li_id:
         #print("here2: ", li_id)
         listed_info = ListedInfo.objects.filter(id=li_id).last()
@@ -934,13 +966,14 @@ def async_price_search(request, lg_id):
 @csrf_exempt
 def new_group(request, name):  
     clean_name = name.strip()
-    
+    title_format = request.GET.get('title_format', 'player group')
+    print(clean_name, title_format)
     if not clean_name:
         return JsonResponse({'success': False, 'error': 'Name is empty'}, status=400)
     
     # Use the classmethod we defined earlier
     # Ensure ProductGroup.create(name) handles the DB save properly
-    group = ProductGroup.create(clean_name)
+    group = ProductGroup.create(clean_name, title_format)
 
     return JsonResponse({
         'success': True,

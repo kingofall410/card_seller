@@ -200,9 +200,9 @@ class Queue:
                             
                             # 3. Process the objects in-memory
                             for succ in successors_list:
-                                print("suc")
+                                #print("suc")
                                 for mt in self.tasks:      
-                                    print("mtdbod", mt.db_id, succ.id)                          
+                                    #print("mtdbod", mt.db_id, succ.id)                          
                                     if mt.db_id == succ.id:
                                         mt.status = StatusBase.SUCCESS
                                         succ.status = StatusBase.SUCCESS # Already updated in DB, but updates Python object

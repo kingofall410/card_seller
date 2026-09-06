@@ -55,13 +55,11 @@ def price_only_card(card_id, settings_id, ss=None):
     price_only(csr_id, settings_id, ss)
     return True
 
-
-#start here to update this to accept lgs belonging to multiple csrs
 def refresh_listing_groups(listing_groups=None, lg_ids=None):
     avail_keyword_strings = []
     sold_keyword_strings = []
     matches_map = {}
-    #print("refresh", listing_groups, lg_ids)
+    print("refresh listing groups", listing_groups, lg_ids)
     #IDs take precedence over objects passed in
     if lg_ids:
         listing_groups = ListingGroup.objects.filter(id__in=lg_ids)
@@ -75,39 +73,63 @@ def refresh_listing_groups(listing_groups=None, lg_ids=None):
             listing_matches = ebay.image_search(csr.parent_card.get_lookup_image(), limit=50, page=1, settings=Settings.get_default())
             csr.update_listings({"": (listing_group, listing_matches)})
         elif listing_group.is_sold and not listing_group.is_graded:
+            search_string = csr.build_search_string()
             sold_keyword_strings.insert(0, (listing_group.get_search_string(csr.build_search_string()), listing_group))
         elif not listing_group.is_sold:
             avail_keyword_strings.insert(0, (listing_group.get_search_string(csr.build_search_string()), listing_group))
-            
+    print(sold_keyword_strings, avail_keyword_strings)        
     if sold_keyword_strings:
         #matches map is keyword_string --> (listing variable, [listings])
-        matches_map = ebay.scrape_with_profile(sold_keyword_strings, limit=50)
+        matches_map = ebay.scrape_with_profile(sold_keyword_strings, limit=50)#(50*3 pages)
         CardSearchResult.update_listings(matches_map)
-
+    #listing_group, listings = matches_map[keywords]
+    print("MM2",matches_map.keys(), len(matches_map))
     if avail_keyword_strings:
-        matches_map = ebay.text_search(avail_keyword_strings, limit=50, settings=Settings.get_default())
+        matches_map = ebay.text_search(avail_keyword_strings, limit=150, settings=Settings.get_default())
         CardSearchResult.update_listings(matches_map)
+    #listing_group, listings = matches_map[keywords]
+    print("MM3",matches_map.keys(), len(matches_map))
+    
         
     return matches_map
 
 
+def price_only_collection(lg_ids, settings_id, ss=None):
+    
+    listing_groups = ListingGroup.objects.filter(id__in=lg_ids)
+    csrs = set(lg.search_result for lg in listing_groups)
+    print("PRICING price_only_collection", [csr.id for csr in csrs])
+    settings = Settings.objects.get(id=settings_id)
+    
+    for csr in csrs:
+        csr.reset_listing_groups()
+        #no csr.save should be needed
+
+    listing_groups = ListingGroup.objects.filter(search_result_id__in=[csr.id for csr in csrs]).filter(is_img=False)
+    matches_map = refresh_listing_groups(listing_groups=listing_groups)   
+    #psa_count = sum(group[0].listings.count() for group in matches_map.values() if 'PSA' in group[0].label)
+    print("final save round")
+    #for csr in csrs:
+        #csr.overall_status = StatusBase.PRICED
+        #csr.save()
+
 def price_only(csr_id, settings_id, ss=None):
     csr = CardSearchResult.objects.get(id=csr_id)
     settings = Settings.objects.get(id=settings_id)
-
     
     csr.reset_listing_groups()
-    csr.save()
+    #no csr.save should be needed
 
     listing_groups = csr.listing_groups.filter(is_img=False)
     matches_map = refresh_listing_groups(listing_groups=listing_groups)   
-    psa_count = sum(group[0].listings.count() for group in matches_map.values() if 'PSA' in group[0].label)
+    #psa_count = sum(group[0].listings.count() for group in matches_map.values() if 'PSA' in group[0].label)
      
     csr.overall_status = StatusBase.PRICED
     csr.save()
 
-def bulk_order_update(card_ids, listing_ids, settings=None):
+def bulk_offer_and_order_update(card_ids, listing_ids, settings=None):
     cards = Card.objects.filter(id__in=card_ids)
+    status = None
     for card in cards:
         csr = card.active_search_results
         listing_info = card.listed_card_info
@@ -118,11 +140,18 @@ def bulk_order_update(card_ids, listing_ids, settings=None):
             if success: 
                 print("SUCCESS", status)
                 csr.perform_status_update(status)
+        else:
+            #no offer id or listing id means failed listing previously
+            print("No offer id for card ", card.id)
+            csr.perform_status_update(StatusBase.FAILED)
     print("A", status)
     ebay.bulk_order_update(listing_ids, settings or Settings.get_default())
-    print("B", status)
-    ebay.bulk_fetch_listing_info(listing_ids, settings or Settings.get_default())
-    print("C", status)
     for card in cards:
         card.active_search_results.save()
+    return True
+
+
+def bulk_order_update(settings=None):
+    
+    ebay.bulk_order_update(None, settings or Settings.get_default())
     return True

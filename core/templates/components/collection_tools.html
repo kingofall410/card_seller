@@ -3,6 +3,7 @@
 
 {% get_product_groups as groups %}
 {% get_spreads as spreads %}
+{% get_title_formats as title_formats %}
 
 <!-- Collection Header Control Bar -->
 <div class="collection-header">
@@ -13,7 +14,7 @@
     <button onclick="handleBulkUpdate(true)" title="Review">🕶</button>
     <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
     <button onclick="submitCollection('/re_sku/')" title="Re-SKU">🏷️</button>
-    <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>          
+    <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>         
     <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
     <button onclick="submitCollection('/clear_product_group/')" title="CPG">🧹</button>
     <button 
@@ -36,7 +37,7 @@
     <!-- Group Dropdown & Selection -->
     <select id="group-dropdown" class="group-select"
             data-card-id="{{ card_id }}"
-            onchange="if(this.value === '__new__') groupSelection(this);"
+            onchange="if(this.value === '__new__') openNewGroupModal(this);"
             style="padding: 8px; border-radius: 6px; min-width: 180px;">
         <option value="">No Group (Single Listing)</option>
         <option value="__new__">➕ New Group…</option>
@@ -64,70 +65,88 @@
     <button onclick="handleBulkList()">Bulk List</button>
 </div>
 
-<!-- Integrated Tag Editor Modal -->
-<div id="modal-wrapper-{{ card.id }}" class="tag-editor-dialog-overlay" style="display: none;">
-    <div class="tag-editor-component" style="border: 1px solid #ccc; padding: 20px; border-radius: 6px; max-width: 500px; width: 90%; background-color: #ffffff; box-shadow: 0px 4px 12px rgba(0,0,0,0.15); position: relative;">
-        <span class="close-tag-dialog" style="position: absolute; top: 12px; right: 16px; font-size: 20px; font-weight: bold; color: #888; cursor: pointer;">&times;</span>
+<!-- New Group Dialog Modal Overlay -->
+<div id="new-group-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: #fff; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <h4 style="margin-top: 0; margin-bottom: 16px;">Create New Product Group</h4>
         
-        <h4 style="margin-top: 0; margin-bottom: 16px;">Manage Metadata for: <strong>{{ obj.title }}</strong></h4>
-        
-        <form method="POST" action="javascript:void(0);">
-            {% csrf_token %}
-            <div style="margin-bottom: 20px;">
-                <label for="new-tags-{{ card.id }}" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Add New Tags:</label>
-                <input 
-                    type="text" 
-                    id="new-tags-{{ card.id }}"
-                    name="new_tags" 
-                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" 
-                    placeholder="e.g. vintage, rookie, 1989">
-                <small style="color: #666; display: block; margin-top: 6px;">Separate multiple tags with commas.</small>
-            </div>
+        <div style="margin-bottom: 16px;">
+            <label for="new-group-title-input" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Group Name:</label>
+            <input type="text" id="new-group-title-input" placeholder="Enter a name for the new group..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" />
+        </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button type="button" class="close-tag-dialog" style="background-color: #6c757d; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    Cancel
-                </button>
-                <button type="submit" style="background-color: #007bff; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    Apply Changes
-                </button>
-            </div>
-        </form>
+        <div style="margin-bottom: 20px;">
+            <label for="new-group-title-format" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Title Format:</label>
+            <select id="new-group-title-format" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: #fff; font-weight: bold; cursor: pointer;">
+                {% for value, label in title_formats %}
+                    <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" id="cancel-new-group-btn" style="background-color: #6c757d; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">Cancel</button>
+            <button type="button" id="submit-new-group-btn" style="background-color: #007bff; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold;">Create Group</button>
+        </div>
     </div>
 </div>
 
 <!-- Collection Header Control Handlers -->
 <script>
-async function groupSelection(element) {
-    const title = prompt("Enter a name for the new group:");
-    if (!title || title.trim() === "") {
-        element.value = "";
+let activeGroupDropdownElement = null;
+
+function openNewGroupModal(element) {
+    activeGroupDropdownElement = element;
+    document.getElementById('new-group-title-input').value = '';
+    document.getElementById('new-group-modal').style.display = 'flex';
+    document.getElementById('new-group-title-input').focus();
+}
+
+document.getElementById('cancel-new-group-btn').addEventListener('click', function() {
+    document.getElementById('new-group-modal').style.display = 'none';
+    if (activeGroupDropdownElement) {
+        activeGroupDropdownElement.value = "";
+    }
+});
+
+document.getElementById('submit-new-group-btn').addEventListener('click', async function() {
+    const titleInput = document.getElementById('new-group-title-input');
+    const formatSelect = document.getElementById('new-group-title-format');
+    
+    const title = titleInput.value.trim();
+    const titleFormat = formatSelect.value;
+
+    if (!title) {
+        alert("Please enter a valid group name.");
         return;
     }
 
-    const url = `/new_group/${encodeURIComponent(title.trim())}`;
+    document.getElementById('new-group-modal').style.display = 'none';
+
+    // Build URL or include titleFormat in your request payload/parameters as needed
+    const url = `/new_group/${encodeURIComponent(title)}/?title_format=${encodeURIComponent(titleFormat)}`;
 
     try {
         const response = await fetch(url);
         const data = await response.json();
 
-        if (data.success) {
+        if (data.success && activeGroupDropdownElement) {
             const newOption = document.createElement("option");
             newOption.value = data.id; 
             newOption.textContent = data.title;
 
-            const newGroupOption = element.querySelector('option[value="__new__"]');
-            element.insertBefore(newOption, newGroupOption);
-            element.value = data.id;
+            const newGroupOption = activeGroupDropdownElement.querySelector('option[value="__new__"]');
+            activeGroupDropdownElement.insertBefore(newOption, newGroupOption);
+            activeGroupDropdownElement.value = data.id;
         } else {
             alert("Failed to create group: " + (data.error || "Unknown error"));
-            element.value = "";
+            if (activeGroupDropdownElement) activeGroupDropdownElement.value = "";
         }
     } catch (err) {
         console.error("Group creation failed:", err);
-        element.value = "";
+        if (activeGroupDropdownElement) activeGroupDropdownElement.value = "";
     }
-}
+});
 
 function handleBulkUpdate(isReview = false) {
     let url;
@@ -175,6 +194,10 @@ document.addEventListener("DOMContentLoaded", function() {
     window.addEventListener('click', function(event) {
         if (event.target.classList.contains('tag-editor-dialog-overlay')) {
             event.target.style.display = 'none';
+        }
+        if (event.target.id === 'new-group-modal') {
+            document.getElementById('new-group-modal').style.display = 'none';
+            if (activeGroupDropdownElement) activeGroupDropdownElement.value = "";
         }
     });
 
