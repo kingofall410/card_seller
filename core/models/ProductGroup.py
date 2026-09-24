@@ -21,7 +21,7 @@ class ProductGroup(models.Model):
     group_key = models.CharField(max_length=50)#limit tied to inventoryItemGroupKey max length
     group_title = models.CharField(max_length=50, blank=True, null=True)
     group_image_link = models.CharField(max_length=250, null=True, blank=True)
-    replaced_by = models.ForeignKey('self', blank=False, null=True, on_delete=models.SET_NULL, related_name='replaces')
+    replaced_by = models.ForeignKey('self', blank=True, null=True, on_delete=models.SET_NULL, related_name='replaces')
 
     card_count = models.IntegerField(default=0)
 
@@ -50,6 +50,12 @@ class ProductGroup(models.Model):
     team_group_title = ["full_name","year","brand","subset","card_name","parallel","card_number","city","team"]
     misc_group_title = ["full_name","year","brand","subset","card_name","parallel","card_number","city","team"]
 
+    candidate_query = models.CharField(max_length=250, null=True, blank=True)
+
+    @property
+    def next_renewal(self):
+        return self.listed_products_info.filter(is_pg=True).first().next_renewal
+    
     @property
     def _calc_listing_str(self):
         if self.card_count > 0:    
@@ -59,11 +65,13 @@ class ProductGroup(models.Model):
 
     def set_title_for_group(self, csr, limit=65):
         values = []
+        if csr.id == 6317:
+            csr.variation_title_base = "1991 Topps Traded 4T"
         #This isn't our first try, don't fuck with the variation title; this assumes the same group as last time
-        if csr.variation_title_base and (len(csr.variation_title_base) <= limit) and csr.overall_status in [StatusBase.CONFIRMED, StatusBase.LISTED]:
+        if csr.variation_title_base and (len(csr.variation_title_base) <= limit) and csr.overall_status in [StatusBase.CONFIRMED, StatusBase.LISTED, StatusBase.SOLD]:
             print("EXISTING csr.variation_title_base", csr.variation_title_base)
             return csr.variation_title_base
-            
+        
         title_format_details = self.misc_group_title
         if self.title_format == TitleFormat.SET_GROUP:
             title_format_details = self.set_group_title
@@ -86,6 +94,10 @@ class ProductGroup(models.Model):
         print("NEW csr.variation_title_base", fart, csr.variation_title_base)
         return csr.variation_title_base
 
+    @property
+    def get_listing_id_display(self):
+        return self.listed_products_info.filter(is_pg=True).first().listing_id
+     
     def _calculate_summary_attribs(self):
         print("PG_secondary _csa", self.id)
         product_list = list(self.products.all()) if self.pk else []
@@ -152,6 +164,14 @@ class ProductGroup(models.Model):
 
 
     @property
+    def pct_complete(self):
+        return 100*(self.completed_count)/self.products.count() if self.products.count() else 0
+    
+    @property
+    def completed_count(self):
+        return self.listed_qty+self.staged_qty+self.sold_price
+    
+    @property
     def size(self):
         return self.products.count()
     
@@ -172,10 +192,11 @@ class ProductGroup(models.Model):
 
     #below is used to create from UI
     @classmethod
-    def create(cls, name, tf):
-        group = ProductGroup.objects.create(group_title=name, title_format=tf)
+    def create(cls, name, tf, candidate_query):
+        group = ProductGroup.objects.create(group_title=name, title_format=tf, candidate_query=candidate_query)
         ListedInfo.create_from_group(group)
         group.group_key=str(group.id)
+        group.candidate_query=str(candidate_query)
         group.save()
         return group
 
@@ -223,8 +244,9 @@ class ProductGroup(models.Model):
                 self.replaced_by.add_to_product_group_internal(csr)
             self.replaced_by.save()
             return self.replaced_by.export_to_ebay_variation_group(new_csrs)
-        
-        csrs = new_csrs + list(self.products.filter(Q(overall_status=StatusBase.LISTED) | Q(overall_status=StatusBase.SOLD) | Q(overall_status=StatusBase.CONFIRMED)))
+
+        #toss these into a set to ensure we're not adding something that is already in
+        csrs = list(set(new_csrs + list(self.products.filter(Q(overall_status=StatusBase.LISTED) | Q(overall_status=StatusBase.SOLD) | Q(overall_status=StatusBase.CONFIRMED)))))
         print(f"Adding {len(new_csrs)} new csrs to '{self.group_title}' total size to be: {len(csrs)}")
         sorted_csrs = sorted(csrs, key=lambda x: x.title_to_be)
         

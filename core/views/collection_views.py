@@ -1,7 +1,6 @@
 # Collection-related views
 from django.views.decorators.csrf import csrf_exempt
-import os
-import json
+import json, re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.conf import settings as app_settings
@@ -31,7 +30,7 @@ from itertools import chain
 from core.models.ProductGroup import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.ListingStatus import ListingStatus
-
+from django.utils.dateparse import parse_datetime
 @require_POST
 @csrf_exempt
 def price_collection(request, collection_id):  
@@ -199,10 +198,6 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
     Flattens card data by driving the query from the CardSearchResult table.
     Uses unique annotation names to avoid conflicting with model fields.
     """
-    from django.db.models import Subquery, OuterRef, F, Q, Case, When, Value, CharField, FloatField
-    from django.db.models.functions import Coalesce, Cast, Ceil, Greatest
-    from pathlib import Path
-
     # 1. Start with search results linked to the incoming card scope
     query = CardSearchResult.objects.filter(parent_card__in=base_queryset)
 
@@ -233,7 +228,6 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
     latest_task_scheduled_subquery = ListingTask.objects.filter(
         card=OuterRef('parent_card')
     ).order_by('-scheduled_for').values('scheduled_for')[:1]
-
 
     # Isolated Subquery to get the latest task date without causing N+1 hits
     latest_confirmtask_scheduled_subquery = ConfirmTask.objects.filter(
@@ -339,6 +333,20 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         fetched_condition=F('condition'),
         strr=F('sell_through_rate_recent'),
         strt=F('sell_through_rate_total'),
+        str_recent_date=F('sell_through_rate_recent_date'),
+        str_overall_date=F('sell_through_rate_overall_date'),
+        f_condition_sold_count=F('condition_sold_count'),
+        f_condition_sold_recent_count=F('condition_sold_recent_count'),
+        f_condition_sold_recent_avail=F('condition_sold_recent_avail'),
+        f_condition_sold_recent_date=F('condition_sold_recent_date'),
+        f_condition_sold_overall_date=F('condition_sold_overall_date'),
+        f_raw_sold_count=F('raw_sold_count'),
+        f_raw_sold_recent_count=F('raw_sold_recent_count'),
+        f_raw_sold_recent_avail=F('raw_sold_recent_avail'),
+        f_raw_sold_recent_date=F('raw_sold_recent_date'),
+        f_raw_sold_overall_date=F('raw_sold_overall_date'),
+        
+        available_count=F('avail_count'),
         legacy_msrp=F('ebay_msrp'),
         product_group_name=F('ebay_product_group__group_title'),
         product_group_key=F('ebay_product_group__group_key'),
@@ -361,9 +369,12 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         'fetched_sku', 'fetched_msrp', 'fetched_qty', 'fetched_list_price',
         'custom_year', 'custom_brand', 'custom_subset', 'custom_city', 'custom_team', 
         'custom_name', 'custom_card_name', 'custom_card_nr', 'custom_parallel', 'custom_title',
-        'overall_status', 'legacy_sku', 'csr_id', 'fetched_condition', 'strr', 'strt', 'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
+        'overall_status', 'legacy_sku', 'csr_id', 'fetched_condition', 'strr', 'strt', 'str_recent_date', 'str_overall_date', 
+        'f_condition_sold_count', 'f_condition_sold_recent_count', 'f_condition_sold_recent_avail', 'f_condition_sold_recent_date', 'f_condition_sold_overall_date',
+        'f_raw_sold_count', 'f_raw_sold_recent_count', 'f_raw_sold_recent_avail', 'f_raw_sold_recent_date', 'f_raw_sold_overall_date', 'available_count', 
+        'legacy_msrp', 'min_offer_val', 'max_offer_val', 'min_avg_val', 
         'max_avg_val', 'scale_max_val', 'product_group_name', 'product_group_key', 'val_range_str',
-        'latest_task_scheduled', 'latest_confirmtask_scheduled', 'latest_listingstatus', 'primary_tag_group'  # Passed through raw row generation
+        'latest_task_scheduled', 'latest_confirmtask_scheduled', 'latest_listingstatus', 'primary_tag_group'
     ).order_by('-fetched_card_id')
     
     if limit:
@@ -372,13 +383,9 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
         raw_rows = list(query)
 
     cards_list = []
-
     safe_min_dt = timezone.make_aware(datetime(1970, 1, 1))
 
     for row in raw_rows:
-        # Build the natural sort components manually from the dictionary data
-        
-        
         title_parts = [
             row['custom_year'],
             row['custom_brand'],
@@ -388,11 +395,13 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
             row['custom_parallel'] if (row['custom_parallel'] and row['custom_parallel'].strip()) else None,
         ]
         
-        # Clean out empty strings and extra spaces exactly like your property does
         natural_sort_title = " ".join(str(part).strip() for part in title_parts if part and str(part).strip())
 
         price_sort_val = row['fetched_list_price'] if row['fetched_list_price'] and row['fetched_list_price'] > 0 else row['fetched_msrp'] if row['fetched_msrp'] else 0
-        
+
+        str_recent_days = timezone.now() - row['str_recent_date'] if row['str_recent_date'] else 0
+        str_overall_days = timezone.now() - row['str_overall_date'] if row['str_overall_date'] else 0
+
         cards_list.append({
             'id': row['fetched_card_id'],
             'collection_id': row['fetched_collection_id'],
@@ -419,6 +428,19 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
             'condition': row['fetched_condition'],
             'strr': row['strr'],
             'strt': row['strt'],
+            'str_recent_days': str_recent_days,
+            'str_overall_days': str_overall_days,
+            'condition_sold_count': row['f_condition_sold_count'],
+            'condition_sold_recent_count': row['f_condition_sold_recent_count'],
+            'condition_sold_recent_avail': row['f_condition_sold_recent_avail'],
+            'condition_sold_recent_date': row['f_condition_sold_recent_date'],
+            'condition_sold_overall_date': row['f_condition_sold_overall_date'],
+            'raw_sold_count': row['f_raw_sold_count'],
+            'raw_sold_recent_count': row['f_raw_sold_recent_count'],   
+            'raw_sold_recent_avail': row['f_raw_sold_recent_avail'],    
+            'raw_sold_recent_date': row['f_raw_sold_recent_date'],    
+            'raw_sold_overall_date': row['f_raw_sold_overall_date'],            
+            'available_count': row['available_count'],
             'min_offer': row['min_offer_val'],
             'max_offer': row['max_offer_val'],
             'min_avg': row['min_avg_val'],
@@ -459,8 +481,31 @@ def flatten_collection(base_queryset, limit=None, status_list=None, excl_status_
                     card_data['reverse_url'] = card_obj.cropped_reverse.url()
                     card_data['reverse_thumb_url'] = card_obj.cropped_reverse.thumbnail.url
 
+    # Optional: If you want to sort cards_list by natural title alphabetically/numerically in Python, uncomment below:
+    cards_list.sort(key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x['natural_sort'])])
+
     return cards_list
 
+def card_count(request):
+    text_query = request.GET.get('q')
+    grp_id = request.GET.get('grp_id')
+
+    if grp_id:
+        pg = ProductGroup.objects.get(id=grp_id)
+        text_query = pg.candidate_query
+    
+    query = CardSearchResult.objects.all()
+    if text_query:
+        query = query.filter(
+            Q(full_name__icontains=text_query) |
+            Q(year__icontains=text_query) |
+            Q(brand__icontains=text_query) |
+            Q(team__icontains=text_query)
+        )
+        
+    count = query.count()
+    return JsonResponse({'count': count})
+    
 def view_collection(request, collection_id):
         
     text_query = request.GET.get('q')
@@ -469,7 +514,7 @@ def view_collection(request, collection_id):
     exclude_status_list = request.GET.getlist('exclude_status')
     collection_id_list = request.GET.getlist('cid')
     grp_id_list = request.GET.getlist('grp_id')
-    timeframe = request.GET.get('timeframe', '0')
+    timeframe = request.GET.get('timeframe', '30')
     start_listing_date = request.GET.get('start_listing_date', None)
     end_listing_date = request.GET.get('end_listing_date', None)
 
@@ -699,3 +744,20 @@ def listings_list(request, timeframe=7):
     }
 
     return render(request, 'listing_list.html', context)
+
+
+def delete(request, pg_id):
+    try:
+        ProductGroup.objects.get(id=pg_id).delete()
+    except Exception:
+        return JsonResponse({'ok': False, 'message': 'Invalid id'}, status=404)
+
+    return JsonResponse({'ok': True, 'message': 'ok'}, status=200)
+
+def refresh_counts(request, pg_id):
+    try:
+        ProductGroup.objects.get(id=pg_id).save()
+    except Exception:
+        return JsonResponse({'ok': False, 'message': 'Invalid id'}, status=404)
+
+    return JsonResponse({'ok': True, 'message': 'ok'}, status=200)

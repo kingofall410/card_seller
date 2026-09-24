@@ -27,6 +27,33 @@ def export_card(request, csr_id):
         return JsonResponse({'error': 'Need auth', 'url':settings.ebay_user_auth_consent}, status=404)
     return success
 
+@csrf_exempt
+def withdraw(request, card_id):
+    card = Card.objects.get(id=card_id)
+
+    if card:
+        if export_handler.withdraw(card):
+            return JsonResponse({'error': 'None'}, status=200)
+    
+    return JsonResponse({'error': 'Invalid card_id'}, status=404)
+
+'''@csrf_exempt
+def withdraw(request):  
+
+    card_ids = request.POST.getlist('card_ids[]', [])
+    if len(card_ids):
+        print("lenny", len(card_ids))
+        card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+    else:
+        print("no cards", len(card_ids))
+        return JsonResponse({'error': 'no cards'}, status=404)   
+    
+    print(card_list)
+    for card in card_list:
+        export_handler.withdraw(card)
+
+    return JsonResponse({'error': 'None'}, status=200)'''
+
 def perform_list(csr_id, publish, group_key, publish_dt=None, price=None, qty=None, priority=0, predecessor=None):
     csr = CardSearchResult.objects.get(id=csr_id)
     print("csr", csr, group_key)

@@ -12,6 +12,7 @@
             <th>City</th>
             <th>Team</th>
             <th>Overall Status</th>
+
             <th>Group ID</th>
             <th>Collection</th>
             <th>Value ($)</th>
@@ -22,6 +23,7 @@
             <th>Front URL</th>
             <th>CSR ID</th>
             <th>Task Time</th>
+
             <th>Primary Tag Group</th>
             <th>Reverse URL</th>
             <th>Front HD URL</th>
@@ -32,8 +34,23 @@
             <th>All Price Sort</th>
             <th>Legacy MSRP</th>
             <th>Qty</th>
-            <th>STR Total</th>
+            <th>DTS Overall</th>
+            <th>DTS Recent</th>
             <th>Natural Sort</th>
+            <th>Overall Sales</th>
+            <th>Recent Sales</th>
+            <th>Raw Sold #</th>
+            <th>Raw Recent #</th>
+            <th>Overall Available</th>
+            <th>STR Recent Days</th>
+            <th>Condition Recent Date</th>
+            <th>Raw Recent Date</th>
+            <th>STR Overall Days</th>
+            <th>Raw Overall Date</th>
+            <th>Condition Overall Date</th>
+            <th>Condition Recent Avail</th>
+            <th>Raw Sold Recent Avail</th>
+            <th>Condition Avail Count</th>
         </tr>
     </thead>
     <tbody>
@@ -70,8 +87,23 @@
             <td>{{ card.all_price_sort }}</td>
             <td>{{ card.legacy_msrp }}</td>
             <td>{{ card.qty }}</td>
-            <td>{{ card.strt }}</td>
+            <td>{{ card.strt|floatformat:2 }}</td>
+            <td>{{ card.strr|floatformat:2 }}</td>
             <td>{{ card.natural_sort }}</td>
+            <td>{{ card.condition_sold_count }}</td>
+            <td>{{ card.condition_sold_recent_count }}</td>
+            <td>{{ card.raw_sold_count }}</td>
+            <td>{{ card.raw_sold_recent_count }}</td>
+            <td>{{ card.available_count }}</td>
+            <td>{{ card.str_recent_days }}</td>
+            <td>{{ card.condition_sold_recent_date }}</td>
+            <td>{{ card.raw_sold_recent_date }}</td>
+            <td>{{ card.str_overall_days }}</td>
+            <td>{{ card.raw_sold_overall_date }}</td>
+            <td>{{ card.condition_sold_overall_date }}</td>
+            <td>{{ card.condition_sold_recent_avail }}</td>
+            <td>{{ card.raw_sold_recent_avail }}</td>
+            <td>{{ card.condition_sold_recent_avail }}</td>
         </tr>
         {% endfor %}
     </tbody>

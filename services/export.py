@@ -1,6 +1,7 @@
 import csv
 from core.models.CardSearchResult import CardSearchResult
 from core.models.ProductGroup import ProductGroup
+from core.models.Card import Card
 from core.models.Status import StatusBase
 from core.models.ListingStatus import ListingStatus
 from django.http import HttpResponse
@@ -10,6 +11,8 @@ from services import ebay
 from django.shortcuts import get_object_or_404
 import requests
 
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
 
 def export_csrs_to_csv(csrs):
     """Exports Card objects to CSV and returns a downloadable response."""
@@ -101,7 +104,25 @@ def add_to_variation_group(csrs, access_token, group_key=None, publish=False):
             group.save()
     return group.listing_id
 
+def withdraw(card, and_delete=True):
+    
+    settings = Settings.get_default()
+    if not ebay.has_user_consent(settings):
+        raise Exception("Missing user consent for eBay Operations")
 
+    # 1. Fetch the authentication token ONCE for the entire batch lifecycle
+    access_token = None
+    access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
+    offer_id = card.listed_card_info.offer_id
+    print(f"Withdraw {card.id} {card.listed_card_info.offer_id}")
+    success = ebay.withdraw_offer(offer_id, access_token)
+    if success:
+        #Do the internal unpublishing here so that even if ebay fails to delete the offer we still withdraw
+        card.unlist()
+        if and_delete:
+            success = ebay.delete_offer(offer_id, access_token)
+    return success
+   
 def clear_inventory_group(group_key):
 
     group, _ = ProductGroup.get_or_create(group_key=group_key)
@@ -214,7 +235,9 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                         listed_info.listing_id = ebay.publish_offer(offer_id, access_token)
                         if listed_info.listing_id is None:
                             raise Exception("eBay offer failed to publish.")
-                        
+                        listed_info.listing_datetime = timezone.now()            
+                        csr.overall_status = StatusBase.LISTED
+                        csr.save()
                         ListingStatus.create(listed_info, listed_info.list_qty, StatusBase.LISTED, 0, True)
                         results_summary["success_count"] += 1
                         results_summary["details"].append({
@@ -223,13 +246,14 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                             "offer_id": listed_info.offer_id,
                             "listing_id": listed_info.listing_id
                         })
+                        
+                        csr.save()
                         print(f"✅ Successfully published standalone CSR ID {csr_id} to eBay")
                     
                     else:
                         # Hold this validated item back for the final batch variation grouping call
                         successful_group_csrs.append(csr)
                         print(f"📦 Staged CSR ID {csr_id} for batch group listing processing")
-
                     # Persist synchronized updates back to local db
                     csr.save()
                     listed_info.save()
@@ -246,7 +270,12 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                 "status": "FAILED",
                 "error": str(e)
             })
+            csr.overall_status = StatusBase.FAILED
+            csr.save()
             print(f"❌ Failed to process CSR ID {csr_id}: {str(e)}")
+            #if we have an access_token epiration, go get it again
+            if e.args[0].find("access") >= 0:
+                access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
 
     # 3. PHASE 2: Handle batch variation grouping all at once
     if publish and group_key and group_key != "-1" and successful_group_csrs:
@@ -265,12 +294,15 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
             with transaction.atomic():
                 
                 for csr in successful_group_csrs:
-                    listed_info = csr.parent_card.listed_card_info
-                    listed_info.listing_id = batch_listing_id
-                    
+                    card_listed_info = csr.parent_card.listed_card_info
+                    card_listed_info.listing_id = batch_listing_id
+                    group_listed_info = card_listed_info.assigned_product_group.listed_products_info.filter(is_pg=True).first()
+                    group_listed_info.listing_id = batch_listing_id
+                    csr.overall_status = StatusBase.LISTED
                     csr.save()
-                    listed_info.save()
-                    ListingStatus.create(listed_info, listed_info.list_qty, StatusBase.LISTED, 0, True)
+                    ListingStatus.create(card_listed_info, card_listed_info.list_qty, StatusBase.LISTED, 0, True)
+                    card_listed_info.save()
+                    group_listed_info.save()
 
                     results_summary["success_count"] += 1
                     results_summary["details"].append({
@@ -280,7 +312,11 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                         "listing_id": batch_listing_id
                     })
             print(f"🚀 Batch grouping complete! eBay Listing ID: {batch_listing_id}")
-            
+            #extra save
+            #print("extra save?")
+            #if successful_group_csrs:
+            #print("extra save")
+            #successful_group_csrs[0].parent_card.listed_card_info.assigned_product_group.listed_products_info.filter(is_pg=True).first().save()
         except Exception as e:
             print(f"❌ Critical failure publishing batch variation group: {str(e)}")
             # Log individual failures for the items that were in the group batch

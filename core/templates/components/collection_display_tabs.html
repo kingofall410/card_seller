@@ -44,7 +44,7 @@ window.zoomState = {
 };
 let isApplyingServerUpdate = false;
 
-(function($) {
+(function($) { 
     const sortConfig = [
         { label: 'Natural', attrName: 'natural sort' },
         { label: 'Prices', attrName: 'all price sort' },
@@ -154,7 +154,7 @@ let isApplyingServerUpdate = false;
         const idxAllPriceSort = headerMap['all price sort'] !== undefined ? headerMap['all price sort'] : 28;
         const idxLegacyMSRP = headerMap['legacy msrp'] !== undefined ? headerMap['legacy msrp'] : 29;
         const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 30;
-        const idxStrt = headerMap['strr'] !== undefined ? headerMap['strr'] : 31;
+        const idxStrt = headerMap['strt'] !== undefined ? headerMap['strt'] : 31;
         
         currentSort.attrIdx = idxId;
 
@@ -357,8 +357,49 @@ let isApplyingServerUpdate = false;
             const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
             return `<input type="text" class="dt-inline-edit" value="${cleanVal}" data-current="${cleanVal}">`;
         }
+        
+        function createLinkRenderer(safeData, row) {
+            const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
+            return `<a href="/card/${row[idxId]}" target="_blank" style="text-decoration:none;">${cleanVal}</a>`;
+        }
+
         function createImageRenderer(safeData) {
             return `<img src="${safeData}" class="lazy-table-img" data-thumb="${safeData}">`;
+        }
+
+        function createSoldCountRenderer(safeData, row, colIdx) {
+            //console.log("sold count renderer", safeData, row, colIdx)
+            if (row[34] != "0")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx]} (${row[27]})" data-current="${row[colIdx]} (${row[27]})">`;
+            else if (row[27] != "")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]} (RW)" data-current="${row[colIdx+2]}">`;
+            else 
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]}" data-current="${row[colIdx+2]}">`;
+        }
+        
+        function createAvailCountRenderer(safeData, row, colIdx) {
+            //console.log("avail count renderer", safeData, row, colIdx)
+            if (row[34] != "0")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx]} (${row[27]})" data-current="${row[colIdx]} (${row[27]})">`;
+            else if (row[27] != "")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]} (RW)" data-current="${row[colIdx+2]}">`;
+            else 
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]}" data-current="${row[colIdx+2]}">`;
+        }
+
+        function createDTSRenderer(safeData, row, colIdx) {
+            console.log("dts renderer", safeData, row, colIdx)
+            const num1 = parseFloat(row[colIdx], 10) || 0;
+            let num2
+            if (colIdx == 31) {
+                num2 = parseFloat(row[42], 10) || 0; 
+            } else {
+                num2 = parseFloat(row[39], 10) || 0; 
+            }
+            console.log(num2, num1)
+            const result = Math.round(num2 / num1);
+            
+            return `<input type="text" class="dt-inline-edit" value="${result}" data-current="${row[colIdx]} (${row[colIdx+7]})">`;
         }
 
         // [Debug] Initializing Spreadsheet-like Input Focus Metadata Context Preservation Engine
@@ -541,7 +582,7 @@ let isApplyingServerUpdate = false;
                 stateSave: true,
                 cascadePanes: false,
                 initCollapsed: true,
-                columns: [6,10,12,1,2,9,17]
+                columns: [6,10,12,1,2,17]
             },
             columnDefs: [
                 {
@@ -566,7 +607,7 @@ let isApplyingServerUpdate = false;
                         show: true,
                         dtOpts: { order: [[1, 'desc']] }
                     },
-                    targets: [2,3,4,5,7,8], 
+                    targets: [2,3,4,5], 
                 },
                 {
                     searchPanes: {
@@ -590,21 +631,25 @@ let isApplyingServerUpdate = false;
                         show: true,
                         dtOpts: { order: [[0, 'desc']] }
                     },
-                    targets: [11,17], 
+                    targets: [17], 
                     type:'num',
                     visible: false
                 },  
                 {
                     targets: [20], 
                     type: 'datetime',
-                    visible: true
+                    visible: false
+                },   
+                {
+                    targets: [31,32], 
+                    type: 'num'
                 },   
                 {
                     targets: [idxFrontUrl, idxReverseUrl],
                     type: 'display'
                 },  
                 {
-                    targets: [15,16,19,21,23,24,26],
+                    targets: [8,9,11,15,16,19,21,23,24,26,30,33,36,37,39,40,41,42,43,44,45,46],
                     visible: false,
                 },
                 { 
@@ -613,13 +658,20 @@ let isApplyingServerUpdate = false;
                         if (type === 'display') {
                             const colCount = meta.settings.aoColumns.length;
                             const isMainTable = (colCount > 5); 
-                            const isProtected = (meta.col === 0 || meta.col === idxId || meta.col === idxCsrId || meta.col === idxFrontUrl || meta.col === idxReverseUrl || meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
+                            const isProtected = (meta.col === 0 || meta.col === 31 || meta.col === 32 || meta.col === 35 || meta.col === 34 || meta.col === idxId || meta.col === idxCsrId || meta.col === idxFrontUrl || meta.col === idxReverseUrl || meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
                             const isImg = (meta.col === idxFrontUrl || meta.col === idxReverseUrl) || (meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
-                            
+                            const isSoldCount = (meta.col === 35) || (meta.col === 34)
+                            const isDTS = (meta.col === 32) || (meta.col === 31)
                             if (isMainTable && !isProtected) {
                                 return createPersistentInputRenderer(data);
                             } else if (isMainTable && isImg) {
                                 return createImageRenderer(data);
+                            } else if (isSoldCount) {
+                                return createSoldCountRenderer(data, row, meta.col);
+                            } else if (isDTS) {
+                                return createDTSRenderer(data, row, meta.col);
+                            } else if (meta.col == idxId) {
+                                return createLinkRenderer(data, row)
                             }
                             return data;
                         }
@@ -682,35 +734,79 @@ let isApplyingServerUpdate = false;
 
                 $('#header-toggle-mount').append($toggleContainer);
 
-                // --- LIVE IMAGE PREVIEW TRACKING ENGINE ---
-                $('#card-data-engine tbody').on('mouseenter', 'tr', function() {
-                    const rowData = table.row(this).data();
+                // --- AJAX LISTING GROUP TOOLTIP & IMAGE PREVIEW HOVER ENGINE ---
+                const tooltipCache = {};
+
+                $('#card-data-engine tbody').on('mouseenter', 'td', function() {
+                    const cell = table.cell(this);
+                    const cellIndex = cell.index();
+                    if (!cellIndex) return;
+
+                    const colIdx = cellIndex.column;
+                    const rowData = table.row(cell.node()).data();
                     if (!rowData) return;
 
-                    const urlFront = rowData[idxFrontHdUrl] ? rowData[idxFrontHdUrl].trim() : '';
-                    const urlBack = rowData[idxReverseHdUrl] ? rowData[idxReverseHdUrl].trim() : '';
-                    
-                    let hasValidImage = false;
+                    const cardId = rowData[idIdx];
 
-                    if (urlFront && urlFront !== 'None' && urlFront !== '-') {
-                        $('#preview-front').attr('src', urlFront).show();
-                        hasValidImage = true;
-                    } else {
-                        $('#preview-front').hide();
-                    }
+                    // --- 1. IMAGE PREVIEW (Columns < 25) ---
+                    if (colIdx < 25) {
+                        const urlFront = rowData[idxFrontHdUrl] ? rowData[idxFrontHdUrl].trim() : '';
+                        const urlBack = rowData[idxReverseHdUrl] ? rowData[idxReverseHdUrl].trim() : '';
+                        
+                        let hasValidImage = false;
 
-                    if (urlBack && urlBack !== 'None' && urlBack !== '-') {
-                        $('#preview-back').attr('src', urlBack).show();
-                        hasValidImage = true;
-                    } else {
-                        $('#preview-back').hide();
-                    }
+                        // Re-initialize image elements inside $previewBox if they were overwritten by tooltips
+                        if ($('#preview-front').length === 0) {
+                            $previewBox.html(`
+                                <img id="preview-front" style="display:none; max-width: 150px; margin-right: 5px;" />
+                                <img id="preview-back" style="display:none; max-width: 150px;" />
+                            `);
+                        }
 
-                    if (hasValidImage) {
-                        $previewBox.show();
+                        if (urlFront && urlFront !== 'None' && urlFront !== '-') {
+                            $('#preview-front').attr('src', urlFront).show();
+                            hasValidImage = true;
+                        } else {
+                            $('#preview-front').hide();
+                        }
+
+                        if (urlBack && urlBack !== 'None' && urlBack !== '-') {
+                            $('#preview-back').attr('src', urlBack).show();
+                            hasValidImage = true;
+                        } else {
+                            $('#preview-back').hide();
+                        }
+
+                        if (hasValidImage) {
+                            $previewBox.show();
+                        } else {
+                            $previewBox.hide();
+                        }
+                    } 
+                    // --- 2. AJAX TOOLTIPS (Columns >= 25) ---
+                    else {
+                        if (!cardId) return;
+
+                        // Determine tooltip type and build a unique composite cache key
+                        const tooltipType = (colIdx < 36) ? 'sold' : 'avail';
+                        const cacheKey = `${cardId}_${tooltipType}`;
+
+                        if (tooltipCache[cacheKey]) {
+                            $previewBox.html(tooltipCache[cacheKey]).show();
+                        } else {
+                            $previewBox.html('<div style="padding: 10px; font-size: 0.8rem; color: #666;">Loading tooltip...</div>').show();
+                            
+                            $.get(`/get_lg_tooltip/${cardId}/?type=${tooltipType}`, function(html) {
+                                tooltipCache[cacheKey] = html;
+                                $previewBox.html(html);
+                            }).fail(function() {
+                                $previewBox.html('<div style="padding: 10px; font-size: 0.8rem; color: #dc3545;">Failed to load</div>');
+                            });
+                        }
                     }
-                })
-                .on('mousemove', 'tr', function(e) {
+                }).on('mousemove', 'td', function(e) {
+                    if (!$previewBox.is(':visible')) return;
+
                     const offset = 15;
                     let posX = e.clientX + offset;
                     let posY = e.clientY + offset;
@@ -719,20 +815,16 @@ let isApplyingServerUpdate = false;
                     const winWidth = $(window).width();
                     const winHeight = $(window).height();
                     
-                    // Temporarily ensure it's visible or use outerWidth/outerHeight if hidden
-                    // Since it's already shown on mouseenter, dimensions are available:
                     const boxWidth = $previewBox.outerWidth();
                     const boxHeight = $previewBox.outerHeight();
 
                     // Check right edge overflow
                     if (posX + boxWidth > winWidth) {
-                        // Flip to the left of the cursor instead
                         posX = e.clientX - boxWidth - offset;
                     }
 
                     // Check bottom edge overflow
                     if (posY + boxHeight > winHeight) {
-                        // Flip above the cursor instead
                         posY = e.clientY - boxHeight - offset;
                     }
 
@@ -742,10 +834,9 @@ let isApplyingServerUpdate = false;
                         left: posX + 'px'
                     });
                 })
-                .on('mouseleave', 'tr', function() {
-                    $previewBox.hide();
-                    $('#preview-front').attr('src', '');
-                    $('#preview-back').attr('src', '');
+                .on('mouseleave', 'td', function() {
+                    // Hide and completely empty the box so stale data doesn't linger when moving across rows/columns
+                    $previewBox.hide().empty();
                 });
 
                 // --- DUAL IMAGE RESOLUTION ROW-WIDE SWAP ENGINE ---

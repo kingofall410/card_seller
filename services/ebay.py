@@ -601,7 +601,7 @@ def bulk_order_update(listing_ids, settings):
                 elif legacy_id in listing_id_map:
                     parent_info = listing_id_map[legacy_id]
                 
-                if parent_info:
+                if parent_info and parent_info.card:#this is only relevant for single listings
                     # 3. Get latest status or create new
                     obj = ListingStatus.objects.filter(listing_info=parent_info).order_by('-id').first()
 
@@ -657,6 +657,7 @@ def get_offer_status(offer_id, settings, info, access_token=None):
         if "listing" in data:
             listed_sku = data["sku"]
             ebay_listing_status = data["listing"]["listingStatus"]
+            ebay_listing_id = data["listing"]["listingId"]
             if ebay_listing_status == "OUT_OF_STOCK":
                 list_status = StatusBase.SOLD
             elif ebay_listing_status == "ENDED":
@@ -674,14 +675,138 @@ def get_offer_status(offer_id, settings, info, access_token=None):
             sold_qty = 0
             sold_price = 0 
             published = False
+            ebay_listing_id = None
         #print(avail_qty, list_status, sold_qty, published)
         ListingStatus.create(info, avail_qty, list_status, sold_qty, published, listed_sku, sold_price)
-        return True, access_token, list_status
+        return True, access_token, list_status, ebay_listing_id
     else:
         ListingStatus.create(info, 0, StatusBase.UNKNOWN, 0, False)
         #print(response)
-        return False, access_token, StatusBase.UNKNOWN
+        return False, access_token, StatusBase.UNKNOWN, None
+    import xml.etree.ElementTree as ET
+
+def get_item_id_via_trading_api(sku, settings):
+    url = "https://api.ebay.com/ws/api.dll"
     
+    headers = {
+        "X-EBAY-API-COMPATIBILITY-LEVEL": "1167",
+        "X-EBAY-API-DEV-NAME": settings.ebay_dev_id,
+        "X-EBAY-API-APP-NAME": settings.ebay_app_id,
+        "X-EBAY-API-CERT-NAME": settings.ebay_cert_id,
+        "X-EBAY-API-CALL-NAME": "GetSellerList",
+        "X-EBAY-API-SITE-ID": "0",
+        "Content-Type": "text/xml"
+    }
+    
+    xml_payload = f"""<?xml version="1.0" encoding="utf-8"?>
+    <GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+        <RequesterCredentials>
+            <eBayAuthToken>{settings.ebay_user_auth_code}</eBayAuthToken>
+        </RequesterCredentials>
+        <SKUArray>
+            <SKU>{sku}</SKU>
+        </SKUArray>
+        <DetailLevel>ReturnAll</DetailLevel>
+    </GetSellerListRequest>"""
+    
+    # DEBUG LOG: Request payload tracking
+    print(f"[DEBUG] Sending Trading API GetSellerList request for SKU: {sku}")
+    response = requests.post(url, data=xml_payload, headers=headers)
+    print(f"[DEBUG] Trading API response status code: {response.status_code}")
+    
+    if response.status_code == 200:
+        root = ET.fromstring(response.text)
+        
+        # Check API acknowledgment status
+        ack = root.find("{urn:ebay:apis:eBLBaseComponents}Ack")
+        if ack is not None and ack.text in ["Success", "Warning"]:
+            item = root.find(".//{urn:ebay:apis:eBLBaseComponents}Item")
+            if item is not None:
+                item_id_elem = item.find("{urn:ebay:apis:eBLBaseComponents}ItemID")
+                status_elem = item.find(".//{urn:ebay:apis:eBLBaseComponents}ListingStatus")
+                
+                item_id = item_id_elem.text if item_id_elem is not None else None
+                listing_status = status_elem.text if status_elem is not None else None
+                
+                # DEBUG LOG: Extraction success
+                print(f"[DEBUG] Successfully extracted via Trading API -> ItemID: {item_id}, ListingStatus: {listing_status}")
+                return item_id, listing_status
+            else:
+                print(f"[DEBUG] No item node found for SKU {sku} in Trading API payload.")
+        else:
+            print(f"[DEBUG] Trading API error response: {response.text}")
+            
+    return None, None
+
+def get_offer_id(sku, access_token):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = f"https://api.ebay.com/sell/inventory/v1/offer?sku={sku}"
+    
+    # DEBUG LOG: Request details
+    print(f"[DEBUG] Requesting offer ID for SKU: {sku} with URL: {url}")
+    
+    response = requests.get(url, headers=headers)
+    
+    # DEBUG LOG: Response details
+    print(f"[DEBUG] Get offer response status: {response.status_code}, body: {response.text}")
+    
+    offer_id = None
+    listing_id = None
+    
+    if response.status_code == 200:
+        data = response.json()
+        offers = data.get('offers', [])
+        print(f"[DEBUG] Found {len(offers)} total offers returned for SKU: {sku}")
+        
+        active_offer = None
+        
+        # Iterate through offers to find an active/published one instead of blindly taking index 0
+        for offer in offers:
+            status = offer.get('status')
+            listing_obj = offer.get('listing') or {}
+            listing_status = listing_obj.get('listingStatus') if listing_obj else None
+            
+            print(f"[DEBUG] Evaluating offerId: {offer.get('offerId')} | Offer Status: {status} | Listing Status: {listing_status}")
+            
+            # Prioritize offers that are PUBLISHED and not ENDED
+            if status == "PUBLISHED" and listing_status != "ENDED":
+                active_offer = offer
+                break
+                
+        # Fallback: if no strictly PUBLISHED offer is found, look for any offer that has a valid listing object
+        if not active_offer:
+            for offer in offers:
+                if offer.get('listing'):
+                    print("[DEBUG] Falling back to first offer with an attached listing object.")
+                    active_offer = offer
+                    break
+                    
+        # Ultimate fallback: just take the first offer if nothing else matches
+        if not active_offer and offers:
+            print("[DEBUG] No active listing found; defaulting to offers[0].")
+            active_offer = offers[0]
+            
+        if active_offer:
+            offer_id = active_offer.get('offerId')
+            listing_obj = active_offer.get('listing')
+            if listing_obj:
+                listing_id = listing_obj.get('listingId')
+            print(f"[DEBUG] Successfully selected -> offer_id: {offer_id}, listing_id: {listing_id}")
+        else:
+            print(f"[DEBUG] No valid offers could be extracted for SKU: {sku}")
+            
+    elif response.status_code == 404:
+        print(f"[DEBUG] No offer found (404) for SKU: {sku}")
+    else:
+        print(f"[DEBUG] Unexpected status code {response.status_code} while fetching offer for SKU: {sku}")
+
+    return offer_id, listing_id
 
 def get_or_create_offer(offer_data, access_token, sku=None):
 
@@ -731,6 +856,39 @@ def publish_offer(offer_id, access_token):
     response = requests.post(url, headers=headers)
     print ("Publish response", response.text)
     return response.json()["listingId"]
+
+def withdraw_offer(offer_id, access_token):
+    print("withdraw", offer_id)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}/withdraw"
+    response = requests.post(url, headers=headers)
+    
+    print("Withdraw response:", response.status_code, response.text)
+    return response.status_code == 204 or response.status_code == 200 
+
+def delete_offer(offer_id, access_token):
+    print("delete", offer_id)
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"
+    }
+
+    url = f"https://api.ebay.com/sell/inventory/v1/offer/{offer_id}"
+    response = requests.delete(url, headers=headers)
+    
+    print("Delete response status:", response.status_code)
+    print("Delete response text:", response.text)
+    
+    # eBay returns HTTP 204 No Content upon successful deletion
+    return response.status_code == 204
 
 #TODO: capture insertion fee from the publish response and allocate to listing as appropriate
 def publish_inventory_group(group_name, access_token):

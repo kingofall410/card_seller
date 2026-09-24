@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Inventory List</title>
+    <title>Listings List</title>
 
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
@@ -100,6 +100,10 @@
 
         table.dataTable tbody td {
             vertical-align: middle;
+            text-align: center;
+        }
+        table.dataTable tbody td:not(:nth-child(4)):not(:nth-child(22)):not(:nth-child(23)) {
+            text-align: left;
         }
 
         td.id-cell {
@@ -116,6 +120,41 @@
             color: #334155;
             white-space: normal;
             word-break: break-all;
+        }
+
+        /* Icon Action Buttons */
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            text-decoration: none;
+            border: 1px solid transparent;
+            transition: background-color 0.15s ease;
+        }
+        .btn-delete { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .btn-delete:hover { background-color: #fecaca; }
+        .btn-withdraw { background-color: #efe4a3; color: #7e6b02; border-color: #ead76b; }
+        .btn-withdraw:hover { background-color: #fecaca; }
+        .btn-refresh { background-color: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+        .btn-refresh:hover { background-color: #e2e8f0; }
+
+        /* Submit Button Styling */
+        .btn-refresh-all {
+            background-color: #2563eb;
+            color: #ffffff;
+            border: 1px solid #1d4ed8;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .btn-refresh-all:hover {
+            background-color: #1d4ed8;
         }
 
         /* Column Header Search Inputs Styling */
@@ -163,6 +202,10 @@
                 <option value="365">Last 365 Days</option>
             </select>
         </div>
+
+        <div class="control-group">
+            <button type="button" id="refreshAllBtn" class="btn-refresh-all">Refresh Status</button>
+        </div>
     </div>
 
     <table id="inventoryTable" class="display" style="width:100%">
@@ -190,6 +233,8 @@
                 <th>Listing End Date</th>
                 <th>Days Listed</th>
                 <th>STR Total</th>
+                <th></th>
+                <th></th>
             </tr>
             <!-- Row 2: Filter Inputs placeholder -->
             <tr>
@@ -214,13 +259,15 @@
                 <th>Listing End Date</th>
                 <th>Days Listed</th>
                 <th>STR Total</th>
+                <th>Delete</th>
+                <th>Refresh</th>
             </tr>
         </thead>
         <tbody>
             <!-- 2. Standalone Cards -->
             {% for item in standalone_items %}
             <tr>
-                <td data-order="{{ item.id|default:0 }}">{{ item.id }}</td>
+                <td data-order="{{ item.id|default:0 }}"><a href="/admin/core/listedinfo/{{item.id}}/change/" target="_blank">{{ item.id }}</a></td>
                 {% if item.is_pg %}
                     <td data-order="Group">
                         <span class="badge badge-group">Group</span>
@@ -251,8 +298,8 @@
                     </td>
                 {% endif %}
                 
-                <td data-order="{{ item.get_listing_id|default:'' }}">
-                    <code>{{ item.get_listing_id|default:"--" }}</code>
+                <td data-order="{{ item.listing_id|default:'' }}">
+                    <code>{{ item.listing_id|default:"--" }}</code>
                 </td>
                 
                 {% if item.is_pg %}
@@ -290,6 +337,27 @@
                 <td data-order="{{ item.listing_str|default:0 }}">
                     {{ item.listing_str|floatformat:0|default:"--" }}
                 </td>
+                <td data-order="0">
+                    {% if item.is_pg and item.product_group %}
+                        <a href="/delete/{{ item.product_group.id }}/" class="btn-icon btn-delete" title="Delete">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </a>
+                    {% else %}
+                        <a href="/withdraw_listing/{{ item.card.id }}" class="btn-icon btn-withdraw" title="Withdraw">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        </a>
+                    {% endif %}
+                </td>
+                <!-- Refresh Action Column (Groups Only) -->
+                <td data-order="0">
+                    {% if item.is_pg and item.product_group %}
+                        -
+                    {% else %}
+                        <a href="/refresh_listing_status/{{ item.card.id }}/" class="btn-icon btn-refresh" title="Refresh Listing Status">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.73-5.73"></path></svg>
+                        </a>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -299,8 +367,89 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
+    <script src="{% static 'js/collection_node.js' %}"></script>
     <script>
+        // Helper to retrieve CSRF token for Django POST requests
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+// --- Refresh All Listing Statuses Method ---
+        function refreshAllListingStatuses(tableInstance) {
+            console.log("[DEBUG] refreshAllListingStatuses method invoked.");
+            var cardIds = [];
+
+            // Collect all card IDs from the table rows (using applied search filters) excluding SOLD status
+            tableInstance.rows({ search: 'applied' }).every(function() {
+                var rowNode = this.node();
+
+                // Check status column (index 2) to skip items where status is SOLD
+                var statusText = $(rowNode).find('td').eq(2).text().trim().toUpperCase();
+                if (statusText === 'SOLD') {
+                    console.log("[DEBUG] Skipping row because status is SOLD.");
+                    return; // skip this row
+                }
+
+                var refreshLink = $(rowNode).find('.btn-refresh').attr('href');
+                if (refreshLink) {
+                    var match = refreshLink.match(/\/refresh_listing_status\/(\d+)\//);
+                    if (match && match[1]) {
+                        cardIds.push(match[1]);
+                    }
+                }
+            });
+
+            if (cardIds.length === 0) {
+                console.log("[DEBUG] No eligible card IDs found to refresh.");
+                alert("No eligible items found to refresh.");
+                return;
+            }
+
+            console.log("[DEBUG] Collected card IDs for bulk refresh (excluding SOLD):", cardIds);
+
+            // Construct form-urlencoded body compatible with request.POST.getlist('card_ids[]')
+            var formData = new URLSearchParams();
+            cardIds.forEach(function(id) {
+                formData.append('card_ids[]', id);
+            });
+
+            const csrftoken = getCookie('csrftoken');
+
+            fetch('/refresh_listing_status/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrftoken
+                },
+                body: formData.toString()
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log("[DEBUG] Refresh status request successfully completed.");
+                    window.location.reload();
+                } else {
+                    console.error("[DEBUG] Refresh status request failed with status:", response.status);
+                    alert("Failed to refresh listing statuses.");
+                }
+            })
+            .catch(error => {
+                console.error("[DEBUG] Error during refresh status request:", error);
+                alert("An error occurred while refreshing statuses.");
+            });
+        }
+
         $(document).ready(function() {
+            console.log("[DEBUG] Initializing inventory table with default sort on Last Updated Date...");
 
             // --- 1. URL Parameter Handling for Timeframe ---
             var urlParams = new URLSearchParams(window.location.search);
@@ -343,8 +492,8 @@
             // --- 3. Setup Second Header Row Inputs for Column Filtering ---
             $('#inventoryTable thead tr:eq(1) th').each(function(i) {
                 var title = $('#inventoryTable thead tr:eq(0) th').eq($(this).index()).text();
-                // Exclude Image column (index 3) from input filtering
-                if (i !== 3) {
+                // Exclude Image (3), Delete (21), and Refresh (22) columns from input filtering
+                if (i !== 3 && i !== 21 && i !== 22) {
                     $(this).html('<input type="text" placeholder="Filter ' + title + '" />');
                 } else {
                     $(this).html('');
@@ -354,11 +503,11 @@
 
             // --- 4. Initialize DataTable ---
             var table = $('#inventoryTable').DataTable({
-                order: [[15, 'desc']], // Column 15 is Listing Start Date index
+                order: [[16, 'desc']], // Column 16 is Last Updated Date index (most to least recent)
                 orderCellsTop: true,   // Ensures sorting binds to top header row
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: 3 }, // Image column non-sortable
+                    { orderable: false, targets: [3, 21, 22] }, // Image, Delete, and Refresh columns non-sortable
                     { type: 'num', targets: [0, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] } 
                 ],
                 language: {
@@ -377,12 +526,19 @@
                             }
                         });
                     });
+                    console.log("[DEBUG] DataTable initialization complete with default sort on Last Updated Date.");
                 }
             });
 
             // Redraw DataTable when toggling Groups / Singles checkboxes
             $('#toggleGroups, #toggleSingles').on('change', function() {
                 table.draw();
+            });
+
+            // Bind click event for Refresh All button to POST card_ids[]
+            $('#refreshAllBtn').on('click', function() {
+                console.log("[DEBUG] Refresh All button clicked.");
+                refreshAllListingStatuses(table);
             });
         });
     </script>

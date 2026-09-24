@@ -25,8 +25,8 @@ class ListingGroup(models.Model):
     is_wide = models.BooleanField(default=False, blank=True, null=True)
     is_img = models.BooleanField(default=False, blank=True, null=True)
     label = models.CharField(max_length=500, blank=True, null=True)  # e.g. "Sold Refined Wide"
-    search_string = models.CharField(max_length=500, blank=True, null=True)
-    filter_terms = models.CharField(max_length=500, blank=True, null=True)
+    search_string = models.CharField(max_length=1000, blank=True, null=True)
+    filter_terms = models.CharField(max_length=1000, blank=True, null=True)
     id_string = models.CharField(max_length=500, blank=True, null=True)
 
     color = models.CharField(max_length=100, default="rgba(204, 153, 0, 0.8)")
@@ -201,7 +201,11 @@ class ListingGroup(models.Model):
     def relevence_filter_bounds(self):
         data = [float(l.ebay_price) for l in self.listings.all()]
         return self.get_relevence_filter_bounds(data)
-    
+
+
+    def count_from(self, date):
+        return len([l for l in self.listings.all() if datetime.fromisoformat(l.display_date).date() >= date])
+
     def get_relevence_filter_bounds(self, data):
 
         if len(data) < 4:  # Statistical filtering requires a decent sample size

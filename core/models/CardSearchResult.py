@@ -256,7 +256,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     sku = models.CharField(max_length=100, blank=True)
     ebay_offer_id = models.CharField(max_length=100, blank=True, null=True)
     ebay_listing_datetime = models.DateTimeField(null=True)
-    list_price = models.FloatField(default=0.0)
+    legacy_list_price = models.FloatField(default=0.0)
     min_avg = models.FloatField(default=0.0)
     max_avg = models.FloatField(default=0.0)
     min_offer = models.FloatField(default=0.0)
@@ -271,8 +271,26 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     shareable_link_front=models.CharField(max_length=250, null=True, blank=True)
     shareable_link_reverse=models.CharField(max_length=250, null=True, blank=True)
 
+    #these probably should be properties
     sell_through_rate_recent = models.FloatField(default=0.0)
     sell_through_rate_total = models.FloatField(default=0.0)
+    sell_through_rate_recent_date = models.DateTimeField(null=True)
+    sell_through_rate_overall_date = models.DateTimeField(null=True)
+
+    raw_sold_count = models.IntegerField(default=0)
+    raw_sold_recent_count = models.IntegerField(default=0)
+    raw_sold_recent_avail = models.IntegerField(default=0)
+    raw_sold_recent_date = models.DateTimeField(null=True)
+    raw_sold_overall_date = models.DateTimeField(null=True)
+
+    condition_sold_count = models.IntegerField(default=0)
+    condition_sold_recent_count = models.IntegerField(default=0)
+    condition_sold_recent_avail = models.IntegerField(default=0)
+    condition_sold_recent_date = models.DateTimeField(null=True)
+    condition_sold_overall_date = models.DateTimeField(null=True)
+
+
+    avail_count = models.IntegerField(default=0)
 
     #combine all this into field_definition
     readonly_fields = ["response_count", "sku",  "ebay_listing_id", "ebay_offer_id"]
@@ -491,46 +509,62 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
             if not available:
                 available = self.listing_groups.filter(label__icontains="ID").first()
 
-            avail_count = 0
-            if available:
+            self.condition_sold_count = condition_sold.listings.count() if condition_sold else 0
+            self.condition_sold_recent_date = condition_sold.recent_date if condition_sold else None
+            self.condition_sold_overall_date = condition_sold.min_date if condition_sold else None
+
+            self.raw_sold_count = raw_sold.listings.count() if raw_sold else 0
+            self.raw_sold_recent_date = raw_sold.recent_date if raw_sold else None
+            self.raw_sold_overall_date = raw_sold.min_date if raw_sold else None
+
+            self.avail_count = available.listings.count() if available else 0
+
+            if self.avail_count > 0:
                 self.min_offer = available.min_price
                 self.max_offer = available.last_5_max_price
-                avail_count = available.listings.count()
+                self.avail_count = available.listings.count()
 
-            #print("CS", condition_sold, condition_sold.listings)
-            #print("RS", condition_sold, condition_sold.listings)
-            if condition_sold and condition_sold.listings.count() > 0:
-                #print("A")
+            if self.condition_sold_count > 0:
+                #flow this up as MSRP instead of raw
+
                 self.min_avg = condition_sold.last_5_min_price
                 self.max_avg = condition_sold.last_5_max_price
-                if hasattr(self.parent_card, "listed_card_info"):
-                    #print("B")
-                    self.ebay_msrp = condition_sold.recent_avg_price
-                    self.parent_card.listed_card_info.msrp = self.ebay_msrp
-                    self.parent_card.save()
-                    self.parent_card.value = self.ebay_msrp
-                    self.parent_card.listed_card_info.save()
+                self.ebay_msrp = condition_sold.recent_avg_price
 
-            elif raw_sold:
-                #print("C")
+                self.condition_sold_recent_count = condition_sold.recent_listings_rel.count()
+                self.condition_sold_recent_avail = available.count_from(self.condition_sold_recent_date)
+
+                if self.raw_sold_count > 0:
+                    self.raw_sold_recent_count = raw_sold.recent_listings_rel.count()
+                    self.raw_sold_count = raw_sold.listings.count()
+
+                self.sell_through_rate_recent = self.condition_sold_recent_count/max(1, self.condition_sold_recent_avail)
+                self.sell_through_rate_total = self.condition_sold_count/max(1, self.avail_count) 
+                self.sell_through_rate_recent_date = self.condition_sold_recent_date
+                self.sell_through_rate_overall_date = self.condition_sold_overall_date
+
+
+            elif self.raw_sold_count > 0:
+                
                 self.min_avg = raw_sold.last_5_min_price
                 self.max_avg = raw_sold.last_5_max_price
-                if hasattr(self.parent_card, "listed_card_info"):
-                    #print("D")
-                    self.ebay_msrp = raw_sold.recent_avg_price
-                    self.parent_card.listed_card_info.msrp = self.ebay_msrp
-                    self.parent_card.value = self.ebay_msrp
-                    self.parent_card.save()
-                    self.parent_card.listed_card_info.save()
-            
-            #print("E")        
-            if raw_sold:
-                #print("F")
-                recent_sold_count = raw_sold.recent_listings_rel.count()
-                sold_count = raw_sold.listings.count()
+                self.ebay_msrp = raw_sold.recent_avg_price
+                self.raw_sold_recent_count = raw_sold.recent_listings_rel.count()
+                self.raw_sold_recent_avail = available.count_from(self.raw_sold_recent_date)
+                self.raw_sold_count = raw_sold.listings.count()
 
-                self.sell_through_rate_recent = 100*recent_sold_count/max(1, avail_count+recent_sold_count)
-                self.sell_through_rate_total = 100*sold_count/max(1, avail_count+sold_count)        
+                self.sell_through_rate_recent = self.raw_sold_recent_count/max(1, self.raw_sold_recent_avail)
+                self.sell_through_rate_total = self.raw_sold_count/max(1, self.avail_count)  
+                self.sell_through_rate_recent_date = self.raw_sold_recent_date       
+                self.sell_through_rate_overall_date = self.raw_sold_overall_date      
+
+            
+            if hasattr(self.parent_card, "listed_card_info"):
+                #print("D")
+                self.parent_card.listed_card_info.msrp = self.ebay_msrp
+                self.parent_card.value = self.ebay_msrp
+                self.parent_card.save()
+                self.parent_card.listed_card_info.save()                
 
         super().save(*args, **kwargs)
 
@@ -713,9 +747,9 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         else: return text
 
     def update_fields(self, all_field_data):
-        #print("afd", all_field_data)
+        print("afd", all_field_data)
         for field_name, field_value in all_field_data.items():
-            print(field_name)
+            print("field name, value: ", field_name, field_value)
             if field_name in ['csrfmiddlewaretoken', 'new_field', 'new_value', 'csrId']:
                 continue
             
@@ -802,19 +836,23 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
         with transaction.atomic():
             for keywords in matches_map:
                 #print(matches_map[keywords])
-                listing_group, listings = matches_map[keywords]
-                print("Updating LG",listing_group, len(listings), "records")
-                listing_group.listings.all().delete()
+                listing_groups, listings = matches_map[keywords]
+                if type(listing_groups) != list:
+                    listing_groups = [listing_groups]
 
-                results = [ProductListing.from_search_results(item, listing_group.search_result, tokenize=False) for item in listings]
-                #print("RESULTS", results)
-                listing_group.listings.set(results)
-                listing_group.search_string = keywords
-                listing_group.modification_date = timezone.now()
-                if listing_group.search_result.overall_status not in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.SOLD, StatusBase.STAGED]:
-                    listing_group.search_result.overall_status = StatusBase.PRICED
-                    #listing_group.search_result.update_value() 
-                listing_group.save()
+                for listing_group in listing_groups:
+                    print("Updating LG",listing_group, len(listings), "records")
+                    listing_group.listings.all().delete()
+
+                    results = [ProductListing.from_search_results(item, listing_group.search_result, tokenize=False) for item in listings]
+                    #print("RESULTS", results)
+                    listing_group.listings.set(results)
+                    listing_group.search_string = keywords
+                    listing_group.modification_date = timezone.now()
+                    if listing_group.search_result.overall_status not in [StatusBase.LISTED, StatusBase.CONFIRMED, StatusBase.SOLD, StatusBase.STAGED]:
+                        listing_group.search_result.overall_status = StatusBase.PRICED
+                        #listing_group.search_result.update_value() 
+                    listing_group.save()
 
     @classmethod
     def from_graded_card_record(cls, pcard, record, csr=None, tokenize=True):
@@ -1119,6 +1157,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
         if group_key:
             group = ProductGroup.objects.get(id=group_key)
+            
             filled_template["product"]["aspects"]["Card"] = group.set_title_for_group(self)
         
         if filled_template["product"]["aspects"]["Card Name"] == "":

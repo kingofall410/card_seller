@@ -76,13 +76,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const searchResultId = "{{ search_result.id }}";
 
     const listBtn = document.getElementById(`list-btn-${cardId}`);
+    const withdrawBtn = document.getElementById(`withdraw-btn-${cardId}`);
     const listNextBtn = document.getElementById(`list-next-btn-${cardId}`);
     const priceNextBtn = document.getElementById(`price-next-btn-${cardId}`);
-    const holdNextBtn = document.getElementById(`hold-next-btn-${cardId}`);
     
     const listUpBtn = document.getElementById(`list-up-btn-${cardId}`);
     const exportBtn = document.getElementById(`export-btn-${cardId}`);
-    const clearBtn = document.getElementById(`clear-listed-info-btn-${cardId}`);
 
     const groupSelect = document.getElementById(`group-select-${cardId}`);
     const scheduleInput = document.getElementById(`schedule-${cardId}`);
@@ -129,15 +128,15 @@ document.addEventListener("DOMContentLoaded", function () {
         );
     });
 
-    clearBtn.addEventListener("click", () => {
+    withdrawBtn.addEventListener("click", () => {
           
-        showSpinnerOnButton(clearBtn);
-        const url = `/clear_listed_info/${cardId}`;
+        showSpinnerOnButton(withdrawBtn);
+        const url = `/withdraw_listing/${cardId}`;
 
         fetch(url)
             .then(res => res.json())
             .then(data => onSuccess && onSuccess(data))
-            .finally(() => restoreButton(clearBtn));
+            .finally(() => restoreButton(withdrawBtn));
     });
 
     priceNextBtn.addEventListener("click", () => {
@@ -151,27 +150,6 @@ document.addEventListener("DOMContentLoaded", function () {
           })
           .catch(err => console.error("Pricing request failed:", err))
           .finally(() => restoreButton(priceNextBtn));
-    });
-
-    
-
-    holdNextBtn.addEventListener("click", () => {
-        showSpinnerOnButton(holdNextBtn);
-
-        const url = `/update_csr_status_only/${searchResultId}`;
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: "held" })
-        })
-        .then(res => res.json())
-          .then(data => {
-              handleNext();
-          })
-          .catch(err => console.error("Pricing request failed:", err))
-          .finally(() => restoreButton(holdNextBtn));
     });
 });
 

@@ -127,27 +127,58 @@ def price_only(csr_id, settings_id, ss=None):
     csr.overall_status = StatusBase.PRICED
     csr.save()
 
-def bulk_offer_and_order_update(card_ids, listing_ids, settings=None):
+def re_sync_listing_and_sku(card_ids, listing_ids, settings=None):
     cards = Card.objects.filter(id__in=card_ids)
     status = None
+    
     for card in cards:
         csr = card.active_search_results
         listing_info = card.listed_card_info
         offer_id = listing_info.offer_id
         token = None
+        
+        # DEBUG LOG: Track initial state per card
+        print(f"[DEBUG] Processing Card ID: {card.id} | SKU: {listing_info.sku} | Current Offer ID: {offer_id}")
+        
         if offer_id:
-            success, token, status = ebay.get_offer_status(offer_id, settings, listing_info, token)
-            if success: 
+            success, token, status, listing_id = ebay.get_offer_status(offer_id, settings, listing_info, token)
+            print(f"[DEBUG] get_offer_status result -> success: {success}, status: {status}, listing_id: {listing_id}")
+            
+            if success and status not in [StatusBase.UNLISTED]: 
                 print("SUCCESS", status)
                 csr.perform_status_update(status)
+            else:
+                new_offer_id, new_listing_id = ebay.get_offer_id(listing_info.sku, token)
+                print(f"[DEBUG] get_offer_id result -> new_offer_id: {new_offer_id}, new_listing_id: {new_listing_id}")
+                
+                if new_offer_id and new_offer_id != offer_id:
+                    success, token, status, listing_id = ebay.get_offer_status(new_offer_id, settings, listing_info, token)
+                    print(f"[DEBUG] get_offer_status for new offer -> success: {success}, status: {status}")
+                    
+                    if success: 
+                        print("FOUND NEW LISTING ID FOR CSR", status)                                 
+                        listing_info.offer_id = new_offer_id
+                        listing_info.listing_id = new_listing_id
+                        csr.perform_status_update(status)
+                elif status in [StatusBase.UNLISTED]:                    
+                    print("NOT FOUND", status)
+                    #new_listing_id, trading_status = ebay.get_item_id_via_trading_api(listing_info.sku, settings)
+                    if False: #new_listing_id:
+                        print(f"[DEBUG] Found new listing ID via Trading API: {new_listing_id}")
+                        listing_info.listing_id = new_listing_id
+                        csr.perform_status_update(StatusBase.CONFIRMED)
+                    csr.perform_status_update(status)
         else:
-            #no offer id or listing id means failed listing previously
-            print("No offer id for card ", card.id)
+            # No offer id or listing id means failed listing previously
+            print(f"[DEBUG] No offer ID found locally for card {card.id}")
             csr.perform_status_update(StatusBase.FAILED)
+            
     print("A", status)
     ebay.bulk_order_update(listing_ids, settings or Settings.get_default())
+    
     for card in cards:
         card.active_search_results.save()
+        
     return True
 
 

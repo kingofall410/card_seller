@@ -5,7 +5,7 @@ from core.models.Card import Card
 from core.models.Status import StatusBase
 from core.models.TagGroup import TagGroup
 from services import lookup
-import calendar, json
+import calendar, json, time, os, logging
 from datetime import date, datetime, timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -19,15 +19,14 @@ from django.db.models import F, ExpressionWrapper, DateTimeField, DurationField
 from django.db.models.functions import Now, Abs, Extract
 from django.utils import timezone
 from django.template.loader import render_to_string
-import time
 from datetime import date, timedelta
 from django.db.models import Q
-import os
 from django.conf import settings
 from django.http import HttpResponse
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-
+from django.shortcuts import render
+from types import SimpleNamespace
 # Import the wrapper function directly from your model pipeline script
 from services.supervision_extract import run_pipeline_on_file
 
@@ -188,34 +187,89 @@ def clear_recent_tasks(request):
 def task_calendar(request):
     start_time = time.perf_counter()
     today = date.today()
+    
+    # Check view type and parameters
+    view_type = request.GET.get("view", "week")
     week_param = request.GET.get("week")
+    month_param = request.GET.get("month")
 
-    # 1. Determine the Start of the Week (Sunday)
-    if week_param:
-        try:
-            week_start = date.fromisoformat(week_param)
-            days_since_sun = (week_start.weekday() + 1) % 7
-            week_start = week_start - timedelta(days=days_since_sun)
-        except ValueError:
+    # If a month parameter is provided, automatically switch to month view
+    if month_param:
+        view_type = "month"
+
+    if view_type == "month":
+        # Parse month parameter or default to today's month
+        if month_param:
+            try:
+                parts = month_param.split("-")
+                year, month = int(parts[0]), int(parts[1])
+                target_date = date(year, month, 1)
+            except (ValueError, IndexError):
+                target_date = date(today.year, today.month, 1)
+        else:
+            target_date = date(today.year, today.month, 1)
+
+        year = target_date.year
+        month = target_date.month
+
+        # First and last day of the target month
+        first_day_of_month = date(year, month, 1)
+        if month == 12:
+            next_month_first = date(year + 1, 1, 1)
+        else:
+            next_month_first = date(year, month + 1, 1)
+        last_day_of_month = next_month_first - timedelta(days=1)
+
+        # Build full calendar grid starting on Sunday
+        days_since_sun = (first_day_of_month.weekday() + 1) % 7
+        grid_start = first_day_of_month - timedelta(days=days_since_sun)
+
+        # Complete the trailing weeks up to Saturday
+        days_until_sat = (5 - last_day_of_month.weekday()) % 7
+        grid_end = last_day_of_month + timedelta(days=days_until_sat)
+
+        # Generate all days for the grid
+        calendar_days = []
+        curr = grid_start
+        while curr <= grid_end:
+            calendar_days.append(curr)
+            curr += timedelta(days=1)
+
+        start_range = calendar_days[0]
+        end_range = calendar_days[-1]
+
+        # Calculate navigation links for previous/next months
+        prev_month_date = date(year - 1, 12, 1) if month == 1 else date(year, month - 1, 1)
+        next_month_date = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        prev_month = prev_month_date.strftime("%Y-%m")
+        next_month = next_month_date.strftime("%Y-%m")
+
+    else:
+        # Weekly view logic (default)
+        if week_param:
+            try:
+                week_start = date.fromisoformat(week_param)
+                days_since_sun = (week_start.weekday() + 1) % 7
+                week_start = week_start - timedelta(days=days_since_sun)
+            except ValueError:
+                days_since_sun = (today.weekday() + 1) % 7
+                week_start = today - timedelta(days=days_since_sun)
+        else:
             days_since_sun = (today.weekday() + 1) % 7
             week_start = today - timedelta(days=days_since_sun)
-    else:
-        days_since_sun = (today.weekday() + 1) % 7
-        week_start = today - timedelta(days=days_since_sun)
 
-    week_days = [week_start + timedelta(days=i) for i in range(7)]
-    start_range = week_days[0]
-    end_range = week_days[-1]
+        calendar_days = [week_start + timedelta(days=i) for i in range(7)]
+        start_range = calendar_days[0]
+        end_range = calendar_days[-1]
 
-    #logger.debug(f"[Debug Logs] Initializing calendar load for range: {start_range} to {end_range}")
+        prev_week_start = week_start - timedelta(days=7)
+        next_week_start = week_start + timedelta(days=7)
 
     # 2. Optimized Combined Task Fetching
-    # Get the bulk IDs for the exclusion check
     bulk_task_ids = BulkListingTask.objects.filter(
         scheduled_for__date__range=(start_range, end_range)
     ).values_list('id', flat=True)
 
-    # Query the base table using our precise logical condition
     combined_tasks = Task.objects.filter(
         scheduled_for__date__range=(start_range, end_range)
     ).filter(
@@ -229,26 +283,23 @@ def task_calendar(request):
         'listingtask__card__listed_card_info',  
         'listingtask__csr'
     ).prefetch_related(
-        # Fix: Traverse from the Bulk task down through its children listings to grab the prices
         'bulklistingtask__successors__listingtask__card__listed_card_info',
         'bulklistingtask__successors__listingtask__csr',
     ).order_by('id')
 
-    # 3. Map both item types into day slots
+    # 3. Map items into day slots
     day_map = {}
     for task in combined_tasks:
         d = task.scheduled_for.date()
         day_map.setdefault(d, []).append(task)
 
-    # 4. Build Day Objects with highly optimized lookups
+    # 4. Build Day Objects with summary statistics
     day_objects = []
-    for d in week_days:
+    for d in calendar_days:
         tasks = sorted(day_map.get(d, []), key=lambda t: t.scheduled_for)
         
-        # Helper function to extract price cleanly across polymorphic types
         def get_task_price(t):
             try:
-                # Dig down to find whichever related object path is hydrated
                 if hasattr(t, 'listingtask') and t.listingtask and t.listingtask.card:
                     return t.listingtask.card.listed_card_info.list_price or 0
                 elif hasattr(t, 'bulklistingtask') and t.bulklistingtask:
@@ -257,40 +308,56 @@ def task_calendar(request):
                 pass
             return 0
 
-        # Build summaries cleanly without triggering subsequent query thrashing
+        success_val = sum(get_task_price(t) for t in tasks if t.status == StatusBase.SUCCESS)
+        failed_val = sum(get_task_price(t) for t in tasks if t.status == StatusBase.FAILED)
+        pending_val = sum(get_task_price(t) for t in tasks if t.status == StatusBase.PENDING)
+
         summary = {
             "total_tasks": len(tasks),
             "success": sum(1 for t in tasks if t.status == StatusBase.SUCCESS),
-            "success_val": sum(get_task_price(t) for t in tasks if t.status == StatusBase.SUCCESS),
+            "success_val": success_val,
             "failed": sum(1 for t in tasks if t.status == StatusBase.FAILED),
-            "failed_val": sum(get_task_price(t) for t in tasks if t.status == StatusBase.FAILED),
+            "failed_val": failed_val,
             "pending": sum(1 for t in tasks if t.status == StatusBase.PENDING),
-            "pending_val": sum(get_task_price(t) for t in tasks if t.status == StatusBase.PENDING)
+            "pending_val": pending_val,
+            "total_val": success_val + failed_val + pending_val
         }
+
+        is_current_month = True
+        if view_type == "month":
+            is_current_month = (d.year == year and d.month == month)
 
         day_objects.append(SimpleNamespace(
             date=d,
             tasks=tasks,
             summary=summary,
-            is_today=(d == today)
+            is_today=(d == today),
+            is_current_month=is_current_month
         ))
 
-    # 5. Calculate Navigation Offsets
-    prev_week_start = week_start - timedelta(days=7)
-    next_week_start = week_start + timedelta(days=7)
-
+    # 5. Build Context & Determine Template
     context = {
         "day_objects": day_objects,
-        "week_start": week_start,
         "today": today,
-        "prev_week": prev_week_start.strftime("%Y-%m-%d"),
-        "next_week": next_week_start.strftime("%Y-%m-%d"),
+        "view_type": view_type,
     }
 
-    duration = time.perf_counter() - start_time
-    #logger.debug(f"[Debug Logs] Calendar compilation complete. Execution time: {duration:.4f} seconds.")
+    if view_type == "month":
+        context.update({
+            "current_month": first_day_of_month,
+            "prev_month": prev_month,
+            "next_month": next_month,
+        })
+        template_name = "services/task_calendar_month.html"
+    else:
+        context.update({
+            "week_start": week_start,
+            "prev_week": prev_week_start.strftime("%Y-%m-%d"),
+            "next_week": next_week_start.strftime("%Y-%m-%d"),
+        })
+        template_name = "services/task_calendar.html"
 
-    return render(request, "services/task_calendar.html", context)
+    return render(request, template_name, context)
 
 def tasks_list(request):
 

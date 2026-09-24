@@ -17,6 +17,8 @@ class ProductListing(models.Model):
     format = models.CharField(max_length=500, blank=True)
     qty = models.IntegerField(default=1)
     bids = models.IntegerField(default=0)
+    img_url_2 = models.CharField(max_length=1500, null=True, blank=True)
+    img_url_3 = models.CharField(max_length=1500, null=True, blank=True)
     
     #legacy
     search_result = models.ForeignKey('core.CardSearchResult', on_delete=models.CASCADE, null=True, related_name="listings")    
@@ -68,6 +70,10 @@ class ProductListing(models.Model):
         # 3. Handle Images (use the downloaded local image path if available, fallback to the external CDN URL)
         local_path = item.get("local_image_path")
         external_url = item.get("image_url", "")
+
+        
+        listing.img_url_2 = item.get("img_url_2", "")
+        listing.img_url_3 = item.get("img_url_3", "")
         
         # Fallback assignment
         listing.img_url = local_path if local_path else external_url
@@ -76,7 +82,7 @@ class ProductListing(models.Model):
         # 4. Clean and Parse Price (extract digits and decimals from strings like "$123.45")
         raw_price = item.get("price", "0")
         # Strip currency symbols and commas to leave a clean float-compatible string
-        clean_price = re.sub(r"[^\d.]", "", raw_price)
+        clean_price = re.sub(r"(?i)USD|[^\d.]", "", raw_price)
         listing.ebay_price = clean_price if clean_price else "0"
         
         # 5. Default Attributes for FB's structural differences
@@ -129,10 +135,15 @@ class ProductListing(models.Model):
         listing.img_url = listing.thumb_url
         price = item.get("price", [{}])
         if isinstance(price, str):
-            listing.ebay_price = price.replace('$', '').replace(',', '')
+            # Strip currency symbols, commas, and 'USD' (case-insensitive), leaving clean digits/decimals
+            clean_price = re.sub(r"(?i)USD|[^\d.]", "", price)
+            listing.ebay_price = clean_price if clean_price else "0"
         else:
-            listing.ebay_price = price.get("value","0")
-
+            # Handle dictionary (or other types) and clean its value just in case
+            raw_value = price.get("value", "0") if isinstance(price, dict) else "0"
+            clean_value = re.sub(r"(?i)USD|[^\d.]", "", str(raw_value))
+            listing.ebay_price = clean_value if clean_value else "0"
+            
         listing.format = item.get("format", None)
         listing.bids = item.get("bids", "0").replace("-","0")
         if not listing.format:

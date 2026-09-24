@@ -143,6 +143,14 @@ class Card(models.Model):
         first_group = self.tag_groups.last()
         return "Unassigned"
 
+
+    def unlist(self):
+        print("here")
+        self.active_search_results.perform_status_update(StatusBase.UNLISTED, True)
+        self.listed_card_info.listing_id = ""
+        self.active_search_results.save()
+        self.listed_card_info.save()
+
     def get_tasks(self):
         """Fetches all subclasses of Task pointing back to this specific card instance."""
         return Task.objects.filter(
@@ -341,7 +349,7 @@ class Card(models.Model):
 
     @property
     def listing_price(self):
-        return self.active_search_results.list_price
+        return None#self.active_search_results.list_price
 
     @property
     def search_count(self):

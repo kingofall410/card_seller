@@ -11,6 +11,22 @@
         gap: 20px;
     }
 
+    .dropdown {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dropdown-toggle {
+        color: white;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+        padding: 4px 8px;
+    }
+
     .nav-link, .sub-nav-link {
         display: block;
         padding: 12px 16px;
@@ -94,7 +110,7 @@
     }
 
     /* Card Monitor Specific Heavy Colors */
-    .clr-pre { color: #ffe58f; }       /* Yellow / Light */
+    .clr-pre { color: #ffe58f; }      /* Yellow / Light */
     .clr-priced { color: #007b1be6; }  /* Green */
     .clr-reviewed { color: #db38d8bc; }/* Pinkish-Purple */
     .clr-listed { color: #91d5ff; }    /* Light Blue */
@@ -136,12 +152,10 @@
 <nav class="custom-navbar">
     <!-- 1. COLLECTION Dropdown -->
     <div class="dropdown">
-        <button class="dropdown-toggle" style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
-            🗂️ COLLECTION ▾
-        </button>
+        <a href="{% url 'collection' '0' %}" class="navbar-link">🗂️ COLLECTION</a>
+        <button class="dropdown-toggle">▾</button>
         <div class="dropdown-menu" style="min-width: 400px;">
-            <a href="{% url 'collection' '0'%}?cid=-1&cid=-2&cid=-3&timeframe=120" class="dec">🗃️ Recent Collections...</a>
-            <a href="{% url 'collection' '0'%}?timeframe=7&status=listed&status=confirmed&status=sold&status=unlisted&status=failed" class="nav-link">🗃️ Latest Listings...</a>
+            <a href="{% url 'collection' '0'%}?cid=-1&cid=-2&cid=-3&timeframe=30" class="dec">🗃️ Recent Collections...</a>
             <a href="{% url 'collection' '0'%}?timeframe=7&status=staged&status=failed" class="nav-link">🗃️ Recently Staged...</a>
             <a href="{% url 'collection' '0'%}?timeframe=120&status=reviewed" class="nav-link">🗃️ Ready to List...</a>
             <a href="{% url 'new_collection' %}" class="nav-link">✨ New Collection...</a>
@@ -150,13 +164,12 @@
 
     <!-- 2. TASK QUEUE Dropdown -->
     <div class="dropdown">
-        <button class="dropdown-toggle" style="color: white; background: none; border: none; cursor: pointer; font-weight: bold;">
-            📤 TASK QUEUE ▾
-        </button>
+        <a href="{% url 'calendar' %}?view=month" class="navbar-link">📅 CALENDAR</a>
+        <button class="dropdown-toggle">▾</button>
         <div class="dropdown-menu" style="overflow: visible;">
             <div class="nav-item-wrapper">
                 <a href="{% url 'task_queue' %}" class="nav-link d-flex justify-content-between">
-                    <span>Active Queue...</span>
+                    <span>📤 Task Queue...</span>
                     <span style="color: #ccc;">▶</span>
                 </a>
                 <div class="sub-dropdown-menu">
@@ -165,7 +178,6 @@
                     <form method="POST" action="{% url 'reset_queue' %}" onsubmit="return confirm('Reset?');">{% csrf_token %}<button class="sub-nav-link" style="color: #af1e1e;">🔄 Reset</button></form>
                 </div>
             </div>
-            <a href="{% url 'calendar' %}" class="nav-link">📅 Task Calendar</a>
             
             <hr style="margin:0; border-color:#eee;">
             <a href="#" class="nav-link" style="color: #d9534f;" onclick="triggerClearRecentTasks(event)">
@@ -259,7 +271,6 @@
         const spinner = document.getElementById("card-spinner");
         spinner.style.display = "inline-block";
 
-        // Replace '/api/card-monitor/' with your actual Django url path
         fetch("/card_status_monitor/")
             .then(response => response.json())
             .then(data => {
@@ -281,5 +292,5 @@
                 spinner.style.display = "none";
                 console.error("Failed to load card status monitor counts:", error);
             });
-});
+    });
 </script>

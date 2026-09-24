@@ -14,7 +14,7 @@
     <button onclick="handleBulkUpdate(true)" title="Review">🕶</button>
     <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
     <button onclick="submitCollection('/re_sku/')" title="Re-SKU">🏷️</button>
-    <button onclick="submitCollection('/bulk_archive/')" title="Archive">🗄️</button>         
+    <button onclick="submitCollection('/withdraw_listing/')" title="Withdraw">❌</button>        
     <button onclick="submitCollection('/refresh_listing_status/')" title="Refresh">🔄</button>
     <button onclick="submitCollection('/clear_product_group/')" title="CPG">🧹</button>
     <button 
@@ -75,13 +75,18 @@
             <input type="text" id="new-group-title-input" placeholder="Enter a name for the new group..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" />
         </div>
 
-        <div style="margin-bottom: 20px;">
+        <div style="margin-bottom: 16px;">
             <label for="new-group-title-format" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Title Format:</label>
             <select id="new-group-title-format" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background-color: #fff; font-weight: bold; cursor: pointer;">
                 {% for value, label in title_formats %}
                     <option value="{{ value }}">{{ label }}</option>
                 {% endfor %}
             </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label for="new-group-candidate-query" style="display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px;">Candidate Query:</label>
+            <input type="text" id="new-group-candidate-query" placeholder="Enter candidate query..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" />
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -98,6 +103,7 @@ let activeGroupDropdownElement = null;
 function openNewGroupModal(element) {
     activeGroupDropdownElement = element;
     document.getElementById('new-group-title-input').value = '';
+    document.getElementById('new-group-candidate-query').value = '';
     document.getElementById('new-group-modal').style.display = 'flex';
     document.getElementById('new-group-title-input').focus();
 }
@@ -112,9 +118,11 @@ document.getElementById('cancel-new-group-btn').addEventListener('click', functi
 document.getElementById('submit-new-group-btn').addEventListener('click', async function() {
     const titleInput = document.getElementById('new-group-title-input');
     const formatSelect = document.getElementById('new-group-title-format');
+    const queryInput = document.getElementById('new-group-candidate-query');
     
     const title = titleInput.value.trim();
     const titleFormat = formatSelect.value;
+    const candidateQuery = queryInput.value.trim();
 
     if (!title) {
         alert("Please enter a valid group name.");
@@ -123,8 +131,8 @@ document.getElementById('submit-new-group-btn').addEventListener('click', async 
 
     document.getElementById('new-group-modal').style.display = 'none';
 
-    // Build URL or include titleFormat in your request payload/parameters as needed
-    const url = `/new_group/${encodeURIComponent(title)}/?title_format=${encodeURIComponent(titleFormat)}`;
+    // Build URL including title_format and candidate_query parameters
+    const url = `/new_group/${encodeURIComponent(title)}/?title_format=${encodeURIComponent(titleFormat)}&candidate_query=${encodeURIComponent(candidateQuery)}`;
 
     try {
         const response = await fetch(url);

@@ -162,12 +162,23 @@
             border-radius: 4px;
             background-color: #eee;
         }
+        .item-images-grid {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            max-width: 280px;
+            flex-shrink: 0;
+        }
+        .item-images-grid .item-img {
+            width: 85px;
+            height: 85px;
+        }
         .item-details {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             flex-grow: 1;
-            height: 90px; /* Aligns with image height block cleanly */
+            min-height: 90px;
         }
         .item-title {
             font-size: 1.05rem;
@@ -305,13 +316,27 @@
             {% for item in results %}
                 <div class="item-row">
                     {% if source == 'facebook' %}
-                        {% if item.img_url %}
-                            <img class="item-img" id="img-{{ item.item_id }}" 
-                                src="{% if 'http' in item.thumb_url %}{{ item.thumb_url }}{% else %}{{ MEDIA_URL }}{{ item.thumb_url }}{% endif %}" 
-                                alt="Item image">
-                        {% else %}
-                            <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
-                        {% endif %}
+                        <!-- Facebook Image Grid -->
+                        <div class="item-images-grid">
+                            {% if item.img_url %}
+                                <img class="item-img" id="img-{{ item.item_id }}" 
+                                     src="{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}" 
+                                     alt="Item image">
+                            {% endif %}
+                            {% if item.img_url_2 %}
+                                <img class="item-img" 
+                                     src="{% if 'http' in item.img_url_2 %}{{ item.img_url_2 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_2 }}{% endif %}" 
+                                     alt="Item image 2">
+                            {% endif %}
+                            {% if item.img_url_3 %}
+                                <img class="item-img" 
+                                     src="{% if 'http' in item.img_url_3 %}{{ item.img_url_3 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_3 }}{% endif %}" 
+                                     alt="Item image 3">
+                            {% endif %}
+                            {% if not item.img_url and not item.img_url_2 and not item.img_url_3 %}
+                                <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
+                            {% endif %}
+                        </div>
                         
                         <div class="item-details">
                             <div>
@@ -343,11 +368,27 @@
                         </div>
 
                     {% else %}
-                        {% if item.image.imageUrl %}
-                            <img class="item-img" id="img-{{ item.item_id }}" src="{{ item.thumb_url }}" alt="Thumbnail">
-                        {% else %}
-                            <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
-                        {% endif %}
+                        <!-- eBay Image Grid -->
+                        <div class="item-images-grid">
+                            {% if item.img_url %}
+                                <img class="item-img" id="img-{{ item.itemId|default:item.item_id }}" 
+                                     src="{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}" 
+                                     alt="Thumbnail">
+                            {% endif %}
+                            {% if item.img_url_2 %}
+                                <img class="item-img" 
+                                     src="{% if 'http' in item.img_url_2 %}{{ item.img_url_2 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_2 }}{% endif %}" 
+                                     alt="Thumbnail 2">
+                            {% endif %}
+                            {% if item.img_url_3 %}
+                                <img class="item-img" 
+                                     src="{% if 'http' in item.img_url_3 %}{{ item.img_url_3 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_3 }}{% endif %}" 
+                                     alt="Thumbnail 3">
+                            {% endif %}
+                            {% if not item.img_url and not item.img_url_2 and not item.img_url_3 %}
+                                <div class="item-img" style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #aaa;">No Image</div>
+                            {% endif %}
+                        </div>
                         
                         <div class="item-details">
                             <div>
@@ -370,8 +411,8 @@
                                     </div>
                                     
                                     <div>
-                                        {% if item.image.imageUrl %}
-                                            <button class="btn btn-action-upload" onclick="logDebug('Uploading external eBay asset: {{ item.itemId }}'); uploadItemImage('{{ item.itemId }}', '{{ item.image.imageUrl }}')">
+                                        {% if item.img_url %}
+                                            <button class="btn btn-action-upload" onclick="logDebug('Uploading external eBay asset: {{ item.itemId }}'); uploadItemImage('{{ item.itemId|default:item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}')">
                                                 📷 Upload Item
                                             </button>
                                         {% endif %}
@@ -477,7 +518,7 @@ function uploadItemImage(itemId, imageUrl) {
             formData.append('slab', 'false');
 
             const uploadUrl = "{% url 'upload_image' collection_id=0 %}";
-            logDebug(`Posting raw image blob payload payload parameters to django route: ${uploadUrl}`);
+            logDebug(`Posting raw image blob payload parameters to django route: ${uploadUrl}`);
             
             return fetch(uploadUrl, {
                 method: 'POST',

@@ -294,6 +294,16 @@ def card_test(request):
 
 # Card-related views
 @csrf_exempt
+def get_lg_tooltip(request, card_id):
+    card = Card.objects.get(id=card_id)
+    group_type = request.GET.get("type", "avail")
+    print("get_lg_tooltip", group_type)
+    lg = card.active_search_results.listing_groups.filter(is_sold=(group_type=="sold")).last()
+    
+    return render(request, "components/listing_group_tooltip.html", {"listing_group": lg}) 
+
+# Card-related views
+@csrf_exempt
 def view_card(request, card_id):
     print("view_card", request.body)
     settings = Settings.get_default()
@@ -530,7 +540,7 @@ def refresh_listing_status(request, card_id=None):
         listing_ids = [card.listed_card_info.listing_id for card in cards if hasattr(card, "listed_card_info")]
     
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_confirm_task(name=f"confirm listings", card=cards[0], callback=lookup.bulk_offer_and_order_update, params={"card_ids": card_ids, "listing_ids":listing_ids}, on_success_status=StatusBase.CONFIRMED)
+    core_config.queue.schedule_confirm_task(name=f"confirm listings", card=cards[0], callback=lookup.re_sync_listing_and_sku, params={"card_ids": card_ids, "listing_ids":listing_ids}, on_success_status=StatusBase.CONFIRMED)
 
     #lookup.bulk_order_update(cards, listing_ids, Settings.get_default())
     #updated_flat_cards = collection_views.flatten_collection(cards)
@@ -967,13 +977,14 @@ def async_price_search(request, lg_id):
 def new_group(request, name):  
     clean_name = name.strip()
     title_format = request.GET.get('title_format', 'player group')
-    print(clean_name, title_format)
+    candidate_query = request.GET.get('candidate_query', "")
+    print(clean_name, title_format, candidate_query)
     if not clean_name:
         return JsonResponse({'success': False, 'error': 'Name is empty'}, status=400)
     
     # Use the classmethod we defined earlier
     # Ensure ProductGroup.create(name) handles the DB save properly
-    group = ProductGroup.create(clean_name, title_format)
+    group = ProductGroup.create(clean_name, title_format, candidate_query)
 
     return JsonResponse({
         'success': True,
@@ -1087,3 +1098,26 @@ def clear_listed_info(request, card_id):
     card.clear_listed_info()
     
     return JsonResponse({"success": True, "error": ""})
+
+
+def summary_view(request):
+    #these numbers aren't quite accurate since we're not using possibly overloaded values
+    name_summary = CardSearchResult.objects.values('full_name').annotate(
+        total_count=Count('id'),
+        imported=Count('id', filter=Q(overall_status=StatusBase.IMPORTED)),
+        unlisted=Count('id', filter=Q(overall_status=StatusBase.UNLISTED)),
+        priced=Count('id', filter=Q(overall_status=StatusBase.PRICED)),
+        reviewed=Count('id', filter=Q(overall_status=StatusBase.REVIEWED)),
+        staged=Count('id', filter=Q(overall_status=StatusBase.STAGED)),
+        listed=Count('id', filter=Q(overall_status=StatusBase.LISTED)),
+        confirmed=Count('id', filter=Q(overall_status=StatusBase.CONFIRMED)),
+        sold=Count('id', filter=Q(overall_status=StatusBase.SOLD)),
+        held=Count('id', filter=Q(overall_status=StatusBase.HELD)),
+        failed=Count('id', filter=Q(overall_status=StatusBase.FAILED)),
+    ).order_by('-total_count')
+
+    context = {
+        "name_summary": name_summary,
+    }
+
+    return render(request, "summary_view.html", context)

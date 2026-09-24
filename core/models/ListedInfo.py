@@ -13,11 +13,13 @@ class ListedInfo(models.Model):
 
     #membership relation 
     #reverse relation from CARD's LI to LI of Product Group card is assigned to
-    assigned_product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.DO_NOTHING, related_name="as_group_member")
+    assigned_product_group = models.ForeignKey('core.ProductGroup', null=True, blank=True, on_delete=models.SET_NULL, related_name="as_group_member")
 
     is_pg = models.BooleanField(default=False)
 
+    #in case we have mismatch, here's what ebay actually says
     listed_sku = models.CharField(max_length=250, blank=True)
+    #listed_offer_id = models.CharField(max_length=250, blank=True)
 
     listing_datetime = models.DateTimeField(null=True)
     list_price = models.FloatField(default=0.0)
@@ -93,8 +95,7 @@ class ListedInfo(models.Model):
             self.sold_price = int(self.sold_qty)*float(self.list_price) or 0.0
             self.total_listing_value = float(self.list_price)
             self.assigned_product_group = self.card.active_search_results.ebay_product_group if self.pk and self.card.active_search_results else None
-            
-            
+
     def save(self, *args, **kwargs):
         csr = None
         print("saving LI ", self.id)
@@ -126,6 +127,9 @@ class ListedInfo(models.Model):
         """Calculates eBay's actual calendar-month GTC renewal date."""
         if not self.listing_start_dt:
             return None
+
+        if not self.is_pg and self.card.active_search_results.overall_status in [StatusBase.SOLD]:
+            return datetime.datetime.max
         
         now = timezone.now()
         renewal = self.listing_start_dt
@@ -213,7 +217,23 @@ class ListedInfo(models.Model):
         self.list_qty = 1
         self.sku = csr.sku
         
-        self.msrp = round(csr.ebay_msrp + 0.01, 1) - 0.01
+        base_dollar = int(csr.ebay_msrp)
+
+        # Generate valid candidate prices ending in .29, .49, or .99 
+        # across the current and adjacent dollar bounds
+        candidates = [
+            base_dollar - 0.01,  # .99 of the previous dollar (e.g., 9.99)
+            base_dollar + 0.29,
+            base_dollar + 0.49,
+            base_dollar + 0.99,
+            base_dollar + 1.29,  # .29 of the next dollar
+            base_dollar + 1.49,  # .49 of the next dollar
+            base_dollar + 1.99   # .99 of the next dollar
+        ]
+
+        # Select the candidate closest to the original ebay_msrp value
+        self.msrp = min(candidates, key=lambda x: abs(x - csr.ebay_msrp))
+        
         #self.variation_title_base = csr.variation_title_base
         
         self.shareable_link_front=csr.shareable_link_front

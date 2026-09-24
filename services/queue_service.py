@@ -120,9 +120,10 @@ class Queue:
         self._load_pending_tasks()
 
     def _reset_running_tasks(self):
-        count = Task.objects.filter(status__in=["running", StatusBase.RUNNING]).update(status=StatusBase.PENDING)
-        if count > 0:
-            print(f"[CLEANUP] Reset {count} stuck 'running' tasks to 'pending'.")
+        pass
+        #count = Task.objects.filter(status__in=["running", StatusBase.RUNNING]).update(status=StatusBase.PENDING)
+        #if count > 0:
+            #print(f"[CLEANUP] Reset {count} stuck 'running' tasks to 'pending'.")
 
     def _load_pending_tasks(self):
         self._reset_running_tasks()
@@ -189,7 +190,7 @@ class Queue:
                         
                         if csr and (csr.overall_status not in [StatusBase.LISTED, StatusBase.HELD] or db_task.on_success_status == StatusBase.CONFIRMED):
                             print("onsuccess", db_task.on_success_status)
-                            csr.overall_status = db_task.on_success_status
+                            csr.perform_status_update(db_task.on_success_status)
 
                         if hasattr(db_task, "bulklistingtask"):
                             print(f"[SUCCESS] {task.title} succeeded. Killing successors: {task.successor_ids}")
