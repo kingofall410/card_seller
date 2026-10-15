@@ -71,10 +71,12 @@ class ProductListing(models.Model):
         local_path = item.get("local_image_path")
         external_url = item.get("image_url", "")
 
-        
-        listing.img_url_2 = item.get("img_url_2", "")
-        listing.img_url_3 = item.get("img_url_3", "")
-        
+
+        local_paths = item.get("local_image_paths", None)
+        if local_paths:
+            listing.img_url_2 = local_paths[1] if len(local_paths) > 1 else ""
+            listing.img_url_3 = local_paths[2] if len(local_paths) > 2 else ""
+      
         # Fallback assignment
         listing.img_url = local_path if local_path else external_url
         listing.thumb_url = external_url
@@ -145,7 +147,8 @@ class ProductListing(models.Model):
             listing.ebay_price = clean_value if clean_value else "0"
             
         listing.format = item.get("format", None)
-        listing.bids = item.get("bids", "0").replace("-","0")
+        listing.bids = item.get("bids", "0").replace("-","0").replace("–", "0")
+        #print("Bid:", listing.bids)
         if not listing.format:
             listing.format = item.get("buyingOptions", [""])[0]
         listing.qty = item.get("qty", "1").replace(",","")
@@ -157,7 +160,7 @@ class ProductListing(models.Model):
         listing.save()
         ListingTitle.objects.create(title=item.get("title", "No title"), parent_listing=listing)
         #listing.save()        
-        #TODO:ultimately this will need to be updated to handle multiple settings objects
+        
         if tokenize:
             listing.title.tokenize(Settings.get_default())
 

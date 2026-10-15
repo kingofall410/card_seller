@@ -272,37 +272,41 @@ def _execute_ebay_search(keyword_strings, settings, limit, page, build_params_fn
     category_id = get_dominant_category_id(None)
     offset = (page - 1) * limit
 
-    for keywords in keyword_strings:
-        search_term = keywords[0]
-        metadata = keywords[1]
-        result_data[search_term] = (metadata, [])
+    for (search_term, metadata) in keyword_strings:
         
-        # Call the specific lambda/function passed in to build unique filters
-        params = build_params_fn(search_term, limit, offset, category_id)
+        if search_term in result_data:
+            print("Skipping duplicate keyword string")
+            result_data[search_term][0].append(metadata)
 
-        try:
-            # Let requests naturally handle parameter encoding
-            response = requests.get(TXT_SEARCH_URL, headers=headers, params=params, timeout=10)
-        except Timeout:
-            print(f"❌ Request timed out for term: {search_term}")
-            continue
-        except RequestException as e:
-            print(f"❌ Request failed for term: {search_term}. Error: {e}")
-            continue
-        
-        if response.status_code == 200:
-            items = response.json().get("itemSummaries", [])
-            if not items:
-                print(f"❌ No matches found for '{search_term}'.")
-            else:
-                print(f"✅ Found {len(items)} matches for '{search_term}'.")
-                result_data[search_term][1].extend(items)
         else:
+            result_data[search_term] = ([metadata], [])
+            
+            # Call the specific lambda/function passed in to build unique filters
+            params = build_params_fn(search_term, limit, offset, category_id)
+
             try:
-                error_msg = response.json()["errors"][0]["message"]
-                print(f"❌ eBay API Error for '{search_term}': {error_msg}")
-            except (KeyError, ValueError):
-                print(f"❌ HTTP Error {response.status_code}: {response.text}")
+                # Let requests naturally handle parameter encoding
+                response = requests.get(TXT_SEARCH_URL, headers=headers, params=params, timeout=10)
+            except Timeout:
+                print(f"❌ Request timed out for term: {search_term}")
+                continue
+            except RequestException as e:
+                print(f"❌ Request failed for term: {search_term}. Error: {e}")
+                continue
+            
+            if response.status_code == 200:
+                items = response.json().get("itemSummaries", [])
+                if not items:
+                    print(f"❌ No matches found for '{search_term}'.")
+                else:
+                    print(f"✅ Found {len(items)} matches for '{search_term}'.")
+                    result_data[search_term][1].extend(items)
+            else:
+                try:
+                    error_msg = response.json()["errors"][0]["message"]
+                    print(f"❌ eBay API Error for '{search_term}': {error_msg}")
+                except (KeyError, ValueError):
+                    print(f"❌ HTTP Error {response.status_code}: {response.text}")
                 
     return result_data
 
@@ -1055,75 +1059,80 @@ def scrape_with_profile(keyword_strings, limit=50, max_pages=3, days=1095):
                     "endDate": end_date,
                     "sorting":"-datelastsold"
                 }
+                
                 for keywords in keyword_strings:
                     row_count = 0
                     page_num = 0
 
                     # keywords is expected to be a tuple/list: (search_string, some_id)
                     current_search = keywords[0]
-                    query["keywords"] = quote_plus(current_search)
-                    result_data[current_search] = (keywords[1], [])
+                    if current_search in result_data:
+                        print("Skipping duplicate keyword string")
+                        result_data[current_search][0].append(keywords[1])
 
-                    while page_num < max_pages:
-                        query["offset"] = page_num * limit
-                        url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
-                        print("URL:", url)
-                        
-                        page = browser.pages[0]
-                        
-                        try:
-                            resp = page.goto(url, timeout=60000)
-                            print(page.url, resp, resp.request)
-                            if "exceeded" in page.url:
+                    else:
+                        query["keywords"] = quote_plus(current_search)
+                        result_data[current_search] = ([keywords[1]], [])
+
+                        while page_num < max_pages:
+                            query["offset"] = page_num * limit
+                            url = base_url + "?" + "&".join(f"{k}={v}" for k, v in query.items())
+                            print("URL:", url)
+                            
+                            page = browser.pages[0]
+                            
+                            try:
+                                resp = page.goto(url, timeout=60000)
+                                print(page.url, resp, resp.request)
+                                if "exceeded" in page.url:
+                                    #this is a daily limit or auth problem
+                                    print(f"Daily limit/auth problem 1 {page_num}.")
+                                    return result_data    
+                            except Exception:
                                 #this is a daily limit or auth problem
-                                print(f"Daily limit/auth problem 1 {page_num}.")
-                                return result_data    
-                        except Exception:
-                            #this is a daily limit or auth problem
-                            print(f"Daily limit/auth problem 2 {page_num}.")
-                            return result_data
-                        
-                        try:
-                            page.wait_for_selector("table, h2.page-notice__title", timeout=60000)
-                        except Exception:
-                            print(f"Timed out waiting for table on page {page_num}.")
-                            break
+                                print(f"Daily limit/auth problem 2 {page_num}.")
+                                return result_data
+                            
+                            try:
+                                page.wait_for_selector("table, h2.page-notice__title", timeout=60000)
+                            except Exception:
+                                print(f"Timed out waiting for table on page {page_num}.")
+                                break
 
-                        rows_data = page.evaluate("""() => {
-                            return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
-                                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
-                                const img = row.querySelector('img');
-                                const imgUrl = img ? img.src : null;
-                                return { cells, imgUrl };
-                            });
-                        }""")
+                            rows_data = page.evaluate("""() => {
+                                return Array.from(document.querySelectorAll('.research-table-row')).map(row => {
+                                    const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                                    const img = row.querySelector('img');
+                                    const imgUrl = img ? img.src : null;
+                                    return { cells, imgUrl };
+                                });
+                            }""")
 
-                        print(f"Found {len(rows_data)} rows.")
-                        
-                        for row_data in rows_data:
-                            cells = row_data["cells"]
-                            if len(cells) < 8:
-                                continue
+                            print(f"Found {len(rows_data)} rows.")
+                            
+                            for row_data in rows_data:
+                                cells = row_data["cells"]
+                                if len(cells) < 8:
+                                    continue
 
-                            # Assuming get_split_part_text exists in your scope
-                            result_data[keywords[0]][1].append({
-                            "title": get_split_part_text(cells[0], 0, 1),
-                            "price": get_split_part_text(cells[2], 0, 0),
-                            "format": get_split_part_text(cells[2], 0, 1),
-                            "sold_date": cells[7],
-                            "shipping": get_split_part_text(cells[3], 0, 0),
-                            "qty": cells[4],
-                            "bids": cells[6],
-                            "itemWebUrl": row_data["imgUrl"]
-                        })
-                        
-                        page_num += 1
-                        row_count += len(rows_data)
-                        
-                        # Break if we didn't get a full page (means no more results)
-                        if len(rows_data) < limit:
-                            break
-
+                                # Assuming get_split_part_text exists in your scope
+                                result_data[keywords[0]][1].append({
+                                "title": get_split_part_text(cells[0], 0, 1),
+                                "price": get_split_part_text(cells[2], 0, 0),
+                                "format": get_split_part_text(cells[2], 0, 1),
+                                "sold_date": cells[7],
+                                "shipping": get_split_part_text(cells[3], 0, 0),
+                                "qty": cells[4],
+                                "bids": cells[6],
+                                "itemWebUrl": row_data["imgUrl"]
+                            })
+                            
+                            page_num += 1
+                            row_count += len(rows_data)
+                            
+                            # Break if we didn't get a full page (means no more results)
+                            if len(rows_data) < limit:
+                                break
                 browser.close()
                 
         finally:

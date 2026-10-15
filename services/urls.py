@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path("tasks/", views.tasks_list, name="tasks_list"),    
-    path("task_queue/", views.task_queue, name="task_queue"),    
+    path("task_queue/", views.task_queue_view, name="task_queue_view"),    
     path("task_monitor_data/", views.task_monitor_data, name="task_monitor_data"),
     path("calendar/", views.task_calendar, name="calendar"),
     path('delete_task/<int:task_id>/', views.delete_task, name="delete_task"),
@@ -16,7 +16,7 @@ urlpatterns = [
     path('retry_task/<int:task_id>/', views.retry_task, name='retry_task'),
     path('clear_recent_tasks/', views.clear_recent_tasks, name='clear_recent_tasks'),
     path('process_scans/', views.process_scans, name='process_scans'),
-    path('queue/', views.queue_dashboard, name='queue_dashboard'),
+    path('queue/', views.task_queue_view, name='task_queue_view'),
     path('queue/clear-recent/', views.clear_recent_tasks_view, name='clear_recent_tasks'),
     path('queue/reset/', views.reset_queue_view, name='reset_queue'),
 ]

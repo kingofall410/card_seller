@@ -156,7 +156,6 @@ class ListingGroup(models.Model):
     @classmethod
     def create(cls, search_result, label, filter_terms, id_string, is_img=False, is_refined=False, is_wide=False, is_sold=False):
         # 1. Force save the parent and ensure it has an ID
-        search_result.save()
         if not search_result.id:
             print("❌ Parent SearchResult has no ID. Cannot create group.")
             return None

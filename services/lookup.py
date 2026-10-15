@@ -26,16 +26,13 @@ def single_image_lookup(card: Card, all_fields = {}, settings=None, sites=["ebay
             listing_matches = ebay.image_search(card.get_lookup_image(), limit=5, page=page, settings=settings)
             csr = card.parse_and_tokenize_search_results(listing_matches, all_fields=all_fields, csr=csr, id_listings=True)
 
-        csr.filter_terms = all_fields["filter_terms"] if "filter_terms" in all_fields else ""
-        '''search_string = csr.build_title(shorter=True) + " " + csr.filter_terms
-        backup_search_string = csr.build_title(shortest=True) + " " + csr.filter_terms
-        csr.set_ovr_attribute("sold_search_string", search_string, False)
-        csr.set_ovr_attribute("text_search_string", search_string, False)'''
-        
-        csr.save()
+        #don't overwrite filter terms --> Is this still relevant given the shift to multiple filter term modules?
+        if "filter_terms" in all_fields:
+            csr.filter_terms = all_fields["filter_terms"]
+            csr.save()
 
-        if refine:
-            text_refinement(csr, csr.text_search_string, all_fields, settings, site=sites[0], retry_limit=retry_limit)
+        '''if refine:
+            text_refinement(csr, csr.text_search_string, all_fields, settings, site=sites[0], retry_limit=retry_limit)'''
 
         if scrape_sold_data:
             price_only(csr.id, settings.id)
@@ -68,27 +65,27 @@ def refresh_listing_groups(listing_groups=None, lg_ids=None):
     for listing_group in listing_groups:
         
         csr = listing_group.search_result
+        search_string = csr.build_search_string()
         if listing_group.is_img:
             #handle is_img right away just go do it as we only have one
             listing_matches = ebay.image_search(csr.parent_card.get_lookup_image(), limit=50, page=1, settings=Settings.get_default())
             csr.update_listings({"": (listing_group, listing_matches)})
         elif listing_group.is_sold and not listing_group.is_graded:
-            search_string = csr.build_search_string()
-            sold_keyword_strings.insert(0, (listing_group.get_search_string(csr.build_search_string()), listing_group))
+            sold_keyword_strings.insert(0, (listing_group.get_search_string(search_string), listing_group))
         elif not listing_group.is_sold:
-            avail_keyword_strings.insert(0, (listing_group.get_search_string(csr.build_search_string()), listing_group))
-    print(sold_keyword_strings, avail_keyword_strings)        
+            avail_keyword_strings.insert(0, (listing_group.get_search_string(search_string), listing_group))
+    #print(sold_keyword_strings, avail_keyword_strings)        
     if sold_keyword_strings:
         #matches map is keyword_string --> (listing variable, [listings])
         matches_map = ebay.scrape_with_profile(sold_keyword_strings, limit=50)#(50*3 pages)
         CardSearchResult.update_listings(matches_map)
     #listing_group, listings = matches_map[keywords]
-    print("MM2",matches_map.keys(), len(matches_map))
+    #print("MM2",matches_map.keys(), len(matches_map))
     if avail_keyword_strings:
         matches_map = ebay.text_search(avail_keyword_strings, limit=150, settings=Settings.get_default())
         CardSearchResult.update_listings(matches_map)
     #listing_group, listings = matches_map[keywords]
-    print("MM3",matches_map.keys(), len(matches_map))
+    #print("MM3",matches_map.keys(), len(matches_map))
     
         
     return matches_map

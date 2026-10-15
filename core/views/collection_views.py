@@ -55,8 +55,12 @@ def price_collection(request, collection_id):
 
 
     core_config = apps.get_app_config("core")
-    core_config.queue.schedule_pricing_task(name=f"refresh lgs", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.price_only_collection, params={"lg_ids":lgids,"settings_id":2}, on_success_status=StatusBase.PRICED)
+    core_config.queue.schedule_pricing_task(name=f"price_collection", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.price_only_collection, params={"lg_ids":lgids,"settings_id":2}, on_success_status=StatusBase.PRICED)
     
+    for card in card_list:
+        card.active_search_results.overall_status = StatusBase.PENDING
+        card.active_search_results.save()
+
     return JsonResponse({"success": True, "error": ""})
 
 @require_POST # Ensure only POST requests hit this
@@ -64,18 +68,20 @@ def price_collection(request, collection_id):
 def identify_collection(request, collection_id):
     print("cid", collection_id)
 
-    collection = Collection.objects.get(id=collection_id)
-    try:
-        card_ids = request.POST.getlist('card_ids[]') 
-        
-        if len(card_ids):           
-            card_list = Card.objects.filter(id__in=card_ids).order_by('id')
-        else:
+    if collection_id:
+        collection = Collection.objects.get(id=collection_id)
+    else:
+        try:
+            card_ids = request.POST.getlist('card_ids[]') 
+            
+            if len(card_ids):           
+                card_list = Card.objects.filter(id__in=card_ids).order_by('id')
+            else:
+                card_list = list(collection.cards.order_by('id'))
+        except json.JSONDecodeError:
             card_list = list(collection.cards.order_by('id'))
-    except json.JSONDecodeError:
-        card_list = list(collection.cards.order_by('id'))
-    
-    print(card_list)
+        
+        print(card_list)
     
     core_config = apps.get_app_config("core")
     for card in card_list:

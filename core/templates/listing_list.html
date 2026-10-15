@@ -122,7 +122,7 @@
             word-break: break-all;
         }
 
-        /* Icon Action Buttons */
+        /* Icon & Toggle Action Buttons */
         .btn-icon {
             width: 32px;
             height: 32px;
@@ -138,10 +138,9 @@
         .btn-delete:hover { background-color: #fecaca; }
         .btn-withdraw { background-color: #efe4a3; color: #7e6b02; border-color: #ead76b; }
         .btn-withdraw:hover { background-color: #fecaca; }
-        .btn-refresh { background-color: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+        .btn-refresh { background-color: #f1f5f9; color: #334155; border-color: #cbd5e1; cursor: pointer; }
         .btn-refresh:hover { background-color: #e2e8f0; }
 
-        /* Submit Button Styling */
         .btn-refresh-all {
             background-color: #2563eb;
             color: #ffffff;
@@ -155,6 +154,109 @@
         }
         .btn-refresh-all:hover {
             background-color: #1d4ed8;
+        }
+
+        .btn-view {
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            background: #f1f5f9;
+            color: #475569;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn-view.active {
+            background: #2563eb;
+            color: #fff;
+            border-color: #1d4ed8;
+        }
+
+        /* Calendar View Styling */
+        #calendarContainer {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .calendar-grid-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            text-align: center;
+            font-weight: 600;
+            color: #475569;
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+        .calendar-cell {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            min-height: 120px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow: hidden;
+        }
+        .calendar-cell.other-month {
+            background: #f1f5f9;
+            opacity: 0.5;
+        }
+        .calendar-date-number {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #334155;
+            text-align: right;
+        }
+        .calendar-events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow-y: auto;
+            max-height: 100px;
+        }
+        .calendar-event-item {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 4px 6px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            color: #1e293b;
+            transition: border-color 0.15s;
+        }
+        .calendar-event-item:hover {
+            border-color: #2563eb;
+        }
+        .calendar-event-thumb {
+            width: 20px;
+            height: 26px;
+            object-fit: contain;
+            background: #e2e8f0;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .calendar-event-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Column Header Search Inputs Styling */
@@ -178,6 +280,12 @@
     <!-- Toolbar Controls -->
     <div class="controls-bar">
         <div class="control-group">
+            <span class="title">View Mode:</span>
+            <button type="button" id="tableViewBtn" class="btn-view active">Table View</button>
+            <button type="button" id="calendarViewBtn" class="btn-view">Calendar View</button>
+        </div>
+
+        <div class="control-group" id="typeTogglesGroup">
             <span class="title">Show Types:</span>
             <label class="checkbox-label">
                 <input type="checkbox" id="toggleGroups" checked>
@@ -208,160 +316,176 @@
         </div>
     </div>
 
-    <table id="inventoryTable" class="display" style="width:100%">
-        <thead>
-            <!-- Row 1: Column Titles -->
-            <tr>
-                <th>ID</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Image</th>
-                <th>SKU / ID</th>
-                <th>Listing ID</th>
-                <th>Title / Description</th>
-                <th>Card Count</th>
-                <th>Total Qty</th>
-                <th>Listed Qty</th>
-                <th>Avail Qty</th>
-                <th>Sold Qty</th>
-                <th>Listed Price</th>
-                <th>Avail Price</th>
-                <th>Sold Price</th>
-                <th>Listing Start Date</th>
-                <th>Last Updated Date</th>
-                <th>Next Renewal Date</th>
-                <th>Listing End Date</th>
-                <th>Days Listed</th>
-                <th>STR Total</th>
-                <th></th>
-                <th></th>
-            </tr>
-            <!-- Row 2: Filter Inputs placeholder -->
-            <tr>
-                <th>ID</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Image</th>
-                <th>SKU / ID</th>
-                <th>Listing ID</th>
-                <th>Title / Description</th>
-                <th>Card Count</th>
-                <th>Total Qty</th>
-                <th>Listed Qty</th>
-                <th>Avail Qty</th>
-                <th>Sold Qty</th>
-                <th>Listed Price</th>
-                <th>Avail Price</th>
-                <th>Sold Price</th>
-                <th>Listing Start Date</th>
-                <th>Last Updated Date</th>
-                <th>Next Renewal Date</th>
-                <th>Listing End Date</th>
-                <th>Days Listed</th>
-                <th>STR Total</th>
-                <th>Delete</th>
-                <th>Refresh</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- 2. Standalone Cards -->
-            {% for item in standalone_items %}
-            <tr>
-                <td data-order="{{ item.id|default:0 }}"><a href="/admin/core/listedinfo/{{item.id}}/change/" target="_blank">{{ item.id }}</a></td>
-                {% if item.is_pg %}
-                    <td data-order="Group">
-                        <span class="badge badge-group">Group</span>
-                    </td>
-                {% else %}
-                    <td data-order="Single">
-                        <span class="badge badge-single">Single</span>
-                    </td>
-                {% endif %}
-                <td data-order="{{ item.listing_status|default:'' }}">
-                    <span class="badge badge-status">{{ item.listing_status }}</span>
-                </td>
-                <td data-order="0">
-                    {% if item.shareable_link_front %}
-                        <img src="{{ item.shareable_link_front }}" class="thumb" alt="Card image">
+    <!-- DataTables Table View -->
+    <div id="tableViewWrapper">
+        <table id="inventoryTable" class="display" style="width:100%">
+            <thead>
+                <!-- Row 1: Column Titles -->
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Image</th>
+                    <th>SKU / ID</th>
+                    <th>Listing ID</th>
+                    <th>Title / Description</th>
+                    <th>Card Count</th>
+                    <th>Total Qty</th>
+                    <th>Listed Qty</th>
+                    <th>Avail Qty</th>
+                    <th>Sold Qty</th>
+                    <th>Listed Price</th>
+                    <th>Avail Price</th>
+                    <th>Sold Price</th>
+                    <th>Listing Start Date</th>
+                    <th>Last Updated Date</th>
+                    <th>Next Renewal Date</th>
+                    <th>Listing End Date</th>
+                    <th>Days Listed</th>
+                    <th>STR Total</th>
+                    <th></th>
+                    <th></th>
+                </tr>
+                <!-- Row 2: Filter Inputs placeholder -->
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Image</th>
+                    <th>SKU / ID</th>
+                    <th>Listing ID</th>
+                    <th>Title / Description</th>
+                    <th>Card Count</th>
+                    <th>Total Qty</th>
+                    <th>Listed Qty</th>
+                    <th>Avail Qty</th>
+                    <th>Sold Qty</th>
+                    <th>Listed Price</th>
+                    <th>Avail Price</th>
+                    <th>Sold Price</th>
+                    <th>Listing Start Date</th>
+                    <th>Last Updated Date</th>
+                    <th>Next Renewal Date</th>
+                    <th>Listing End Date</th>
+                    <th>Days Listed</th>
+                    <th>STR Total</th>
+                    <th>Delete</th>
+                    <th>Refresh</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 2. Standalone Cards -->
+                {% for item in standalone_items %}
+                <tr data-type="{% if item.is_pg %}Group{% else %}Single{% endif %}" data-last-updated="{{ item.last_updated|date:'Y-m-d' }}">
+                    <td data-order="{{ item.id|default:0 }}"><a href="/admin/core/listedinfo/{{item.id}}/change/" target="_blank">{{ item.id }}</a></td>
+                    {% if item.is_pg %}
+                        <td data-order="Group">
+                            <span class="badge badge-group">Group</span>
+                        </td>
                     {% else %}
-                        <div class="thumb-placeholder">N/A</div>
+                        <td data-order="Single">
+                            <span class="badge badge-single">Single</span>
+                        </td>
                     {% endif %}
-                </td>
-                
-                {% if item.is_pg %}
-                    <td data-order="{{ item.product_group.group_key|default:'-' }}">
-                        <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_key|default:"-" }}</a></strong>
+                    <td data-order="{{ item.listing_status|default:'' }}">
+                        <span class="badge badge-status">{{ item.listing_status }}</span>
                     </td>
-                {% else %}
-                    <td class="id-cell" data-order="{{ item.sku|default:'-' }}">
-                        <code>{{ item.sku|default:'-' }}</code>
+                    <td data-order="0">
+                        {% if item.shareable_link_front %}
+                            <img src="{{ item.shareable_link_front }}" class="thumb" alt="Card image">
+                        {% else %}
+                            <div class="thumb-placeholder">N/A</div>
+                        {% endif %}
                     </td>
-                {% endif %}
-                
-                <td data-order="{{ item.listing_id|default:'' }}">
-                    <code>{{ item.listing_id|default:"--" }}</code>
-                </td>
-                
-                {% if item.is_pg %}
-                    <td data-order="{{ item.product_group.group_title|default:'-' }}">
-                        <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_title|default:"-" }}</a></strong>
-                    </td>
-                {% else %}
-                    <td data-order="{{ item.listing_detail_text|default:'' }}">
-                        <a href="/card/{{ item.card_id }}/" style="text-decoration: none;">{{ item.listing_detail_text|default:"(Untitled)" }}</a>
-                    </td>
-                {% endif %}
-                <td data-order="{{ item.card_count|default:0 }}">{{ item.card_count|default:0 }}</td>
-                <td data-order="{{ item.total_qty|default:0 }}">{{ item.total_qty|default:0 }}</td>
-                <td data-order="{{ item.list_qty|default:0 }}">{{ item.list_qty|default:0 }}</td>
-                <td data-order="{{ item.avail_qty|default:0 }}">{{ item.avail_qty|default:0 }}</td>
-                <td data-order="{{ item.sold_qty|default:0 }}">{{ item.sold_qty|default:0 }}</td>
-                <td data-order="{{ item.list_price|default:0 }}">${{ item.list_price|floatformat:0 }}</td>
-                <td data-order="{{ item.avail_price|default:0 }}">${{ item.avail_price|floatformat:0 }}</td>
-                <td data-order="{{ item.sold_price|default:0 }}">${{ item.sold_price|floatformat:0 }}</td>
-                <td data-order="{% if item.listing_start_dt %}{{ item.listing_start_dt|date:'U' }}{% else %}0{% endif %}">
-                    {{ item.listing_start_dt|date:"Y-m-d"|default:"--" }}
-                </td>
-                <td data-order="{% if item.last_updated %}{{ item.last_updated|date:'U' }}{% else %}0{% endif %}">
-                    {% if item.listing_start_dt == item.last_updated %}--{% else %}{{ item.last_updated|date:"Y-m-d"|default:"--" }}{% endif %}
-                </td>
-                <td data-order="{% if item.next_renewal %}{{ item.next_renewal|date:'U' }}{% else %}0{% endif %}">
-                    {% if item.listing_end_dt %}--{% else %}{{ item.next_renewal|date:"Y-m-d"|default:"--" }}{% endif %}
-                </td>
-                <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'U' }}{% else %}0{% endif %}">
-                    {{ item.listing_end_dt|date:"Y-m-d"|default:"--" }}
-                </td>
-                <td data-order="{{ item.days_listed|default:0 }}">
-                    {{ item.days_listed|default:"--" }}
-                </td>
-                <td data-order="{{ item.listing_str|default:0 }}">
-                    {{ item.listing_str|floatformat:0|default:"--" }}
-                </td>
-                <td data-order="0">
-                    {% if item.is_pg and item.product_group %}
-                        <a href="/delete/{{ item.product_group.id }}/" class="btn-icon btn-delete" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        </a>
+                    
+                    {% if item.is_pg %}
+                        <td data-order="{{ item.product_group.group_key|default:'-' }}">
+                            <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_key|default:"-" }}</a></strong>
+                        </td>
                     {% else %}
-                        <a href="/withdraw_listing/{{ item.card.id }}" class="btn-icon btn-withdraw" title="Withdraw">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                        </a>
+                        <td class="id-cell" data-order="{{ item.sku|default:'-' }}">
+                            <code>{{ item.sku|default:'-' }}</code>
+                        </td>
                     {% endif %}
-                </td>
-                <!-- Refresh Action Column (Groups Only) -->
-                <td data-order="0">
-                    {% if item.is_pg and item.product_group %}
-                        -
+                    
+                    <td data-order="{{ item.listing_id|default:'' }}">
+                        <code>{{ item.listing_id|default:"--" }}</code>
+                    </td>
+                    
+                    {% if item.is_pg %}
+                        <td data-order="{{ item.product_group.group_title|default:'-' }}">
+                            <strong><a href="/product_group_detail/{{ item.product_group.group_key }}/" style="text-decoration:none">{{ item.product_group.group_title|default:"-" }}</a></strong>
+                        </td>
                     {% else %}
-                        <a href="/refresh_listing_status/{{ item.card.id }}/" class="btn-icon btn-refresh" title="Refresh Listing Status">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.73-5.73"></path></svg>
-                        </a>
+                        <td data-order="{{ item.listing_detail_text|default:'' }}">
+                            <a href="/card/{{ item.card_id }}/" style="text-decoration: none;">{{ item.listing_detail_text|default:"(Untitled)" }}</a>
+                        </td>
                     {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    <td data-order="{{ item.card_count|default:0 }}">{{ item.card_count|default:0 }}</td>
+                    <td data-order="{{ item.total_qty|default:0 }}">{{ item.total_qty|default:0 }}</td>
+                    <td data-order="{{ item.list_qty|default:0 }}">{{ item.list_qty|default:0 }}</td>
+                    <td data-order="{{ item.avail_qty|default:0 }}">{{ item.avail_qty|default:0 }}</td>
+                    <td data-order="{{ item.sold_qty|default:0 }}">{{ item.sold_qty|default:0 }}</td>
+                    <td data-order="{{ item.list_price|default:0 }}">${{ item.list_price|floatformat:0 }}</td>
+                    <td data-order="{{ item.avail_price|default:0 }}">${{ item.avail_price|floatformat:0 }}</td>
+                    <td data-order="{{ item.sold_price|default:0 }}">${{ item.sold_price|floatformat:0 }}</td>
+                    <td data-order="{% if item.listing_start_dt %}{{ item.listing_start_dt|date:'U' }}{% else %}0{% endif %}">
+                        {{ item.listing_start_dt|date:"Y-m-d"|default:"--" }}
+                    </td>
+                    <td data-order="{% if item.last_updated %}{{ item.last_updated|date:'U' }}{% else %}0{% endif %}">
+                        {% if item.listing_start_dt == item.last_updated %}--{% else %}{{ item.last_updated|date:"Y-m-d"|default:"--" }}{% endif %}
+                    </td>
+                    <td data-order="{% if item.next_renewal %}{{ item.next_renewal|date:'U' }}{% else %}0{% endif %}">
+                        {% if item.listing_end_dt %}--{% else %}{{ item.next_renewal|date:"Y-m-d"|default:"--" }}{% endif %}
+                    </td>
+                    <td data-order="{% if item.listing_end_dt %}{{ item.listing_end_dt|date:'U' }}{% else %}0{% endif %}">
+                        {{ item.listing_end_dt|date:"Y-m-d"|default:"--" }}
+                    </td>
+                    <td data-order="{{ item.days_listed|default:0 }}">
+                        {{ item.days_listed|default:"--" }}
+                    </td>
+                    <td data-order="{{ item.listing_str|default:0 }}">
+                        {{ item.listing_str|floatformat:0|default:"--" }}
+                    </td>
+                    <td data-order="0">
+                        {% if item.is_pg and item.product_group %}
+                            <a href="/delete/{{ item.product_group.id }}/" class="btn-icon btn-delete" title="Delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </a>
+                        {% else %}
+                            <a href="/withdraw_listing/{{ item.card.id }}" class="btn-icon btn-withdraw" title="Withdraw">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                            </a>
+                        {% endif %}
+                    </td>
+                    <!-- Refresh Action Column (Groups Only) -->
+                    <td data-order="0">
+                        {% if item.is_pg and item.product_group %}
+                            -
+                        {% else %}
+                            <a href="/refresh_listing_status/{{ item.card.id }}/" class="btn-icon btn-refresh" title="Refresh Listing Status">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.73-5.73"></path></svg>
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Calendar View Container -->
+    <div id="calendarContainer" style="display: none;">
+        <div class="calendar-nav">
+            <button type="button" id="prevMonth" class="btn-refresh">&lt; Previous Month</button>
+            <h3 id="calendarMonthTitle" style="margin: 0;"></h3>
+            <button type="button" id="nextMonth" class="btn-refresh">Next Month &gt;</button>
+        </div>
+        <div class="calendar-grid-header">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
 
     <!-- jQuery & DataTables Script Imports -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -369,7 +493,9 @@
 
     <script src="{% static 'js/collection_node.js' %}"></script>
     <script>
-        // Helper to retrieve CSRF token for Django POST requests
+        let table;
+        let calendarDate = new Date();
+
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -384,83 +510,123 @@
             }
             return cookieValue;
         }
-// --- Refresh All Listing Statuses Method ---
-        function refreshAllListingStatuses(tableInstance) {
-            console.log("[DEBUG] refreshAllListingStatuses method invoked.");
-            var cardIds = [];
 
-            // Collect all card IDs from the table rows (using applied search filters) excluding SOLD status
+        function refreshAllListingStatuses(tableInstance) {
+            var cardIds = [];
             tableInstance.rows({ search: 'applied' }).every(function() {
                 var rowNode = this.node();
-
-                // Check status column (index 2) to skip items where status is SOLD
                 var statusText = $(rowNode).find('td').eq(2).text().trim().toUpperCase();
-                if (statusText === 'SOLD') {
-                    console.log("[DEBUG] Skipping row because status is SOLD.");
-                    return; // skip this row
-                }
-
+                if (statusText === 'SOLD') return;
                 var refreshLink = $(rowNode).find('.btn-refresh').attr('href');
                 if (refreshLink) {
                     var match = refreshLink.match(/\/refresh_listing_status\/(\d+)\//);
-                    if (match && match[1]) {
-                        cardIds.push(match[1]);
-                    }
+                    if (match && match[1]) cardIds.push(match[1]);
                 }
             });
 
             if (cardIds.length === 0) {
-                console.log("[DEBUG] No eligible card IDs found to refresh.");
                 alert("No eligible items found to refresh.");
                 return;
             }
 
-            console.log("[DEBUG] Collected card IDs for bulk refresh (excluding SOLD):", cardIds);
-
-            // Construct form-urlencoded body compatible with request.POST.getlist('card_ids[]')
             var formData = new URLSearchParams();
-            cardIds.forEach(function(id) {
-                formData.append('card_ids[]', id);
-            });
-
+            cardIds.forEach(function(id) { formData.append('card_ids[]', id); });
             const csrftoken = getCookie('csrftoken');
 
             fetch('/refresh_listing_status/', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': csrftoken
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrftoken },
                 body: formData.toString()
             })
             .then(response => {
-                if (response.ok) {
-                    console.log("[DEBUG] Refresh status request successfully completed.");
-                    window.location.reload();
-                } else {
-                    console.error("[DEBUG] Refresh status request failed with status:", response.status);
-                    alert("Failed to refresh listing statuses.");
-                }
+                if (response.ok) window.location.reload();
+                else alert("Failed to refresh listing statuses.");
             })
-            .catch(error => {
-                console.error("[DEBUG] Error during refresh status request:", error);
-                alert("An error occurred while refreshing statuses.");
-            });
+            .catch(error => alert("An error occurred while refreshing statuses."));
+        }
+
+        function renderCalendar() {
+            const year = calendarDate.getFullYear();
+            const month = calendarDate.getMonth();
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            $('#calendarMonthTitle').text(`${monthNames[month]} ${year}`);
+
+            // Gather items across ALL pages using DataTables API (ignoring pagination limits)
+            const eventsByDate = {};
+            if (table) {
+                table.rows({ search: 'applied' }).every(function() {
+                    const $row =$(this.node());
+                    const lastUpdated = $row.attr('data-last-updated');
+                    if (!lastUpdated || lastUpdated === '--') return;
+
+                    const title = $row.find('td').eq(6).text().trim() || 'Untitled';
+                    const imgSrc = $row.find('td').eq(3).find('img').attr('src');
+                    const linkHref = $row.find('td').eq(0).find('a').attr('href') || '#';
+                    const type = $row.attr('data-type');
+
+                    if (!eventsByDate[lastUpdated]) {
+                        eventsByDate[lastUpdated] = [];
+                    }
+                    eventsByDate[lastUpdated].push({ title, imgSrc, linkHref, type });
+                });
+            }
+
+            const gridEl = $('#calendarGrid');
+            gridEl.empty();
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const prevTotalDays = new Date(year, month, 0).getDate();
+
+            // Previous month padding days
+            for (let i = firstDayIndex - 1; i >= 0; i--) {
+                const dayNum = prevTotalDays - i;
+                gridEl.append(`<div class="calendar-cell other-month"><div class="calendar-date-number">${dayNum}</div></div>`);
+            }
+
+            // Current month days
+            for (let day = 1; day <= totalDays; day++) {
+                const monthStr = String(month + 1).padStart(2, '0');
+                const dayStr = String(day).padStart(2, '0');
+                const dateKey = `${year}-${monthStr}-${dayStr}`;
+
+                const dayEvents = eventsByDate[dateKey] || [];
+                let eventsHtml = '';
+                dayEvents.forEach(ev => {
+                    const thumbHtml = ev.imgSrc ? `<img src="${ev.imgSrc}" class="calendar-event-thumb">` : `<div class="calendar-event-thumb" style="display:flex;align-items:center;justify-content:center;font-size:8px;">N/A</div>`;
+                    eventsHtml += `
+                        <a href="${ev.linkHref}" target="_blank" class="calendar-event-item" title="${ev.title}">
+                            ${thumbHtml}
+                            <span class="calendar-event-title">${ev.title}</span>
+                        </a>
+                    `;
+                });
+
+                gridEl.append(`
+                    <div class="calendar-cell">
+                        <div class="calendar-date-number">${day}</div>
+                        <div class="calendar-events-list">${eventsHtml}</div>
+                    </div>
+                `);
+            }
+
+            // Next month padding days to fill grid row
+            const totalCellsSoFar = firstDayIndex + totalDays;
+            const remainingCells = (totalCellsSoFar % 7 === 0) ? 0 : 7 - (totalCellsSoFar % 7);
+            for (let day = 1; day <= remainingCells; day++) {
+                gridEl.append(`<div class="calendar-cell other-month"><div class="calendar-date-number">${day}</div></div>`);
+            }
         }
 
         $(document).ready(function() {
-            console.log("[DEBUG] Initializing inventory table with default sort on Last Updated Date...");
-
-            // --- 1. URL Parameter Handling for Timeframe ---
             var urlParams = new URLSearchParams(window.location.search);
             var activeTimeframeParam = urlParams.get('timeframe') || urlParams.get('days') || 'all';
-            
             $('#timeframeSelect').val(activeTimeframeParam);
 
             $('#timeframeSelect').on('change', function() {
                 var selectedVal = $(this).val();
                 var searchParams = new URLSearchParams(window.location.search);
-
                 if (selectedVal && selectedVal !== 'all') {
                     searchParams.set('timeframe', selectedVal);
                     searchParams.delete('days');
@@ -468,31 +634,23 @@
                     searchParams.delete('timeframe');
                     searchParams.delete('days');
                 }
-
                 window.location.search = searchParams.toString();
             });
 
-
-            // --- 2. Custom Client-Side Search Extension (Type Toggles) ---
             $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
-                var typeCell = data[1]; // Column index 1: Type ("Group" or "Single")
+                var typeCell = data[1];
                 var showGroups = $('#toggleGroups').is(':checked');
                 var showSingles = $('#toggleSingles').is(':checked');
-
                 var isGroup = typeCell.indexOf('Group') !== -1;
                 var isSingle = typeCell.indexOf('Single') !== -1;
 
                 if (isGroup && !showGroups) return false;
                 if (isSingle && !showSingles) return false;
-
                 return true;
             });
 
-
-            // --- 3. Setup Second Header Row Inputs for Column Filtering ---
             $('#inventoryTable thead tr:eq(1) th').each(function(i) {
                 var title = $('#inventoryTable thead tr:eq(0) th').eq($(this).index()).text();
-                // Exclude Image (3), Delete (21), and Refresh (22) columns from input filtering
                 if (i !== 3 && i !== 21 && i !== 22) {
                     $(this).html('<input type="text" placeholder="Filter ' + title + '" />');
                 } else {
@@ -500,48 +658,67 @@
                 }
             });
 
-
-            // --- 4. Initialize DataTable ---
-            var table = $('#inventoryTable').DataTable({
-                order: [[16, 'desc']], // Column 16 is Last Updated Date index (most to least recent)
-                orderCellsTop: true,   // Ensures sorting binds to top header row
+            table = $('#inventoryTable').DataTable({
+                order: [[16, 'desc']],
+                orderCellsTop: true,
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: [3, 21, 22] }, // Image, Delete, and Refresh columns non-sortable
+                    { orderable: false, targets: [3, 21, 22] },
                     { type: 'num', targets: [0, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] } 
                 ],
-                language: {
-                    search: "Global filter:"
-                },
+                language: { search: "Global filter:" },
                 initComplete: function() {
-                    // Apply individual column searching targeting the second header row inputs safely
                     var api = this.api();
                     api.columns().every(function() {
                         var that = this;
                         var inputSelector = $('#inventoryTable thead tr:eq(1) th').eq(this.index()).find('input');
-                        
                         inputSelector.on('keyup change clear', function() {
                             if (that.search() !== this.value) {
                                 that.search(this.value).draw();
                             }
                         });
                     });
-                    console.log("[DEBUG] DataTable initialization complete with default sort on Last Updated Date.");
                 }
             });
 
-            // Redraw DataTable when toggling Groups / Singles checkboxes
             $('#toggleGroups, #toggleSingles').on('change', function() {
                 table.draw();
+                if ($('#calendarContainer').is(':visible')) {
+                    renderCalendar();
+                }
             });
 
-            // Bind click event for Refresh All button to POST card_ids[]
             $('#refreshAllBtn').on('click', function() {
-                console.log("[DEBUG] Refresh All button clicked.");
                 refreshAllListingStatuses(table);
+            });
+
+            // View Toggle handlers
+            $('#tableViewBtn').on('click', function() {
+                $(this).addClass('active');$('#calendarViewBtn').removeClass('active');
+                $('#calendarContainer').hide();
+                $('#tableViewWrapper').show();
+                $('#typeTogglesGroup').show();
+            });
+
+            $('#calendarViewBtn').on('click', function() {
+                $(this).addClass('active');$('#tableViewBtn').removeClass('active');
+                $('#tableViewWrapper').hide();
+                $('#typeTogglesGroup').show();
+                $('#calendarContainer').show();
+                renderCalendar();
+            });
+
+            // Calendar Navigation handlers
+            $('#prevMonth').on('click', function() {
+                calendarDate.setMonth(calendarDate.getMonth() - 1);
+                renderCalendar();
+            });
+
+            $('#nextMonth').on('click', function() {
+                calendarDate.setMonth(calendarDate.getMonth() + 1);
+                renderCalendar();
             });
         });
     </script>
-
 </body>
 </html>

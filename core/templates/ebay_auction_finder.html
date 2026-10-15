@@ -140,6 +140,17 @@
             margin: 20px 0 10px 0;
             font-size: 1.1rem;
             color: #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .cache-status-badge {
+            font-size: 0.75rem;
+            background: #e2f0d9;
+            color: #385723;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: normal;
         }
         .item-list {
             display: flex;
@@ -170,8 +181,8 @@
             flex-shrink: 0;
         }
         .item-images-grid .item-img {
-            width: 85px;
-            height: 85px;
+            width: 80px;
+            height: 80px;
         }
         .item-details {
             display: flex;
@@ -194,6 +205,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-top: 6px;
         }
         .price-line {
             font-size: 0.95rem;
@@ -207,8 +219,18 @@
             display: flex;
             gap: 12px;
             align-items: center;
-            font-size: 0.85rem;
+            flex-wrap: wrap;
+            font-size: 0.82rem;
             color: #666;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .meta-tag {
+            background: #f1f3f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #495057;
         }
         .bid-badge {
             padding: 2px 6px;
@@ -229,7 +251,7 @@
             border-radius: 6px;
             margin-top: 30px;
             font-size: 0.85rem;
-            max-height: 150px;
+            max-height: 180px;
             overflow-y: auto;
         }
     </style>
@@ -248,7 +270,7 @@
         </div>
 
         <div id="ebay-panel" class="search-form-panel {% if source != 'facebook' %}active{% endif %}">
-            <form method="GET" action="" onsubmit="logDebug('eBay Form submitted.');">
+            <form method="GET" action="" onsubmit="handleFormSubmit(event, 'ebay');">
                 <input type="hidden" name="source" value="ebay">
                 <div class="form-row">
                     <div class="form-group flex-grow">
@@ -273,7 +295,7 @@
         </div>
 
         <div id="fb-panel" class="search-form-panel {% if source == 'facebook' %}active{% endif %}">
-            <form method="GET" action="" onsubmit="logDebug('FB Marketplace Form submitted.');">
+            <form method="GET" action="" onsubmit="handleFormSubmit(event, 'facebook');">
                 <input type="hidden" name="source" value="facebook">
                 <div class="form-row">
                     <div class="form-group flex-grow">
@@ -283,7 +305,7 @@
 
                     <div class="form-group">
                         <label for="fb-location">Location / City</label>
-                        <input type="text" id="fb-location" name="location" value="{{ request.GET.location }}" placeholder="e.g. Chicago" required>
+                        <input type="text" id="fb-location" name="location" value="{{ request.GET.location }}" placeholder="e.g. nyc" required>
                     </div>
 
                     <div class="form-group">
@@ -305,11 +327,14 @@
 
     {% if search_term %}
         <div class="results-heading">
-            {% if source == 'facebook' %}
-                Facebook Marketplace items matching <strong>"{{ search_term }}"</strong> near <strong>"{{ request.GET.location }}"</strong>:
-            {% else %}
-                Auctions matching <strong>"{{ search_term }}"</strong> ending within {{ hours_until_end }} hours:
-            {% endif %}
+            <div>
+                {% if source == 'facebook' %}
+                    Facebook Marketplace items matching <strong>"{{ search_term }}"</strong> near <strong>"{{ request.GET.location }}"</strong>:
+                {% else %}
+                    Auctions matching <strong>"{{ search_term }}"</strong> ending within {{ hours_until_end }} hours:
+                {% endif %}
+            </div>
+            <span id="cache-indicator" class="cache-status-badge" style="display:none;">⚡ Loaded from Cache (No Scrape)</span>
         </div>
 
         <div class="item-list">
@@ -320,17 +345,17 @@
                         <div class="item-images-grid">
                             {% if item.img_url %}
                                 <img class="item-img" id="img-{{ item.item_id }}" 
-                                     src="{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}" 
+                                     src="/media/{{ item.img_url }}" 
                                      alt="Item image">
                             {% endif %}
                             {% if item.img_url_2 %}
-                                <img class="item-img" 
-                                     src="{% if 'http' in item.img_url_2 %}{{ item.img_url_2 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_2 }}{% endif %}" 
+                                <img class="item-img"  
+                                     src="/media/{{ item.img_url_2 }}" 
                                      alt="Item image 2">
                             {% endif %}
                             {% if item.img_url_3 %}
-                                <img class="item-img" 
-                                     src="{% if 'http' in item.img_url_3 %}{{ item.img_url_3 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_3 }}{% endif %}" 
+                                <img class="item-img"  
+                                     src="/media/{{ item.img_url_3 }}" 
                                      alt="Item image 3">
                             {% endif %}
                             {% if not item.img_url and not item.img_url_2 and not item.img_url_3 %}
@@ -341,19 +366,19 @@
                         <div class="item-details">
                             <div>
                                 <a href="https://www.facebook.com/marketplace/item/{{ item.item_id }}/" target="_blank" class="item-title" style="color: #1877f2;">
-                                    {{ item.title.title }}
+                                    {{ item.title|title }}
                                 </a>
                                 
                                 <div class="middle-body-row">
                                     <div class="price-line">
-                                        <span class="price-main">${{ item.ebay_price|default:"0.00" }}</span>
+                                        <span class="price-main">${{ item.ebay_price|default:"N/A" }}</span>
                                         <span class="price-shipping">({{ item.format|default:"Local Pickup" }})</span>
                                     </div>
                                     
                                     <div>
                                         {% if item.img_url %}
                                             <button class="btn btn-action-upload" style="background-color: #1877f2;" 
-                                                    onclick="logDebug('Checking saved status for asset: {{ item.item_id }}'); uploadItemImage('{{ item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}')">
+                                                    onclick="logDebug('Checking saved status for asset: {{ item.item_id }}'); uploadItemImage('{{ item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}/media/{{ item.img_url }}{% endif %}')">
                                                 💾 Saved to DB
                                             </button>
                                         {% endif %}
@@ -363,7 +388,9 @@
 
                             <div class="meta-row">
                                 <span style="color: #666; font-weight: bold;">📍 Verified Listing</span>
-                                <span style="color: #999;">| Source: FB Marketplace DB (ID: {{ item.item_id }})</span>
+                                <span class="meta-tag">Condition: {{ item.condition|default:"Used / Good" }}</span>
+                                <span class="meta-tag">Location: {{ request.GET.location|title }}</span>
+                                <span style="color: #999;">| Source DB ID: {{ item.item_id }}</span>
                             </div>
                         </div>
 
@@ -372,17 +399,17 @@
                         <div class="item-images-grid">
                             {% if item.img_url %}
                                 <img class="item-img" id="img-{{ item.itemId|default:item.item_id }}" 
-                                     src="{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}" 
+                                     src="{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}/media/{{ item.img_url }}{% endif %}" 
                                      alt="Thumbnail">
                             {% endif %}
                             {% if item.img_url_2 %}
                                 <img class="item-img" 
-                                     src="{% if 'http' in item.img_url_2 %}{{ item.img_url_2 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_2 }}{% endif %}" 
+                                     src="{% if 'http' in item.img_url_2 %}{{ item.img_url_2 }}{% else %}/media/{{ item.img_url_2 }}{% endif %}" 
                                      alt="Thumbnail 2">
                             {% endif %}
                             {% if item.img_url_3 %}
                                 <img class="item-img" 
-                                     src="{% if 'http' in item.img_url_3 %}{{ item.img_url_3 }}{% else %}{{ MEDIA_URL }}{{ item.img_url_3 }}{% endif %}" 
+                                     src="{% if 'http' in item.img_url_3 %}{{ item.img_url_3 }}{% else %}/media/{{ item.img_url_3 }}{% endif %}" 
                                      alt="Thumbnail 3">
                             {% endif %}
                             {% if not item.img_url and not item.img_url_2 and not item.img_url_3 %}
@@ -412,7 +439,7 @@
                                     
                                     <div>
                                         {% if item.img_url %}
-                                            <button class="btn btn-action-upload" onclick="logDebug('Uploading external eBay asset: {{ item.itemId }}'); uploadItemImage('{{ item.itemId|default:item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}{{ MEDIA_URL }}{{ item.img_url }}{% endif %}')">
+                                            <button class="btn btn-action-upload" onclick="logDebug('Uploading external eBay asset: {{ item.itemId }}'); uploadItemImage('{{ item.itemId|default:item.item_id }}', '{% if 'http' in item.img_url %}{{ item.img_url }}{% else %}/media/{{ item.img_url }}{% endif %}')">
                                                 📷 Upload Item
                                             </button>
                                         {% endif %}
@@ -424,11 +451,11 @@
                                 <span class="bid-badge {% if item.bidCount == 0 %}zero-bids{% endif %}">
                                     🔨 {{ item.bidCount }} {% if item.bidCount == 1 %}bid{% else %}bids{% endif %}
                                 </span>
-                                
                                 <span style="color: #c94a00; font-weight: bold;">
                                     ⏱️ {{ item.countdown_text }}
                                 </span>
-                                
+                                <span class="meta-tag">Condition: {{ item.condition|default:"Auction Spec" }}</span>
+                                <span class="meta-tag">Format: {{ item.buyingOptions.0|default:"Auction" }}</span>
                                 <span style="color: #999;">| ID: {{ item.legacyItemId|default:item.itemId }}</span>
                             </div>
                         </div>
@@ -447,8 +474,6 @@
     </div>
 </div>
 
-{% include "components/drop_zone.html" %}
-
 <script>
 // Debug logger helper
 function logDebug(message) {
@@ -462,22 +487,52 @@ function logDebug(message) {
     console.log(`[DEBUG] ${message}`);
 }
 
+// Client-side Caching Mechanism
+const currentParams = window.location.search;
+const cacheStorageKey = 'deal_finder_cache_' + currentParams;
+
+window.addEventListener('DOMContentLoaded', () => {
+    logDebug("DOM fully loaded and parsed.");
+    
+    if (currentParams) {
+        // Check if we have results rendered from the server; if so, cache them
+        const resultsContainer = document.querySelector('.item-list');
+        if (resultsContainer && !resultsContainer.querySelector('.empty-state')) {
+            localStorage.setItem(cacheStorageKey, resultsContainer.innerHTML);
+            logDebug(`Cached current search results in localStorage for key: ${cacheStorageKey}`);
+        } else {
+            // Check if cached version exists for fast retrieval without re-scraping
+            const cachedHtml = localStorage.getItem(cacheStorageKey);
+            if (cachedHtml && resultsContainer) {
+                logDebug(`[Cache Hit] Restoring results from localStorage for parameters: ${currentParams}`);
+                resultsContainer.innerHTML = cachedHtml;
+                const indicator = document.getElementById('cache-indicator');
+                if (indicator) indicator.style.display = 'inline-block';
+            } else {
+                logDebug(`[Cache Miss] No cached results found for ${currentParams}. Proceeding with fresh fetch/scrape.`);
+            }
+        }
+    }
+});
+
+function handleFormSubmit(event, sourceName) {
+    const queryInput = event.target.querySelector('input[name="q"]');
+    const term = queryInput ? queryInput.value : '';
+    logDebug(`Form submitted for source: ${sourceName} with query: "${term}". Checking cache...`);
+}
+
 function switchTab(panelId) {
     logDebug(`Switching search view panel to: ${panelId}`);
     
-    // Hide panels
     document.querySelectorAll('.search-form-panel').forEach(panel => {
         panel.classList.remove('active');
     });
-    // Remove active styles from tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     
-    // Show selected panel
     document.getElementById(panelId).classList.add('active');
     
-    // Apply tab styles
     if (panelId === 'ebay-panel') {
         document.getElementById('tab-ebay').classList.add('active');
     } else if (panelId === 'fb-panel') {

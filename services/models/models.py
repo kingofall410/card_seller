@@ -245,7 +245,7 @@ class Season(SettingsToken):
                     normalized = f"{main} {compound_match.group(2)}"
                     current_tokens[key] = [normalized]
                     
-                    console.log(f"[Debug] Compound year matched and verified sequential: {normalized}")
+                    print(f"[Debug] Compound year matched and verified sequential: {normalized}")
                     
                     reduced = re.sub(re.escape(compound_match.group(0)), "", input_str, flags=re.IGNORECASE).strip()
                     new_tokens = [Season.create(value=normalized, settings=applied_settings, field=key)]
@@ -285,6 +285,29 @@ class Subset(SettingsToken):
         subs_obj, created = Subset.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field)
         
         return subs_obj
+
+class Sport(SettingsToken):
+    field_key = models.CharField(max_length=500, blank=False, default="sport")
+    parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="sports", default=1)
+    
+    class Meta:
+        unique_together = ("raw_value", "parent_settings", "field_key")
+
+class League(SettingsToken):
+    field_key = models.CharField(max_length=500, blank=False, default="league")
+    parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="leagues", default=1)
+    sport = models.ForeignKey(Sport, on_delete=models.SET_NULL, null=True, related_name="leagues")
+
+    @classmethod
+    def create(cls, value, settings, sport):
+        print("create")
+        subs_obj, created = League.objects.get_or_create(raw_value=value, parent_settings=settings, sport=sport)
+        
+        return subs_obj
+    
+    class Meta:
+        unique_together = ("raw_value", "parent_settings", "field_key")
+
     
 class City(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="cities")
@@ -297,14 +320,12 @@ class Team(SettingsToken):
     field_key = models.CharField(max_length=500, blank=False, default="teams")
     parent_settings = models.ForeignKey(Settings, on_delete=models.CASCADE, related_name="teams", default=1)
     home_city = models.ForeignKey(City, on_delete=models.CASCADE, related_name="teams", default=1)
+    league = models.ForeignKey(League, on_delete=models.SET_NULL, null=True, related_name="teams")
     
-
-    def __str__(self):
-        return f"{self.home_city.raw_value} {self.raw_value}"
     
     @classmethod
-    def create(cls, value, settings, field, city):
-        team_obj, _ = Team.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, home_city=city)
+    def create(cls, value, settings, field, city, league):
+        team_obj, _ = Team.objects.get_or_create(raw_value=value, parent_settings=settings, field_key=field, home_city=city, league=league)
         team_obj.primary_token = team_obj
         team_obj.save()
         return team_obj

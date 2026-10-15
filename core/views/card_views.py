@@ -680,14 +680,21 @@ def delete(request, card_id=None):
     if request.method == 'POST':
         #print("POST")
         card_id = card_id or request.POST.get('card_id')
+        card_ids = request.POST.getlist('card_ids[]')
         collection_id = request.POST.get('collection_id')
         try:
             if card_id:
                 card = Card.objects.get(id=card_id)
                 card.delete()
+            elif card_ids:
+                for cid in card_ids:
+                    card = Card.objects.get(id=cid)
+                    card.delete()
+
             if collection_id:
                 collection = Collection.objects.get(id=collection_id)
                 collection.delete()
+                
         except (Collection.DoesNotExist, Card.DoesNotExist):
             return JsonResponse({'error': 'Card/Collection not found'}, status=404)
     return JsonResponse({"success": True, "error": ""})

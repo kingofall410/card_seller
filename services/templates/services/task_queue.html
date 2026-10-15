@@ -1,210 +1,320 @@
-{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Task Queue Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Auto-refresh every 5 seconds to observe background execution -->
-    <meta http-equiv="refresh" content="5">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Queue</title>
+
+    <!-- DataTables & jQuery CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+            color: #222;
+        }
+
+        h1 {
+            margin: 0 0 5px 0;
+        }
+
+        .summary {
+            margin-bottom: 15px;
+            color: #666;
+        }
+
+        .table-wrapper {
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        table.dataTable {
+            width: 100% !important;
+            font-size: 13px;
+            border-collapse: collapse !important;
+        }
+
+        table.dataTable thead th {
+            background: #e8e8e8;
+            border-bottom: 2px solid #bbb !important;
+            padding: 8px 10px;
+            white-space: nowrap;
+        }
+
+        table.dataTable tbody td {
+            padding: 8px 10px;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .id {
+            color: #666;
+            text-align: right;
+        }
+
+        .title {
+            font-weight: 600;
+        }
+
+        .description {
+            color: #777;
+            font-size: 11px;
+            margin-top: 3px;
+            max-width: 300px;
+            white-space: normal;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        .timestamp {
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .callback {
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 250px;
+            white-space: normal;
+            word-break: break-all;
+        }
+
+        .params {
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 250px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow: hide;
+        }
+
+        .error {
+            color: #b00020;
+            max-width: 250px;
+            white-space: normal;
+        }
+
+        .number {
+            text-align: right;
+        }
+
+        .empty {
+            padding: 30px;
+            text-align: center;
+            color: #777;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
 
-    <div class="max-w-7xl mx-auto space-y-6">
+<body>
 
-        <!-- Header Controls -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-            <div>
-                <h1 class="text-2xl font-bold text-white tracking-wide">Task Queue Monitor</h1>
-                <p class="text-xs text-slate-400 mt-1">
-                    Auto-refreshing • Server time: <span class="text-slate-200 font-mono">{{ now|date:"Y-m-d H:i:s" }}</span>
-                </p>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                <form action="{% url 'clear_recent_tasks' %}" method="post" class="inline flex items-center gap-2">
-                    {% csrf_token %}
-                    <input type="hidden" name="minutes" value="15">
-                    <button type="submit" 
-                            class="px-3 py-1.5 text-xs font-semibold bg-amber-600/20 text-amber-300 border border-amber-500/30 rounded hover:bg-amber-600/30 transition">
-                        Purge Pending (15m)
-                    </button>
-                </form>
+<h1>Task Queue</h1>
 
-                <form action="{% url 'reset_queue' %}" method="post" class="inline">
-                    {% csrf_token %}
-                    <button type="submit" 
-                            class="px-3 py-1.5 text-xs font-semibold bg-rose-600/20 text-rose-300 border border-rose-500/30 rounded hover:bg-rose-600/30 transition">
-                        Reset Stuck Tasks
-                    </button>
-                </form>
-            </div>
-        </div>
+<div class="summary">
+    {{ tasks|length }} tasks shown
+    · {{ pending_count }} pending
+    · {{ running_count }} running
+</div>
 
-        <!-- Metric Badges -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
-                <span class="text-xs text-slate-400 uppercase font-semibold">In-Memory Queued</span>
-                <div class="text-2xl font-bold text-sky-400 mt-1">{{ memory_tasks|length }}</div>
-            </div>
-            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
-                <span class="text-xs text-slate-400 uppercase font-semibold">Running</span>
-                <div class="text-2xl font-bold text-amber-400 mt-1">{{ counts.running }}</div>
-            </div>
-            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
-                <span class="text-xs text-slate-400 uppercase font-semibold">Pending (DB)</span>
-                <div class="text-2xl font-bold text-indigo-400 mt-1">{{ counts.pending }}</div>
-            </div>
-            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
-                <span class="text-xs text-slate-400 uppercase font-semibold">Success</span>
-                <div class="text-2xl font-bold text-emerald-400 mt-1">{{ counts.success }}</div>
-            </div>
-            <div class="bg-slate-800 border border-slate-700/60 p-4 rounded-lg">
-                <span class="text-xs text-slate-400 uppercase font-semibold">Failed</span>
-                <div class="text-2xl font-bold text-rose-400 mt-1">{{ counts.failed }}</div>
-            </div>
-        </div>
+<div class="table-wrapper">
 
-        <!-- Active Memory Queue Section -->
-        <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-            <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/80 flex justify-between items-center">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
-                    Live Memory Queue (`Queue.tasks`)
-                </h2>
-                <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">
-                    Sorted by Scheduled & Priority
-                </span>
-            </div>
+    <table id="taskQueueTable" class="display nowrap cell-border stripe hover">
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs font-mono">
-                    <thead class="bg-slate-900/60 text-slate-400 uppercase border-b border-slate-700">
-                        <tr>
-                            <th class="px-4 py-3">DB ID</th>
-                            <th class="px-4 py-3">Task Title</th>
-                            <th class="px-4 py-3">Scheduled For</th>
-                            <th class="px-4 py-3">Priority</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Successors</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-700/50">
-                        {% for task in memory_tasks %}
-                        <tr class="hover:bg-slate-700/30 transition">
-                            <td class="px-4 py-2.5 font-bold text-slate-300">#{{ task.db_id }}</td>
-                            <td class="px-4 py-2.5 text-white font-medium">{{ task.title }}</td>
-                            <td class="px-4 py-2.5 text-slate-400">
-                                {{ task.scheduled_for|date:"H:i:s" }}
-                                {% if task.scheduled_for <= now %}
-                                    <span class="ml-1 text-[10px] text-emerald-400 font-bold">READY</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-2.5">
-                                <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-200">
-                                    {{ task.priority }}
-                                </span>
-                            </td>
-                            <td class="px-4 py-2.5">
-                                {% if task.status == 'running' %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">RUNNING</span>
-                                {% elif task.status == 'pending' %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">PENDING</span>
-                                {% elif task.status == 'staged' %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">STAGED</span>
-                                {% else %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">{{ task.status }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-2.5 text-slate-400">
-                                {% if task.successor_ids %}
-                                    <div class="flex gap-1">
-                                        {% for succ_id in task.successor_ids %}
-                                            <span class="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-[10px] text-indigo-300">
-                                                ➜ #{{ succ_id }}
-                                            </span>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <span class="text-slate-600">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="px-4 py-6 text-center text-slate-500 font-sans">
-                                Queue is currently empty.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Scheduled</th>
+                <th>Executed</th>
+                <th>Created</th>
+                <th>Predecessor</th>
+                <th>Group</th>
+                <th>CSR ID</th>
+                <th>Player</th>
+                <th>Value</th>
+                <th>Description</th>
+                <th>Error</th>
+            </tr>
+        </thead>
 
-        <!-- Recent Database Execution History -->
-        <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-            <div class="px-5 py-3 border-b border-slate-700 bg-slate-800/80">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">
-                    Recent Database Executions
-                </h2>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs font-mono">
-                    <thead class="bg-slate-900/60 text-slate-400 uppercase border-b border-slate-700">
-                        <tr>
-                            <th class="px-4 py-3">ID</th>
-                            <th class="px-4 py-3">Task Title</th>
-                            <th class="px-4 py-3">Type</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Executed At</th>
-                            <th class="px-4 py-3">Error / Output</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-700/50">
-                        {% for db_task in recent_db_tasks %}
-                        <tr class="hover:bg-slate-700/30 transition">
-                            <td class="px-4 py-2.5 text-slate-400">#{{ db_task.id }}</td>
-                            <td class="px-4 py-2.5 text-slate-200 font-medium">{{ db_task.title }}</td>
-                            <td class="px-4 py-2.5 text-slate-400">
-                                {% if db_task.listingtask %}
-                                    <span class="text-sky-400">Listing</span>
-                                {% elif db_task.bulklistingtask %}
-                                    <span class="text-indigo-400">Bulk Listing</span>
-                                {% elif db_task.pricingtask %}
-                                    <span class="text-emerald-400">Pricing</span>
-                                {% elif db_task.idtask %}
-                                    <span class="text-amber-400">ID</span>
-                                {% elif db_task.uploadtask %}
-                                    <span class="text-purple-400">Upload</span>
-                                {% elif db_task.confirmtask %}
-                                    <span class="text-teal-400">Confirm</span>
-                                {% else %}
-                                    <span class="text-slate-500">Base Task</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-2.5">
-                                {% if db_task.status == 'success' %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">SUCCESS</span>
-                                {% elif db_task.status == 'failed' %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">FAILED</span>
-                                {% else %}
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">{{ db_task.status }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-2.5 text-slate-400">
-                                {{ db_task.executed_at|date:"Y-m-d H:i:s"|default:"—" }}
-                            </td>
-                            <td class="px-4 py-2.5 text-rose-400 max-w-xs truncate">
-                                {{ db_task.error_str|default:"—" }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <tbody>
 
-    </div>
+        {% for task in tasks %}
+
+            <tr>
+
+                <!-- ID (Index 0) -->
+                <td class="id" data-order="{{ task.id }}">
+                    {{ task.id }}
+                </td>
+
+                <!-- Title (Index 1) -->
+                <td>
+                    <div class="title">
+                        {{ task.display_title }}
+                    </div>
+                </td>
+
+                <!-- Status (Index 2) -->
+                <td
+                    class="status"
+                    {% if task.status_color %}
+                        style="color: {{ task.status_color }};"
+                    {% endif %}
+                >
+                    {% if task.status_icon %}
+                        {{ task.status_icon }}
+                    {% endif %}
+                    {{ task.status }}
+                </td>
+
+                <!-- Priority (Index 3) -->
+                <td class="number" data-order="{{ task.priority }}">
+                    {{ task.priority }}
+                </td>
+
+                <!-- Scheduled (Index 4) -->
+                <td class="timestamp" data-order="{{ task.scheduled_for|date:'U'|default:'0' }}">
+                    {% if task.scheduled_for %}
+                        {{ task.scheduled_for|date:"Y-m-d H:i:s" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Executed (Index 5) -->
+                <td class="timestamp" data-order="{{ task.executed_at|date:'U'|default:'0' }}">
+                    {% if task.executed_at %}
+                        {{ task.executed_at|date:"Y-m-d H:i:s" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Created (Index 6) -->
+                <td class="timestamp" data-order="{{ task.created_at|date:'U'|default:'0' }}">
+                    {% if task.created_at %}
+                        {{ task.created_at|date:"Y-m-d H:i:s" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Predecessor (Index 8) -->
+                <td class="number" data-order="{{ task.predecessor_id|default:0 }}">
+                    {% if task.predecessor_id %}
+                        {{ task.predecessor_id }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Group Key (Index 9) -->
+                <td>
+                    {% if task.listingtask %}
+                        {{ task.listingtask.group_key|default:"—" }}
+                    {% elif task.bulklistingtask %}
+                        {{ task.bulklistingtask.group_key|default:"—" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- CSR ID (Index 10) -->
+                <td>
+                    {{ task.get_csr_id|default:"—" }}
+                </td>
+
+                <!-- Player (Index 11) -->
+                <td>
+                    {% if task.listingtask %}
+                        {{ task.listingtask.display_player_name|default:"—" }}
+                    {% elif task.bulklistingtask %}
+                        {{ task.bulklistingtask.display_player_name|default:"—" }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Value (Index 12) -->
+                <td class="number" data-order="{% if task.bulklistingtask %}{{ task.bulklistingtask.display_value }}{% elif task.listingtask %}{{ task.listingtask.display_value }}{% else %}0{% endif %}">
+                    {% if task.bulklistingtask %}
+                        ${{ task.bulklistingtask.display_value|floatformat:2 }}
+                    {% elif task.listingtask %}
+                        ${{ task.listingtask.display_value|floatformat:2 }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+                <!-- Description (Index 13) -->
+                <td>
+                    <div class="description">
+                        {{ task.display_description|default:"—" }}
+                    </div>
+                </td>
+
+                <!-- Error (Index 14) -->
+                <td>
+                    {% if task.error_str %}
+                        <div class="error">
+                            {{ task.error_str }}
+                        </div>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        console.log("[DEBUG] Initializing DataTables on #taskQueueTable...");
+
+        var table = $('#taskQueueTable').DataTable({
+            scrollX: true,
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+            order: [[4, 'desc']], // Scheduled column is index 4
+            stateSave: true,      // Remembers pagination & column sorting state on refresh
+            language: {
+                search: "Filter tasks:",
+                emptyTable: "No tasks found for the selected period."
+            },
+            columnDefs: [
+                // Right-align numeric columns: ID (0), Priority (3), Predecessor (8), Value (12)
+                { targets: [0, 3, 8, 12], className: 'dt-body-right' }
+            ]
+        });
+
+        console.log("[DEBUG] DataTables initialized successfully. Column count:", table.columns().count());
+    });
+</script>
 
 </body>
 </html>

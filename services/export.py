@@ -1,4 +1,5 @@
 import csv
+
 from core.models.CardSearchResult import CardSearchResult
 from core.models.ProductGroup import ProductGroup
 from core.models.Card import Card
@@ -9,7 +10,8 @@ from services.models.models import Settings
 from services.google import GoogleDriveUploader
 from services import ebay
 from django.shortcuts import get_object_or_404
-import requests
+import requests, time, io, subprocess, json
+from PIL import Image
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
@@ -49,7 +51,7 @@ def export_zip(csrs):
 
     return response
 
-import cloudinary
+import cloudinary, base64
 import cloudinary.uploader
 
 #TODO:remove
@@ -59,6 +61,56 @@ cloudinary.config(
   api_secret = "3xXqCNYuD3nfzStElFrviXFnioY"
 )
 
+IMGBB_API_KEY = "3d7d29fd0b01908d25e3364c1511a6f5"
+
+def upload_to_catbox(image_path):
+    print("catbox")
+    url = "https://catbox.moe/user/api.php"
+    data = {"reqtype": "fileupload"}
+    
+    with open(image_path, "rb") as f:
+        files = {"fileToUpload": f}
+        response = requests.post(url, data=data, files=files, timeout=(15, 60))
+        
+    if response.status_code == 200 and response.text.startswith("http"):
+        return response.text.strip()
+        
+    raise Exception(f"Catbox upload failed: {response.text}")
+def upload_to_imgbb(image_path, public_id=None, folder=None):
+    # Build the exact curl command that you know works in your terminal
+    cmd = [
+        "curl", "-s", "-X", "POST",
+        "https://api.imgbb.com/1/upload",
+        "-F", f"key={IMGBB_API_KEY}",
+        "-F", f"image=@{image_path}"
+    ]
+    
+    if public_id:
+        cmd.extend(["-F", f"name={public_id}"])
+
+    try:
+        # Run curl and capture the output
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            check=True, 
+            timeout=120
+        )
+        
+        response_data = json.loads(result.stdout)
+
+        if response_data.get("success"):
+            return response_data["data"]["display_url"]
+
+        error_msg = response_data.get("error", {}).get("message", "Unknown error")
+        raise Exception(f"ImgBB upload failed: {error_msg}")
+        
+    except subprocess.TimeoutExpired:
+        raise Exception("ImgBB curl subprocess timed out.")
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Curl process failed: {e.stderr}")
+    
 def upload_to_cloudinary(image_path, public_id=None, folder=None):
     response = cloudinary.uploader.upload(
         image_path,
@@ -203,8 +255,8 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                 offer_data = listed_info.export_to_offer_template(ebay.ebay_offer_data_template, (not group_key))
 
                 print(listed_info.sku)
-                print(item_data)
-                print(offer_data)
+                #print(item_data)
+                #print(offer_data)
                 # If preview/dry-run mode, save assets locally and move to next item
                 if not publish:
                     csr.save()
@@ -220,15 +272,29 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                     print(f"📁 Saved local draft for CSR ID {csr_id} (Publish=False)")
                     continue
 
-                # Create the item and offer on eBay
-                if ebay.create_inventory_item(listed_info.sku, item_data, access_token):
-                    print("Offer data: ", offer_data)
-                    offer_id, status = ebay.get_or_create_offer(offer_data, access_token, listed_info.sku)
-                    
-                    if status == 201:
-                        listed_info.offer_id = offer_id
+                #check for an existing offer_id to re-use to skip item/offer creation
+                if listed_info.offer_id:
+                    offer_id = listed_info.offer_id
+                    status = 201
+                else:
+
+                    # Create the item and offer on eBay
+                    if ebay.create_inventory_item(listed_info.sku, item_data, access_token):
+                        print("Offer data: ", offer_data)
+                        offer_id, status = ebay.get_or_create_offer(offer_data, access_token, listed_info.sku)
+                        
+                        if status == 201:
+                            listed_info.offer_id = offer_id
+                        else:
+                            listed_info.listing_id = ""
+                            offer_id = None
                     else:
-                        listed_info.listing_id = ""
+                        results_summary["success_count"] += 1
+                        offer_id = None
+                        # Fallback recovery strategy matching your original blueprint rules
+                        #ebay.get_inventory_group(group_key, settings, access_token)
+
+                if offer_id:#item and offer successfully created
 
                     # Branch logic handling: Single standalone items publish immediately
                     if not group_key or group_key == "-1":
@@ -254,14 +320,10 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
                         # Hold this validated item back for the final batch variation grouping call
                         successful_group_csrs.append(csr)
                         print(f"📦 Staged CSR ID {csr_id} for batch group listing processing")
+                        
                     # Persist synchronized updates back to local db
                     csr.save()
                     listed_info.save()
-                    
-                else:
-                    # Fallback recovery strategy matching your original blueprint rules
-                    ebay.get_inventory_group(group_key, settings, access_token)
-                    results_summary["success_count"] += 1
 
         except Exception as e:
             results_summary["failed_count"] += 1
@@ -274,8 +336,11 @@ def export_to_ebay(csr_id=None, csr_ids=None, publish=False, group_key=None):
             csr.save()
             print(f"❌ Failed to process CSR ID {csr_id}: {str(e)}")
             #if we have an access_token epiration, go get it again
-            if e.args[0].find("access") >= 0:
-                access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
+            try: 
+                if e.args[0].find("access") >= 0:
+                    access_token = ebay.get_access_token(settings, settings.ebay_user_auth_code)
+            except Exception:
+                pass
 
     # 3. PHASE 2: Handle batch variation grouping all at once
     if publish and group_key and group_key != "-1" and successful_group_csrs:

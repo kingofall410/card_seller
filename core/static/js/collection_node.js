@@ -57,33 +57,35 @@ function submitAndGo(url) {
 
 function submitCollection(url, startDate, spread, force, tags) {
     console.log("submitCollection", url, startDate, force, tags);
-    launchSequence()
-    // 1. Get the data
-    const rawData = sessionStorage.getItem('card_sequence');
-    const selections = rawData ? JSON.parse(rawData) : [];
-    
-    console.log("Sending IDs to backend:", selections);
+    if (url !="/delete_card/" || confirm(`⚠️ WARNING: Are you sure you want to PERMANENTLY delete the selected cards?\nThis action cannot be undone.`)) {
+      launchSequence()
+      // 1. Get the data
+      const rawData = sessionStorage.getItem('card_sequence');
+      const selections = rawData ? JSON.parse(rawData) : [];
+      
+      console.log("Sending IDs to backend:", selections);
 
-    $.ajax({
-      url: url,
-      method: "POST", // Change to POST
-      data: {
-          'card_ids': selections, // Selections is your [3691, 3692, ...]
-          'start_dt': startDate,
-          'spread': spread,
-          'force_price': force,
-          'tags': tags,
+      $.ajax({
+        url: url,
+        method: "POST", // Change to POST
+        data: {
+            'card_ids': selections, // Selections is your [3691, 3692, ...]
+            'start_dt': startDate,
+            'spread': spread,
+            'force_price': force,
+            'tags': tags,
+        },
+        success: function(response) {
+          console.log("Response received:", response);
+          //patchCardUpdates(response["data"])
       },
-      success: function(response) {
-        console.log("Response received:", response);
-        //patchCardUpdates(response["data"])
-    },
-      error: function(xhr) {
-          // Since you got a 500 error, this block will now catch it
-          console.log(xhr.responseText); 
-          alert("Request failed. Check the Django terminal for the traceback.");
-      }
-  });
+        error: function(xhr) {
+            // Since you got a 500 error, this block will now catch it
+            console.log(xhr.responseText); 
+            alert("Request failed. Check the Django terminal for the traceback.");
+        }      
+    });
+  }
 }
 
 function updateAttributeVisibility() {

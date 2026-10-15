@@ -265,8 +265,12 @@ class ListedInfo(models.Model):
 
         from services import export
         # Media Asset Upload & SKU Assembly Pipelines
-        self.shareable_link_front = export.upload_to_cloudinary(front)
-        self.shareable_link_reverse = export.upload_to_cloudinary(reverse)
+        #self.shareable_link_front = export.upload_to_cloudinary(front)
+        #self.shareable_link_reverse = export.upload_to_cloudinary(reverse)
+        self.shareable_link_front = export.upload_to_imgbb(front)
+        self.shareable_link_reverse = export.upload_to_imgbb(reverse)
+        #self.shareable_link_front = export.upload_to_catbox(front)
+        #self.shareable_link_reverse = export.upload_to_catbox(reverse)
 
 
     def build_sku(self):
@@ -277,7 +281,8 @@ class ListedInfo(models.Model):
     
     def accept_msrp(self):
         print("accept")
-        self.list_price = self.msrp
+        self.msrp = self.card.active_search_results.ebay_msrp if self.card.active_search_results else 0
+        self.list_price = round(self.msrp+0.49)-0.01
         self.save()
         #self.card.save()
 

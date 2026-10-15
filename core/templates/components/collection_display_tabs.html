@@ -1,5 +1,3 @@
-{% load custom_tags %}
-
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/searchpanes/2.2.0/css/searchPanes.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css">
@@ -11,26 +9,32 @@
     </aside>
 
     <main class="main-content">
-        <header class="content-header">
+        <header class="content-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <div id="header-info-mount"></div>
-            <div id="header-toggle-mount" style="margin-right: 15px;"></div>
+            <div id="view-toggle-mount"></div>
         </header>
-
-        <div id="visual-card-grid"></div>
         
-        {% comment %} {% include "components/collection_product_groups.html" %} {% endcomment %}
+        <div id="visual-card-grid"></div>
 
-        {% include "components/collection_datatable.html" %}
+        <!-- Split Content Layout: Datatable on Left, Static Preview Pane on Right -->
+        <div class="main-content-split">
+            <section class="content-primary">
+                {% include "components/collection_datatable.html" %}
+            </section>
+
+            <aside class="content-preview-panel">
+                <div class="preview-header">
+                    <h3>Card Preview</h3>
+                </div>
+                <div class="dt-image-preview-static">
+                    <!-- Static preview content rendered dynamically via JS -->
+                </div>
+            </aside>
+        </div>
 
         <div id="infinite-loader">Loading more cards...</div>
     </main>
 </div>
-
-<div id="dt-row-hover-preview" class="dt-image-preview">
-    <img id="preview-front" src="" alt="Card Front Preview">
-    <img id="preview-back" src="" alt="Card Back Preview">
-</div>
-
 {% include "components/card_item_flat.html" %}
 
 <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
@@ -63,12 +67,35 @@ let isApplyingServerUpdate = false;
     let currentSort = { attrName: 'natural sort', attrIdx: null, dir: 'asc' };
     let loadingNextPage = false;
 
-    // --- Dynamic Sort Bar Generation ---
+    // Global state tracking for card stacking
+    let isCardStackingEnabled = true;
+
+    // --- Dynamic Sort Bar Generation with Stacking Toggle ---
     function buildSortBar(tableApi, headerMap) {
         const bar = document.getElementById('dynamic-sort-bar');
         if (!bar) return;
-        bar.innerHTML = '<span class="sort-label">Sort Collection</span>';
+        
+        // Clear and build container structure
+        bar.innerHTML = `
+            <span class="sort-label">Display & Sort</span>
+            <div class="stack-toggle-wrapper" style="margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid #eee;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: #333; font-weight: 500;">
+                    <input type="checkbox" id="stack-toggle-checkbox" ${isCardStackingEnabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+                    Stack Duplicate Cards
+                </label>
+            </div>
+            <span class="sort-label">Sort Collection</span>
+        `;
 
+        // Bind event listener to the stacking checkbox
+        const stackCheckbox = document.getElementById('stack-toggle-checkbox');
+        stackCheckbox.addEventListener('change', (e) => {
+            isCardStackingEnabled = e.target.checked;
+            // Trigger a DataTable redraw so the drawCallback re-evaluates stacking rules
+            tableApi.draw(false);
+        });
+
+        // Render sort links
         sortConfig.forEach(cfg => {
             const targetIdx = headerMap[cfg.attrName];
             if (targetIdx === undefined) return; 
@@ -132,32 +159,57 @@ let isApplyingServerUpdate = false;
             headerMap[text] = idx;
         });
 
-        const idxName = headerMap['full name'] !== undefined ? headerMap['full name'] : 4;
-        const idxStatus = headerMap['overall status'] !== undefined ? headerMap['overall status'] : 8; 
         const idxGroup = headerMap['groups'] !== undefined ? headerMap['groups'] : 14; 
         
-        const idxYear = headerMap['year'] !== undefined ? headerMap['year'] : 1;
-        const idxBrand = headerMap['brand'] !== undefined ? headerMap['brand'] : 2;
-        const idxValue = headerMap['Value ($)'] !== undefined ? headerMap['Value ($)'] : 13;
-        const idxValueRange = headerMap['val range'] !== undefined ? headerMap['val range'] : 17;
-        const idxId = headerMap['id'] !== undefined ? headerMap['id'] : 14;
-        const idxCsrId = headerMap['csr_id'] !== undefined ? headerMap['csr_id'] : (headerMap['csr id'] !== undefined ? headerMap['csr id'] : 19);
-        const idxCollId = headerMap['collection'] !== undefined ? headerMap['collection'] : 12;
-        const idxFrontUrl = headerMap['front url'] !== undefined ? headerMap['front url'] : 18;
-        const idxReverseUrl = headerMap['reverse url'] !== undefined ? headerMap['reverse url'] : 22;
-        const idxParallel = headerMap['parallel'] !== undefined ? headerMap['parallel'] : 5;
-        const idxFrontHdUrl = headerMap['front hd url'] !== undefined ? headerMap['front hd url'] : 23;
-        const idxReverseHdUrl = headerMap['reverse hd url'] !== undefined ? headerMap['reverse hd url'] : 24;
-        const idxMSRP = headerMap['MSRP'] !== undefined ? headerMap['MSRP'] : 25;
-        const idxListPrice = headerMap['list price'] !== undefined ? headerMap['list price'] : 26;
-        const idxCondition = headerMap['condition'] !== undefined ? headerMap['condition'] : 27;
-        const idxAllPriceSort = headerMap['all price sort'] !== undefined ? headerMap['all price sort'] : 28;
-        const idxLegacyMSRP = headerMap['legacy msrp'] !== undefined ? headerMap['legacy msrp'] : 29;
-        const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 30;
-        const idxStrt = headerMap['strt'] !== undefined ? headerMap['strt'] : 31;
-        
-        currentSort.attrIdx = idxId;
+        const idxYear = headerMap['year'] !== undefined ? headerMap['year'] : 3;
+        const idxBrand = headerMap['brand'] !== undefined ? headerMap['brand'] : 4;
+        const idxSubset = headerMap['subset'] !== undefined ? headerMap['subset'] : 5;
+        const idxCardName = headerMap['card name'] !== undefined ? headerMap['card name'] : 6;
+        const idxParallel = headerMap['parallel'] !== undefined ? headerMap['parallel'] : 7;
+        const idxName = headerMap['full name'] !== undefined ? headerMap['full name'] : 8;
+        const idxCardNr = headerMap['card number'] !== undefined ? headerMap['card number'] : 9;
+        const idxCity = headerMap['city'] !== undefined ? headerMap['city'] : 10;
+        const idxTeamName = headerMap['team'] !== undefined ? headerMap['team'] : 11;
+        const idxStatus = headerMap['overall status'] !== undefined ? headerMap['overall status'] : 2; 
 
+        const idxCollId = headerMap['collection id'] !== undefined ? headerMap['collection id'] : 12;
+        const idxValue = headerMap['Value ($)'] !== undefined ? headerMap['Value ($)'] : 13;
+        const idxId = headerMap['id'] !== undefined ? headerMap['id'] : 1;
+        const idxModDate = headerMap['modified'] !== undefined ? headerMap['modified'] : 24;  
+        const idxValueRange = headerMap['val range'] !== undefined ? headerMap['val range'] : 15;   
+        const idxFrontUrl = headerMap['front url'] !== undefined ? headerMap['front url'] : 16; 
+        const idxCsrId = headerMap['csr id'] !== undefined ? headerMap['csr id'] : 17;
+        const idxTaskTime = headerMap['task time'] !== undefined ? headerMap['task time'] : 18;
+        
+        const idxReverseUrl = headerMap['reverse url'] !== undefined ? headerMap['reverse url'] : 19;
+        const idxFrontHdUrl = headerMap['front'] !== undefined ? headerMap['front'] : 20;
+        const idxReverseHdUrl = headerMap['reverse'] !== undefined ? headerMap['reverse'] : 21;
+        const idxListPrice = headerMap['list price'] !== undefined ? headerMap['list price'] : 23;
+        const idxMSRP = headerMap['MSRP'] !== undefined ? headerMap['MSRP'] : 22;
+        const idxCondition = headerMap['condition'] !== undefined ? headerMap['condition'] : 14;
+        const idxQty = headerMap['qty'] !== undefined ? headerMap['qty'] : 25;
+        
+        const idxDTSOverall = headerMap['DTSO'] !== undefined ? headerMap['DTSO'] : 26;
+        const idxDTSRecent = headerMap['DTSR'] !== undefined ? headerMap['DTSR'] : 27;
+        const idxNaturalSort = headerMap['natural sort'] !== undefined ? headerMap['natural sort'] : 28;
+        const idxSalesOverall = headerMap['SalesO'] !== undefined ? headerMap['SalesO'] : 29;
+        const idxSalesRecent = headerMap['SalesR'] !== undefined ? headerMap['SalesR'] : 30;
+
+        const idxRawSoldCount = headerMap['raw sold count'] !== undefined ? headerMap['raw sold count'] : 31;
+        const idxRawRecentSoldCount = headerMap['raw recent sold count'] !== undefined ? headerMap['raw recent sold count'] : 32;
+        const idxAvailOverall = headerMap['AvailableO'] !== undefined ? headerMap['AvailableO'] : 33;
+        const idxSTRRDayCount = headerMap['STR Recent Days'] !== undefined ? headerMap['STR Recent Days'] : 34;
+        const idxConditionRecentDate = headerMap['Condition Recent Date'] !== undefined ? headerMap['Condition Recent Date'] : 35;
+        
+        const idxRawRecentDate = headerMap['Raw Recent Date'] !== undefined ? headerMap['Raw Recent Date'] : 36;
+        const idxSTRTDayCount = headerMap['STR Overall Days'] !== undefined ? headerMap['STR Overall Days'] : 37;
+        const idxRawOverallDate = headerMap['Raw Overall Date'] !== undefined ? headerMap['Raw Overall Date'] : 38;
+        const idxConditionOverallDate = headerMap['Condition Overall Date'] !== undefined ? headerMap['Condition Overall Date'] : 39;
+        const idxConditionRecentAvail = headerMap['Condition recent avail'] !== undefined ? headerMap['Condition recent avail'] : 40;
+        const idxRawSoldRecentAvail = headerMap['raw sold recent avail'] !== undefined ? headerMap['raw sold recent avail'] : 41;
+        const idxRecentAvail = headerMap['AvailableR'] !== undefined ? headerMap['AvailableR'] : 42;
+        
+        currentSort.attrIdx = idxNaturalSort;
         // =====================================================================
         // ADVANCED BACKEND PIPELINE STATES & LEDGERS
         // =====================================================================
@@ -172,17 +224,41 @@ let isApplyingServerUpdate = false;
         let lastClickedTableIndex = null;
         let lastClickedGridIndex = null;
 
-        // Map initial payload safely matching the un-swapped logic
+        // Configure search pane categories for tracking
+        const searchPaneConfigs = [
+            { key: 'brand', colIdx: idxBrand },
+            { key: 'subset', colIdx: idxSubset },
+            { key: 'parallel', colIdx: idxParallel },
+            { key: 'product_group_name', colIdx: idxGroup },
+            { key: 'parallel', colIdx: idxParallel },
+            { key: 'condition', colIdx: idxCondition },
+            { key: 'subset', colIdx: idxSubset },
+            { key: 'card_name', colIdx: idxCardName },
+            { key: 'city', colIdx: idxCity },
+            { key: 'team', colIdx: idxTeamName }
+        ];
+
+        // Initialize frequency maps for each configuration
+        const countsMaps = {};
+        searchPaneConfigs.forEach(pane => {
+            countsMaps[pane.key] = {};
+        });
+
+        // Map initial payload AND tally frequencies simultaneously in a single pass
         const preloadedCardsList = [];
         $('#card-data-engine tbody tr').each(function() {
-            const $tds = $(this).find('td');
-            preloadedCardsList.push({
+            const $tds =$(this).find('td');
+            const card = {
                 id: $tds.eq(idxId).text().trim(),
                 csr_id: $tds.eq(idxCsrId).text().trim(),
                 name: $tds.eq(idxName).text().trim(),
                 year: $tds.eq(idxYear).text().trim(),
                 brand: $tds.eq(idxBrand).text().trim(),
                 value: $tds.eq(idxValue).text().trim(),
+                city: $tds.eq(idxCity).text().trim(),
+                team: $tds.eq(idxTeamName).text().trim(),
+                subset: $tds.eq(idxSubset).text().trim(),
+                card_name: $tds.eq(idxCardName).text().trim(),
                 overall_status: $tds.eq(idxStatus).text().trim(),
                 collection_id: $tds.eq(idxCollId).text().trim(),
                 product_group_name: $tds.eq(idxGroup).text().trim(),
@@ -191,13 +267,49 @@ let isApplyingServerUpdate = false;
                 parallel: $tds.eq(idxParallel).text().trim(),
                 msrp: $tds.eq(idxMSRP).text().trim(),
                 list_price: $tds.eq(idxListPrice).text().trim(),
-                task_time: $tds.eq(20).text().trim(),
-                legacy_msrp: $tds.eq(idxLegacyMSRP).text().trim(),
+                task_time: $tds.eq(idxTaskTime).text().trim(),
+                legacy_msrp: $tds.eq(idxMSRP).text().trim(),
                 qty: $tds.eq(idxQty).text().trim(),
-                strt: $tds.eq(idxStrt).text().trim(),
+                strt: $tds.eq(idxDTSOverall).text().trim(),
                 condition: $tds.eq(idxCondition).text().trim(),
+                natural_sort: $tds.eq(idxNaturalSort).text().trim(),
+            };
+            
+            preloadedCardsList.push(card);
+
+            // Inline frequency tallying
+            searchPaneConfigs.forEach(pane => {
+                const val = card[pane.key];
+                if (val !== undefined && val !== '') {
+                    const map = countsMaps[pane.key];
+                    map[val] = (map[val] || 0) + 1;
+                }
             });
         });
+
+        console.debug('[Card Engine Debug] Preloaded cards parsed and tallied inline:', preloadedCardsList.length);
+
+        // Sort, slice top 10, and build custom options array post-loop
+        const combinedTopOptions = [];
+        searchPaneConfigs.forEach(pane => {
+            const countsMap = countsMaps[pane.key];
+            const sortedVals = Object.entries(countsMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            console.debug(`[Card Engine Debug] Top 10 SearchPane options for ${pane.key}:`, sortedVals);
+
+            sortedVals.forEach(([val, count]) => {
+                combinedTopOptions.push({
+                    label: `${val}`,
+                    value: function(rowData, rowIdx) {
+                        return rowData[pane.colIdx] === val;
+                    }
+                });
+            });
+        });
+
+        console.debug('[Card Engine Debug] Total combined top options generated (Inline):', combinedTopOptions.length);
 
         /**
         * Synchronizes state parameters exactly across UI visibility paradigms.
@@ -362,6 +474,31 @@ let isApplyingServerUpdate = false;
             const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
             return `<a href="/card/${row[idxId]}" target="_blank" style="text-decoration:none;">${cleanVal}</a>`;
         }
+        
+        function createCurrencyRenderer(safeData, row) {
+            console.debug('[CurrencyRenderer] Input safeData:', safeData);
+
+            const cleanVal = safeData ? safeData.toString().replace(/^\$/, '').trim() : '';
+            const num = parseFloat(cleanVal);
+
+            console.debug('[CurrencyRenderer] Cleaned string:', cleanVal, '| Parsed number:', num);
+
+            if (isNaN(num)) {
+                console.debug('[CurrencyRenderer] Value is not a valid number, fallback to raw string');
+                return safeData ? `$${safeData}` : '';
+            }
+
+            const formatted = `$${num.toFixed(2)}`;
+            const result = `<input type="text" class="dt-inline-edit"  style="text-align: right; width: 100%;" value="${formatted}">`;
+            console.debug('[CurrencyRenderer] Final formatted currency:', result);
+            
+            return result;
+        }
+        
+        function createLinkRenderer(safeData, row) {
+            const cleanVal = safeData ? safeData.toString().replace(/"/g, '&quot;') : '';
+            return `<a href="/card/${row[idxId]}" target="_blank" style="text-decoration:none;">${cleanVal}</a>`;
+        }
 
         function createImageRenderer(safeData) {
             return `<img src="${safeData}" class="lazy-table-img" data-thumb="${safeData}">`;
@@ -369,32 +506,32 @@ let isApplyingServerUpdate = false;
 
         function createSoldCountRenderer(safeData, row, colIdx) {
             //console.log("sold count renderer", safeData, row, colIdx)
-            if (row[34] != "0")
-                return `<input type="text" class="dt-inline-edit" value="${row[colIdx]} (${row[27]})" data-current="${row[colIdx]} (${row[27]})">`;
-            else if (row[27] != "")
-                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]} (RW)" data-current="${row[colIdx+2]}">`;
+            if (row[idxSalesOverall] != "0")//there are applicable overall sales, show the specifed count with condition
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx]} (${row[idxCondition]})" data-current="${row[colIdx]} (${row[idxCondition]})">`;
+            else if (row[idxCondition] != "")//condition is specified but no applicable sales, go to RW -->
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]} (RW)" data-current="${row[colIdx+2]} (RW)">`;
             else 
                 return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]}" data-current="${row[colIdx+2]}">`;
         }
         
         function createAvailCountRenderer(safeData, row, colIdx) {
             //console.log("avail count renderer", safeData, row, colIdx)
-            if (row[34] != "0")
-                return `<input type="text" class="dt-inline-edit" value="${row[colIdx]} (${row[27]})" data-current="${row[colIdx]} (${row[27]})">`;
-            else if (row[27] != "")
-                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]} (RW)" data-current="${row[colIdx+2]}">`;
+            if (row[idxSalesOverall] != "0")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx-2]} (${row[idxCondition]})" data-current="${row[colIdx-2]}  (${row[idxCondition]})">`;
+            else if (row[idxCondition] != "")
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx-1]} (RW)" data-current="${row[colIdx-1]} (RW)">`;
             else 
-                return `<input type="text" class="dt-inline-edit" value="${row[colIdx+2]}" data-current="${row[colIdx+2]}">`;
+                return `<input type="text" class="dt-inline-edit" value="${row[colIdx-1]}" data-current="${row[colIdx-1]}">`;
         }
 
         function createDTSRenderer(safeData, row, colIdx) {
             console.log("dts renderer", safeData, row, colIdx)
             const num1 = parseFloat(row[colIdx], 10) || 0;
             let num2
-            if (colIdx == 31) {
-                num2 = parseFloat(row[42], 10) || 0; 
+            if (colIdx == idxDTSOverall) {
+                num2 = parseFloat(row[idxSTRTDayCount], 10) || 0; 
             } else {
-                num2 = parseFloat(row[39], 10) || 0; 
+                num2 = parseFloat(row[idxSTRRDayCount], 10) || 0; 
             }
             console.log(num2, num1)
             const result = Math.round(num2 / num1);
@@ -582,10 +719,19 @@ let isApplyingServerUpdate = false;
                 stateSave: true,
                 cascadePanes: false,
                 initCollapsed: true,
-                columns: [6,10,12,1,2,17]
+                panes: [
+                    {
+                        header: 'Groupings',
+                        options: combinedTopOptions,
+                        initCollapsed: false,
+                        dtOpts: { order: [[1, 'desc']] }
+                    }
+                ],
+                columns: [idxName,idxStatus,idxYear,idxBrand,idxValueRange],
             },
+            autoWidth: true,
             columnDefs: [
-                {
+                {//checkbox
                     targets: 0,
                     orderable: false,
                     render: function(data, type, row, meta) {
@@ -593,63 +739,59 @@ let isApplyingServerUpdate = false;
                         return `<input type="checkbox" class="dt-row-chk" data-id="${id}">`;
                     }
                 },
-                {
+                {//Default open search panes sorted by count with visible column
                     searchPanes: {
                         show: true,
                         initCollapsed: false,
-                        sortable: true,
                         dtOpts: { order: [[1, 'desc']] }
                     },
-                    targets: [6,10], 
+                    targets: [idxName,idxStatus], 
                 },
-                {
+                {//Default closed search panes sorted by count with visible column
                     searchPanes: {
                         show: true,
                         dtOpts: { order: [[1, 'desc']] }
                     },
-                    targets: [2,3,4,5], 
+                    targets: [idxBrand,idxSubset,idxParallel], 
                 },
-                {
+                {//Default closed search panes sorted by string value with NO visible column
                     searchPanes: {
                         show: true,
                         initCollapsed: false,
                         dtOpts: { order: [[0, 'desc']] }
                     },
-                    targets: [12], 
+                    targets: [idxCollId,idxValueRange], 
                     visible: false
                 }, 
-                {
+                {//Default closed search panes sorted by numerical value with visible column
                     searchPanes: {
                         show: true,
                         initCollapsed: false,
                         dtOpts: { order: [[0, 'desc']] }
                     },
-                    targets: [1]
+                    type: 'num',
+                    targets: [idxYear]
                 }, 
-                {
-                    searchPanes: {
-                        show: true,
-                        dtOpts: { order: [[0, 'desc']] }
-                    },
-                    targets: [17], 
-                    type:'num',
-                    visible: false
-                },  
-                {
-                    targets: [20], 
+                {//Hidden/sorting date-times with NO visible column
+                    targets: [], 
                     type: 'datetime',
                     visible: false
                 },   
-                {
-                    targets: [31,32], 
+                {//Default visible numerical columns
+                    targets: [idxDTSOverall,idxDTSRecent], 
                     type: 'num'
                 },   
-                {
+                {//Default visible image columns
                     targets: [idxFrontUrl, idxReverseUrl],
                     type: 'display'
                 },  
                 {
-                    targets: [8,9,11,15,16,19,21,23,24,26,30,33,36,37,39,40,41,42,43,44,45,46],
+                    targets: [
+                        idxTaskTime,idxModDate,idxCsrId,idxFrontHdUrl,
+                        idxReverseHdUrl,idxMSRP,idxQty,idxNaturalSort,idxRawSoldCount,idxRawRecentSoldCount,
+                        idxSTRRDayCount,idxConditionRecentDate, idxRawRecentDate,idxSTRTDayCount,idxRawOverallDate,
+                        idxConditionOverallDate,idxConditionRecentAvail,idxRawSoldRecentAvail, idxValue
+                    ],
                     visible: false,
                 },
                 { 
@@ -658,20 +800,25 @@ let isApplyingServerUpdate = false;
                         if (type === 'display') {
                             const colCount = meta.settings.aoColumns.length;
                             const isMainTable = (colCount > 5); 
-                            const isProtected = (meta.col === 0 || meta.col === 31 || meta.col === 32 || meta.col === 35 || meta.col === 34 || meta.col === idxId || meta.col === idxCsrId || meta.col === idxFrontUrl || meta.col === idxReverseUrl || meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
                             const isImg = (meta.col === idxFrontUrl || meta.col === idxReverseUrl) || (meta.col === idxFrontHdUrl || meta.col === idxReverseHdUrl);
-                            const isSoldCount = (meta.col === 35) || (meta.col === 34)
-                            const isDTS = (meta.col === 32) || (meta.col === 31)
-                            if (isMainTable && !isProtected) {
-                                return createPersistentInputRenderer(data);
-                            } else if (isMainTable && isImg) {
+                            const isSoldCount = (meta.col === idxSalesOverall) || (meta.col === idxSalesRecent)
+                            const isAvailCount = (meta.col === idxRecentAvail)
+                            const isDTS = (meta.col === idxDTSOverall) || (meta.col === idxDTSRecent)
+                            const isCurrency = (meta.col === idxMSRP) || (meta.col === idxValue)|| (meta.col === idxListPrice)
+                            if (isMainTable && isImg) {
                                 return createImageRenderer(data);
-                            } else if (isSoldCount) {
+                            } else if (isMainTable && isSoldCount) {
                                 return createSoldCountRenderer(data, row, meta.col);
-                            } else if (isDTS) {
+                            } else if (isMainTable && isAvailCount) {
+                                return createAvailCountRenderer(data, row, meta.col);
+                            } else if (isMainTable && isDTS) {
                                 return createDTSRenderer(data, row, meta.col);
-                            } else if (meta.col == idxId) {
+                            } else if (isMainTable && meta.col == idxId) {
                                 return createLinkRenderer(data, row)
+                            } else if (isMainTable && isCurrency) {
+                                return createCurrencyRenderer(data);
+                            } else if (isMainTable) {
+                                return createPersistentInputRenderer(data);
                             }
                             return data;
                         }
@@ -688,7 +835,7 @@ let isApplyingServerUpdate = false;
                 const api = this.api();
                 
                 const idIdx = api.columns().header().toArray().findIndex(th => $(th).text().trim() === 'ID');
-                console.log("Calculated ID Index:", idIdx);
+                console.debug("[ViewToggle] Calculated ID Index:", idIdx);
                 window.zoomState = window.zoomState || {};
                 window.zoomState.idColumnIndex = idIdx;
                 window.zoomState.headerMap = headerMap; 
@@ -698,153 +845,303 @@ let isApplyingServerUpdate = false;
                 
                 buildSortBar(api, headerMap);
 
-                // --- 3-STATE RADIO TOGGLE MECHANICS ---
-                const $toggleContainer = $('<div class="view-toggle-group"></div>').css({
-                    'display': 'flex', 'gap': '5px', 'background': '#eee', 
-                    'padding': '3px', 'border-radius': '6px'
-                });
+                // Read initial URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const initialViewSlug = urlParams.get('view') || 'grid';
+                const initialLayoutSlug = urlParams.get('layout') || 'pricing';
 
-                const views = ['Grid', 'Table', 'Grouped'];
-                views.forEach((view, idx) => {
-                    const $radio = $(`<input type="radio" name="view-toggle" id="view-${idx}" value="${idx}" ${idx === 0 ? 'checked' : ''} style="display:none;">`);
-                    const $label = $(`<label for="view-${idx}" style="padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 4px; transition: 0.2s;">${view}</label>`);
-                    
-                    if (idx === 0) $label.css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+                const $toggleContainer = $('<div class="view-toggle-group" style="display: inline-flex; background: #eee; padding: 4px; border-radius: 6px; gap: 4px; flex-wrap: nowrap; white-space: nowrap;"></div>');
+                const views = [
+                    { label: 'Grid', slug: 'grid', type: 'grid' },
+                    { label: 'Quick Pricing', slug: 'quick-pricing', type: 'table', layoutIdx: 0 },
+                    { label: 'Quick Info', slug: 'quick-info', type: 'table', layoutIdx: 1 },
+                    { label: 'Full Info', slug: 'info-review', type: 'table', layoutIdx: 2 }
+                ];
+
+                // Read initial view from URL params (defaults to 'quick-pricing' if none found)
+                const currentInitialSlug = urlParams.get('view') || urlParams.get('layout') || (typeof initialLayoutSlug !== 'undefined' ? initialLayoutSlug : 'quick-pricing');
+
+                const $engineTable =$('#card-data-engine');
+                const $grid =$('#visual-card-grid');
+                const $groupedView =$('#grouped-card-view');
+
+                // Mount the single unified toolbar directly into the header mount point
+                const $mountPoint =$('#view-toggle-mount');
+                if ($mountPoint.length) {
+                    $mountPoint.append($toggleContainer);
+                    console.debug("[ViewToggle] Unified toggle container successfully mounted into #view-toggle-mount.");
+                } else {
+                    $engineTable.before($toggleContainer);
+                    console.warn("[ViewToggle] #view-toggle-mount not found, fell back to prepending above table.");
+                }
+
+                views.forEach((item) => {
+                    const isChecked = item.slug === currentInitialSlug;
+
+                    const $radio =$(`<input type="radio" name="unified-view-toggle" id="view-${item.slug}" value="${item.slug}" ${isChecked ? 'checked' : ''} style="display:none;">`);
+                    const $label =$(`<label for="view-${item.slug}" style="padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 4px; transition: 0.2s;">${item.label}</label>`);
+
+                    if (isChecked) {
+                        $label.css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+                    }
+
+                    const applyViewLayout = () => {
+                        console.debug(`[ViewToggle] Applying view/layout: ${item.label} (${item.slug})`);
+
+                        // Highlight active button
+                        $('.view-toggle-group label').css({'background': 'transparent', 'box-shadow': 'none'});$label.css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
+                        $radio.prop('checked', true);
+
+                        // Hide all primary containers by default
+                        $engineTable.attr('style', 'display: none !important;');
+                        if ($grid.length)$grid.hide();
+                        if ($groupedView.length)$groupedView.hide();
+
+                        const $previewPanel =$('.content-preview-panel');
+                        const $splitWorkspace =$('.main-content-split');
+
+                        if (item.type === 'grid') {
+                            if ($grid.length)$grid.show();
+                            $previewPanel.addClass('layout-hidden');$splitWorkspace.addClass('preview-hidden');
+                        } else if (item.type === 'grouped') {
+                            if ($groupedView.length)$groupedView.show();
+                            $previewPanel.addClass('layout-hidden');$splitWorkspace.addClass('preview-hidden');
+                        } else if (item.type === 'table') {
+                            // Display DataTable
+                            $engineTable.attr('style', 'display: table !important; width: 100%; margin-top: 20px;');
+
+                            const dt = $.fn.DataTable.isDataTable($engineTable) ?$engineTable.DataTable() : null;
+                            if (!dt) {
+                                console.warn("[ViewToggle] DataTables instance not found on #card-data-engine.");
+                                return;
+                            }
+
+                            // Preview Panel Visibility: Hide for Detail Pricing (index 2) and Full Info (index 3)
+                            const hidePreviewLayouts = [2, 3];
+                            if (hidePreviewLayouts.includes(item.layoutIdx)) {
+                                $previewPanel.addClass('layout-hidden');
+                                $splitWorkspace.addClass('preview-hidden');
+                            } else {
+                                $previewPanel.removeClass('layout-hidden');
+                                $splitWorkspace.removeClass('preview-hidden');
+                            }
+
+                            // Apply specific table columns visibility rules
+                            const idx = item.layoutIdx;
+                            if (idx === 2) {
+                                // --- PRICING VIEW ---
+                                dt.columns().visible(true);
+                                dt.columns([
+                                    idxCity, idxTeamName, idxCollId, idxModDate,
+                                    idxValueRange, idxFrontUrl, idxFrontHdUrl, idxCsrId, idxTaskTime,
+                                    idxReverseUrl, idxReverseHdUrl, idxNaturalSort, idxRawRecentSoldCount, idxSTRRDayCount, idxRawSoldCount, idxValue,
+                                    idxConditionRecentDate, idxRawRecentDate, idxSTRTDayCount, idxRawOverallDate,
+                                    idxConditionOverallDate, idxConditionRecentAvail, idxRawSoldRecentAvail,
+                                ]).visible(false);
+
+                                $(dt.column(idxCondition).nodes()).removeClass('highlight-col');
+                                $(dt.column(idxListPrice).nodes()).addClass('highlight-col');
+                                dt.columns.adjust();
+                            } else if (idx === 0) {
+                                // --- Quick PRICING VIEW ---
+                                dt.columns().visible(true);
+                                dt.columns([
+                                    idxCity, idxTeamName, idxCollId, idxModDate,
+                                    idxValueRange, idxFrontUrl, idxFrontHdUrl, idxCsrId, idxTaskTime,
+                                    idxReverseUrl, idxReverseHdUrl, idxNaturalSort, idxRawRecentSoldCount, idxSTRRDayCount, idxRawSoldCount, idxValue,
+                                    idxConditionRecentDate, idxRawRecentDate, idxSTRTDayCount, idxRawOverallDate,
+                                    idxConditionOverallDate, idxConditionRecentAvail, idxRawSoldRecentAvail, idxSalesOverall, idxSalesRecent, idxAvailOverall, idxRecentAvail
+                                ]).visible(false);
+
+                                $(dt.column(idxCondition).nodes()).removeClass('highlight-col');$(dt.column(idxListPrice).nodes()).addClass('highlight-col');
+                                dt.columns.adjust();
+                            } else if (idx === 1) {
+                                // --- Quick INFO VIEW ---
+                                dt.columns().visible(true);
+                                dt.columns([
+                                    idxCity, idxTeamName, idxCollId, idxModDate, idxListPrice,
+                                    idxValueRange, idxFrontUrl, idxFrontHdUrl, idxCsrId, idxTaskTime,
+                                    idxReverseUrl, idxReverseHdUrl, idxNaturalSort, idxRawRecentSoldCount, idxSTRRDayCount, idxRawSoldCount, idxValue,
+                                    idxConditionRecentDate, idxRawRecentDate, idxSTRTDayCount, idxRawOverallDate,
+                                    idxConditionOverallDate, idxConditionRecentAvail, idxRawSoldRecentAvail, idxDTSOverall,
+                                    idxDTSRecent, 
+                                    idxSalesOverall, idxSalesRecent, idxAvailOverall, idxRecentAvail
+                                ]).visible(false);
+
+                                $(dt.column(idxCondition).nodes()).removeClass('highlight-col');$(dt.column(idxListPrice).nodes()).removeClass('highlight-col');
+                                dt.columns.adjust();
+                            } else if (idx === 3) {
+                                // --- FULL INFO REVIEW VIEW ---
+                                dt.columns().visible(true);
+                                dt.columns([
+                                    idxCollId, idxModDate,
+                                    idxValueRange, idxFrontUrl, idxCsrId, idxTaskTime, idxReverseUrl, idxSalesRecent, idxSalesOverall,
+                                    idxNaturalSort, idxRawRecentSoldCount, idxRawSoldCount, idxAvailOverall, idxSTRRDayCount, 
+                                    idxConditionRecentDate, idxRawRecentDate, idxSTRTDayCount, idxRawOverallDate, 
+                                    idxConditionOverallDate, idxConditionRecentAvail, idxRawSoldRecentAvail, idxRecentAvail
+                                ]).visible(false);
+
+                                $(dt.column(idxListPrice).nodes()).removeClass('highlight-col');$(dt.column(idxCondition).nodes()).addClass('highlight-col');
+                                dt.columns.adjust();
+                            }
+
+                            setTimeout(() => {
+                                window.dispatchEvent(new Event('resize'));
+                                dt.columns.adjust();
+                            }, 50);
+                        }
+
+                        if (typeof renderCheckboxUI === 'function') {
+                            renderCheckboxUI();
+                        }
+                    };
+
+                    if (isChecked) {
+                        applyViewLayout();
+                        
+                    }
 
                     $label.on('click', function() {
-                        $('.view-toggle-group label').css({'background': 'transparent', 'box-shadow': 'none'});
-                        $(this).css({'background': '#fff', 'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'});
-                        
-                        const $engineTable = $('#card-data-engine');
-                        const $grid = $('#visual-card-grid');
-                        const $groupedView = $('#grouped-card-view');
+                        console.debug(`[ViewToggle] Switched to: ${item.label} (${item.slug})`);
 
-                        $engineTable.attr('style', 'display: none !important;');
-                        $grid.hide();
-                        $groupedView.hide();
+                        const url = new URL(window.location);
+                        url.searchParams.set('view', item.slug);
+                        url.searchParams.delete('layout'); 
+                        window.history.pushState({}, '', url);
 
-                        if (idx === 0) $grid.show();
-                        else if (idx === 1) $engineTable.attr('style', 'display: table !important; width: 100%; margin-top: 20px;');
-                        else if (idx === 2) $groupedView.show();
-                        renderCheckboxUI();
+                        applyViewLayout();
                     });
 
                     $toggleContainer.append($radio).append($label);
                 });
 
-                $('#header-toggle-mount').append($toggleContainer);
-
-                // --- AJAX LISTING GROUP TOOLTIP & IMAGE PREVIEW HOVER ENGINE ---
-                const tooltipCache = {};
-
-                $('#card-data-engine tbody').on('mouseenter', 'td', function() {
-                    const cell = table.cell(this);
-                    const cellIndex = cell.index();
-                    if (!cellIndex) return;
-
-                    const colIdx = cellIndex.column;
-                    const rowData = table.row(cell.node()).data();
-                    if (!rowData) return;
-
-                    const cardId = rowData[idIdx];
-
-                    // --- 1. IMAGE PREVIEW (Columns < 25) ---
-                    if (colIdx < 25) {
-                        const urlFront = rowData[idxFrontHdUrl] ? rowData[idxFrontHdUrl].trim() : '';
-                        const urlBack = rowData[idxReverseHdUrl] ? rowData[idxReverseHdUrl].trim() : '';
-                        
-                        let hasValidImage = false;
-
-                        // Re-initialize image elements inside $previewBox if they were overwritten by tooltips
-                        if ($('#preview-front').length === 0) {
-                            $previewBox.html(`
-                                <img id="preview-front" style="display:none; max-width: 150px; margin-right: 5px;" />
-                                <img id="preview-back" style="display:none; max-width: 150px;" />
-                            `);
-                        }
-
-                        if (urlFront && urlFront !== 'None' && urlFront !== '-') {
-                            $('#preview-front').attr('src', urlFront).show();
-                            hasValidImage = true;
-                        } else {
-                            $('#preview-front').hide();
-                        }
-
-                        if (urlBack && urlBack !== 'None' && urlBack !== '-') {
-                            $('#preview-back').attr('src', urlBack).show();
-                            hasValidImage = true;
-                        } else {
-                            $('#preview-back').hide();
-                        }
-
-                        if (hasValidImage) {
-                            $previewBox.show();
-                        } else {
-                            $previewBox.hide();
-                        }
-                    } 
-                    // --- 2. AJAX TOOLTIPS (Columns >= 25) ---
-                    else {
-                        if (!cardId) return;
-
-                        // Determine tooltip type and build a unique composite cache key
-                        const tooltipType = (colIdx < 36) ? 'sold' : 'avail';
-                        const cacheKey = `${cardId}_${tooltipType}`;
-
-                        if (tooltipCache[cacheKey]) {
-                            $previewBox.html(tooltipCache[cacheKey]).show();
-                        } else {
-                            $previewBox.html('<div style="padding: 10px; font-size: 0.8rem; color: #666;">Loading tooltip...</div>').show();
-                            
-                            $.get(`/get_lg_tooltip/${cardId}/?type=${tooltipType}`, function(html) {
-                                tooltipCache[cacheKey] = html;
-                                $previewBox.html(html);
-                            }).fail(function() {
-                                $previewBox.html('<div style="padding: 10px; font-size: 0.8rem; color: #dc3545;">Failed to load</div>');
-                            });
-                        }
-                    }
-                }).on('mousemove', 'td', function(e) {
-                    if (!$previewBox.is(':visible')) return;
-
-                    const offset = 15;
-                    let posX = e.clientX + offset;
-                    let posY = e.clientY + offset;
-
-                    // Cache window and preview box dimensions
-                    const winWidth = $(window).width();
-                    const winHeight = $(window).height();
+                // --- BROWSER BACK / FORWARD NAVIGATION (POPSTATE) ---
+                window.addEventListener('popstate', () => {
+                    const params = new URLSearchParams(window.location.search);
+                    const viewSlug = params.get('view') || 'grid';
+                    const layoutSlug = params.get('layout') || 'pricing';
                     
-                    const boxWidth = $previewBox.outerWidth();
-                    const boxHeight = $previewBox.outerHeight();
-
-                    // Check right edge overflow
-                    if (posX + boxWidth > winWidth) {
-                        posX = e.clientX - boxWidth - offset;
+                    console.debug('[URL State] Popstate triggered. Restoring view:', viewSlug, 'layout:', layoutSlug);
+                    
+                    const viewIdx = viewSlugs.indexOf(viewSlug);
+                    if (viewIdx !== -1) {
+                        $(`#view-${viewSlug}`).trigger('click');
                     }
 
-                    // Check bottom edge overflow
-                    if (posY + boxHeight > winHeight) {
-                        posY = e.clientY - boxHeight - offset;
+                    const layoutIdx = layoutSlugs.indexOf(layoutSlug);
+                    if (layoutIdx !== -1) {
+                        $(`#layout-${layoutSlug}`).trigger('click');
                     }
-
-                    // Apply the adjusted coordinates
-                    $previewBox.css({
-                        top: posY + 'px',
-                        left: posX + 'px'
-                    });
-                })
-                .on('mouseleave', 'td', function() {
-                    // Hide and completely empty the box so stale data doesn't linger when moving across rows/columns
-                    $previewBox.hide().empty();
                 });
+                
+                
+                // --- AJAX LISTING GROUP STATIC PREVIEW PANE ENGINE ---
+                const tooltipCache = {};
+                const $staticPreview =$('.dt-image-preview-static');
+
+                function getValidUrl(url) {
+                    if (!url) return '';
+                    const trimmed = url.trim();
+                    return (trimmed && trimmed !== 'None' && trimmed !== '-') ? trimmed : '';
+                }
+
+                // Reusable DOM renderer for the static preview pane
+                function renderStaticPreview(frontUrl, backUrl, contentHtml = '') {
+                    $staticPreview.empty();
+
+                    const validFront = getValidUrl(frontUrl);
+                    const validBack = getValidUrl(backUrl);
+
+                    console.log(`[Debug Engine] Rendering static preview pane -> Front: ${validFront || 'None'} | Back: ${validBack || 'None'} | HasInfo: ${!!contentHtml}`);
+
+                    // 1. Dedicated row for the two side-by-side images
+                    const $imagesRow =$('<div class="preview-images-row"></div>');
+
+                    // Front Image Slot
+                    const $frontSlot =$('<div class="preview-image-slot"></div>');
+                    if (validFront) {
+                        $frontSlot.append(`<img src="${validFront}" alt="Card Front" />`);
+                    } else {
+                        $frontSlot.append(`<div class="preview-placeholder">No Front Image</div>`);
+                    }
+
+                    // Back Image Slot
+                    const $backSlot =$('<div class="preview-image-slot"></div>');
+                    if (validBack) {
+                        $backSlot.append(`<img src="${validBack}" alt="Card Back" />`);
+                    } else {
+                        $backSlot.append(`<div class="preview-placeholder">No Back Image</div>`);
+                    }
+
+                    $imagesRow.append($frontSlot).append($backSlot);
+                    $staticPreview.append($imagesRow);
+
+                    // 2. Append metadata/tooltip info below the images row
+                    if (contentHtml) {
+                        $staticPreview.append(`<div class="preview-tooltip-content">${contentHtml}</div>`);
+                    }
+
+                    // Fallback if nothing is provided at all
+                    if (!validFront && !validBack && !contentHtml) {
+                        $staticPreview.html('<div style="padding: 20px; font-size: 0.9rem; color: #888; text-align: center; width: 100%;">Hover over a table row to preview card details.</div>');
+                    }
+                }
+
+                $('#card-data-engine tbody')
+                    .on('mouseenter', 'td', function() {
+                        const cell = table.cell(this);
+                        const cellIndex = cell.index();
+                        if (!cellIndex) return;
+
+                        const colIdx = cellIndex.column;
+                        const rowData = table.row(cell.node()).data();
+                        if (!rowData) return;
+
+                        const cardId = rowData[idIdx];
+                        const urlFront = rowData[idxFrontHdUrl];
+                        const urlBack = rowData[idxReverseHdUrl];
+
+                        // --- 1. IMAGE ONLY PREVIEW (Columns < idxListPrice) ---
+                        if (false) {
+                            renderStaticPreview(urlFront, urlBack);
+                        } 
+                        // --- 2 & 3. AJAX TOOLTIPS WITH FRONT IMAGE (Columns >= idxListPrice) ---
+                        else {
+                            if (!cardId) return;
+
+                            const tooltipType = (colIdx < idxRawSoldCount) ? 'sold' : 'avail';
+                            const cacheKey = `${cardId}_${tooltipType}`;
+
+                            const loadingHtml = '<div style="padding: 10px; font-size: 0.8rem; color: #666;">Loading preview details...</div>';
+                            const errorHtml = '<div style="padding: 10px; font-size: 0.8rem; color: #dc3545;">Failed to load details</div>';
+
+                            // Show cached version immediately if available
+                            if (tooltipCache[cacheKey]) {
+                                renderStaticPreview(urlFront, urlBack, tooltipCache[cacheKey]);
+                                return;
+                            }
+
+                            // Show loading placeholder alongside front image
+                            renderStaticPreview(urlFront, urlBack, loadingHtml);
+
+                            // Fetch AJAX tooltip
+                            $.get(`/get_lg_tooltip/${cardId}/?type=${tooltipType}`)
+                                .done(function(html) {
+                                    tooltipCache[cacheKey] = html;
+                                    renderStaticPreview(urlFront, urlBack, html);
+                                })
+                                .fail(function() {
+                                    renderStaticPreview(urlFront, urlBack, errorHtml);
+                                });
+                        }
+                    });
 
                 // --- DUAL IMAGE RESOLUTION ROW-WIDE SWAP ENGINE ---
                 $('#card-data-engine tbody').on('click', 'img', function (e) {
                     e.stopPropagation();
 
-                    const $clickedImg = $(this);
-                    const $row = $clickedImg.closest('tr');
+                    const $clickedImg =$(this);
+                    const $row =$clickedImg.closest('tr');
                     const tableApi = $('#card-data-engine').DataTable();
                     const rowData = tableApi.row($row).data();
                     
@@ -853,11 +1150,11 @@ let isApplyingServerUpdate = false;
                     $row.toggleClass('expanded-row');
                     const isExpanded = $row.hasClass('expanded-row');
                     
-                    const $frontImg = $row.find(`td:eq(${idxFrontUrl}) img, img.lazy-table-img:eq(0)`).first();
-                    const $reverseImg = $row.find(`td:eq(${idxReverseUrl}) img, img.lazy-table-img:eq(1)`).first();
+                    const $frontImg =$row.find(`td:eq(${idxFrontUrl}) img, img.lazy-table-img:eq(0)`).first();
+                    const $reverseImg =$row.find(`td:eq(${idxReverseUrl}) img, img.lazy-table-img:eq(1)`).first();
 
-                    if (!$frontImg.data('thumb')) $frontImg.data('thumb', $frontImg.attr('src'));
-                    if (!$reverseImg.data('thumb')) $reverseImg.data('thumb', $reverseImg.attr('src'));
+                    if (!$frontImg.data('thumb')) $frontImg.data('thumb',$frontImg.attr('src'));
+                    if (!$reverseImg.data('thumb')) $reverseImg.data('thumb',$reverseImg.attr('src'));
 
                     if (isExpanded) {
                         const frontHd = rowData[idxFrontHdUrl];
@@ -870,8 +1167,7 @@ let isApplyingServerUpdate = false;
                             
                             const imgCache = new Image();
                             imgCache.onload = function() {
-                                $imageElement.data('current-hd', hdUrl);
-                                $imageElement.attr('src', hdUrl);
+                                $imageElement.data('current-hd', hdUrl);$imageElement.attr('src', hdUrl);
                             };
                             imgCache.src = hdUrl;
                         };
@@ -879,36 +1175,121 @@ let isApplyingServerUpdate = false;
                         lazyLoadAsset($frontImg, frontHd);
                         lazyLoadAsset($reverseImg, reverseHd);
                     } else {
-                        $frontImg.attr('src', $frontImg.data('thumb'));
-                        $reverseImg.attr('src', $reverseImg.data('thumb'));
+                        $frontImg.attr('src',$frontImg.data('thumb'));
+                        $reverseImg.attr('src',$reverseImg.data('thumb'));
                     }
                 });
 
                 $('#panes-container').on('click', '.dtsp-searchPane table tbody tr', function() {
-                    const pane = $(this).closest('.dtsp-searchPane');
-                    $(this).toggleClass('selected'); 
+                    const pane = $(this).closest('.dtsp-searchPane');$(this).toggleClass('selected'); 
                     grid.addClass('filtering-active');
                     pane.addClass('pane-processing');
                     loader.text("Applying filters...").show();
                 });
             },
             drawCallback: function(settings) {
+                console.log("in drawCallback");
                 const api = this.api();
                 const grid = $('#visual-card-grid');
-                const targetIdx = api.column('ID:name').index(); 
-                const actualIdx = (targetIdx !== undefined && targetIdx !== null) ? targetIdx : 14;
-
-                grid.find('.card-item').hide();
                 
-                const currentPageIds = api.rows({ page: 'current', filter: 'applied', order: 'applied' })
-                                         .data().toArray().map(row => {
-                                             return row[actualIdx] ? row[actualIdx].toString() : '';
-                                         });
+                const targetIdx = api.column('ID:name').index(); 
+                const actualIdx = (targetIdx !== undefined && targetIdx !== null) ? targetIdx : idxId;
 
-                currentPageIds.forEach(id => {
-                    grid.find(`.card-item[data-id="${id}"]`).show().appendTo(grid);
+                // Hide all cards and clear previous stacking states completely
+                grid.find('.card-item').hide().removeClass('card-stacked card-stack-first card-stack-subsequent').removeAttr('data-stack-count');
+                
+                // Map current page rows
+                const currentPageRows = api.rows({ page: 'current', filter: 'applied', order: 'applied' })
+                    .data().toArray()
+                    .map(row => ({
+                        id: row[actualIdx] ? row[actualIdx].toString() : '',
+                        naturalSort: (typeof idxNaturalSort !== 'undefined' && row[idxNaturalSort] !== undefined) ? row[idxNaturalSort] : ''
+                    }));
+
+                // Step 1: Establish and lock in the TRUE individual base quantity for every card.
+                // We capture it from the existing badge once and store it permanently in data-base-qty.
+                const cardBaseQtys = {};
+                currentPageRows.forEach(item => {
+                    if (!item.id) return;
+                    const $card = grid.find(`.card-item[data-id="${item.id}"]`);
+                    
+                    let baseQty = 1;
+                    if ($card.attr('data-base-qty') !== undefined) {
+                        baseQty = parseInt($card.attr('data-base-qty'), 10) || 1;
+                    } else {
+                        // Read from current badge if present
+                        const $badge =$card.find('.duplicate-qty-badge');
+                        if ($badge.length) {
+                            const badgeText = $badge.text().trim();
+                            const parsed = parseInt(badgeText.replace(/^x/i, ''), 10);
+                            if (!isNaN(parsed)) baseQty = parsed;
+                        }
+                        // Save it securely as the immutable base quantity so stack sums never overwrite it
+                        $card.attr('data-base-qty', baseQty);
+                    }
+                    cardBaseQtys[item.id] = baseQty;
                 });
 
+                // Step 2: Pre-calculate stack counts and total aggregated base quantities per NaturalSort group
+                const sortCounts = {};
+                const sortTotalQty = {};
+                
+                currentPageRows.forEach(item => {
+                    if (item.naturalSort !== '') {
+                        sortCounts[item.naturalSort] = (sortCounts[item.naturalSort] || 0) + 1;
+                        const cardQty = cardBaseQtys[item.id] || 1;
+                        sortTotalQty[item.naturalSort] = (sortTotalQty[item.naturalSort] || 0) + cardQty;
+                    }
+                });
+
+                console.log("current page rows data:", currentPageRows);
+
+                const currentPageIds = [];
+                let prevNaturalSort = null;
+
+                currentPageRows.forEach((item, index) => {
+                    if (!item.id) return;
+                    currentPageIds.push(item.id);
+
+                    const $card = grid.find(`.card-item[data-id="${item.id}"]`);
+                    const count = sortCounts[item.naturalSort] || 1;
+                    const baseQty = cardBaseQtys[item.id] || 1;
+                    
+                    // Evaluate duplicate grouping only if stacking is enabled
+                    const isDuplicate = isCardStackingEnabled && (item.naturalSort !== '' && item.naturalSort === prevNaturalSort);
+                    const $badgeMount =$card.find('.qty-badge-mount');
+
+                    if (isDuplicate) {
+                        // Hide subsequent duplicate cards so they don't occupy grid space
+                        $card.addClass('card-stack-subsequent').hide();
+                        console.debug(`[CardStack] Condensing duplicate card ID ${item.id} (NaturalSort: ${item.naturalSort})`);
+                    } else {
+                        const isStackHead = isCardStackingEnabled && (count > 1);
+
+                        if (isStackHead) {
+                            $card.addClass('card-stacked card-stack-first').attr('data-stack-count', count);
+                        } else {
+                            $card.removeClass('card-stacked card-stack-first card-stack-subsequent').removeAttr('data-stack-count');
+                        }
+
+                        // Determine display quantity: combined stack total if stacked, or pristine baseQty if unstacked
+                        const displayQty = isStackHead ? (sortTotalQty[item.naturalSort] || baseQty) : baseQty;
+
+                        // Render badge: full badge if > 1, '+' trigger if 1
+                        const badgeHtml = displayQty > 1 
+                            ? `<div class="duplicate-qty-badge" title="Quantity: ${displayQty}">x${displayQty}</div>` 
+                            : `<div class="qty-add-trigger" title="Set Quantity">+</div>`;
+                        
+                        $badgeMount.html(badgeHtml);
+
+                        // Append and display the card
+                        $card.show().appendTo(grid);
+                    }
+
+                    prevNaturalSort = isCardStackingEnabled ? item.naturalSort : null;
+                });
+
+                console.log("current page ids:", currentPageIds);
                 sessionStorage.setItem('card_sequence', JSON.stringify(currentPageIds));
                 
                 setTimeout(() => { 
@@ -917,10 +1298,27 @@ let isApplyingServerUpdate = false;
                     if (!loadingNextPage) {
                         $('#infinite-loader').hide(); 
                     }
+
+                    // --- SYNC PREVIEW PANE TO FIRST ROW ---
+                    if (!$('.content-preview-panel').hasClass('layout-hidden')) {
+                        const $firstRow =$('#card-data-engine tbody tr:visible').first();
+                        if ($firstRow.length) {
+                            console.debug("[Preview] Triggering hover on first visible row from drawCallback.");
+                            $firstRow.trigger('mouseenter');
+                        } else {
+                            $('.dt-image-preview-static').html('<p style="color: #666; font-size: 13px; text-align: center; padding: 20px;">No preview available</p>');
+                        }
+                    }
                 }, 150);
             }
-        });
-
+        }); 
+        const $paneElements = $('#panes-container .dtsp-searchPane');
+        if ($paneElements.length > 0) {
+            $paneElements.last().insertBefore($paneElements.first());
+            console.debug('[Card Engine Debug] Custom SearchPane successfully relocated to the top.');
+        } else {
+            console.debug('[Card Engine Debug] Warning: SearchPane elements not found during rearrangement.');
+        }
         // =====================================================================
         // SPREADSHEET-STYLE CELL EDIT INTERACTION PIPELINE
         // =====================================================================

@@ -131,6 +131,10 @@ class BulkListingTask(Task):
     @property
     def group_key(self):
         return self.successors.first().group_key
+    
+    @property
+    def get_listed_info(self):
+        return self.successors.first().listingtask.get_listed_info
 
     @property
     def display_group_name(self):
@@ -148,6 +152,11 @@ class ListingTask(Task):
     @property
     def group_key(self):
         return self.params().get('group_key')
+
+
+    @property
+    def get_listed_info(self):
+        return self.card.listed_card_info
 
     @property
     def display_group_name(self):

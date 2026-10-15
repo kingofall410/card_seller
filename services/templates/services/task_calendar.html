@@ -66,7 +66,7 @@
         .day-column.today { 
             background-color: var(--today-bg); 
             border-color: #ffe066;
-            z-index:0;
+            z-index: 0;
         }
 
         .day-header {
@@ -134,6 +134,7 @@
         .status-success, .status-completed { background-color: #33cc3320 !important; color: #000 !important; border-left: 4px solid #33cc33 !important; }
         .status-none { background-color: #96969620 !important; color: #000 !important; border-left: 4px solid #969696 !important; }
         .status-sold { background-color: #c9bc008b !important; color: #000 !important; border-left: 4px solid #c9bc00ff !important; }
+
         /* --- Floating Hover Tooltip Elements Rules --- */
         #task-hover-tooltip {
             position: fixed;
@@ -367,21 +368,18 @@
 function refreshDayListings(event, buttonEl) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     
-    const $containerColumn = $(buttonEl).closest('.day-column');
+    const $containerColumn =$(buttonEl).closest('.day-column');
     const dayGroupKey = $containerColumn.attr('data-day') || 'Selected Day';
     
-    // 1. Find all task items inside this column area
-    const $allTasks = $containerColumn.find('.task-item');
+    const $allTasks =$containerColumn.find('.task-item');
     
     if ($allTasks.length === 0) {
         alert("No tasks found to refresh in this column area.");
         return;
     }
 
-    // 2. Map through elements to build a clean array of target card IDs
     const cardIds = [];
     $allTasks.each(function() {
-        // Swapped to pick up the underlying card foreign key attribute directly
         const cardId = $(this).attr('data-card-id'); 
         if (cardId) cardIds.push(cardId);
     });
@@ -393,10 +391,8 @@ function refreshDayListings(event, buttonEl) {
 
     if (!confirm(`Refresh listing status data loop for all ${cardIds.length} cards scheduled on ${dayGroupKey}?`)) return;
 
-    const $btn = $(buttonEl);
-    $btn.prop('disabled', true).text('Refreshing Batch...');
-    console.log(cardIds)
-    // 3. Fire a single batch POST request to the backend with your payload array
+    const $btn = $(buttonEl);$btn.prop('disabled', true).text('Refreshing Batch...');
+
     $.ajax({
         url: "/refresh_listing_status/",
         method: "POST",
@@ -420,10 +416,10 @@ function refreshDayListings(event, buttonEl) {
 function retryAllFailedInGroup(event, buttonEl) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     
-    const $containerColumn = $(buttonEl).closest('.day-column');
+    const $containerColumn =$(buttonEl).closest('.day-column');
     const dayGroupKey = $containerColumn.attr('data-day') || 'Selected Day';
     
-    const $failedTasks = $containerColumn.find('.task-item:not(.status-confirmed)');
+    const $failedTasks =$containerColumn.find('.task-item:not(.status-confirmed)');
     
     if ($failedTasks.length === 0) {
         alert("No failed tasks found in this column area.");
@@ -523,15 +519,14 @@ function processReschedule(taskId, mode) {
 
 // --- Singleton Unified Hover Popover System Handler Logic ---
 $(document).ready(function() {
-    const $tooltip = $('#task-hover-tooltip');
+    const $tooltip =$('#task-hover-tooltip');
 
     $(document).on('mouseenter', '.task-item', function(e) {
-        if ($(e.target).closest('.task-action-dropdown').length) {
-            $tooltip.css('opacity', '0');
+        if ($(e.target).closest('.task-action-dropdown').length) {$tooltip.css('opacity', '0');
             return;
         }
 
-        const $el = $(this);
+        const $el =$(this);
         
         let imgHtml = '';
         if ($el.data('thumb')) {
@@ -548,6 +543,8 @@ $(document).ready(function() {
             <div style="font-weight:bold; text-align:center; margin-bottom:4px;">${$el.data('title') || 'Task Detail'}</div>
             <div style="font-size:11px; color:#ccc; width:100%;">
                 <div><b>Price:</b> $${$el.data('price') || '0.00'}</div>
+                <div><b>Platform:</b> ${$el.data('platform') || 'N/A'}</div>
+                <div><b>ListedInfo ID:</b> ${$el.data('listed-info-id') || 'N/A'}</div>
                 <div><b>CSR:</b> ${$el.data('csr-list') || ''}</div>
                 <div><b>Scheduled:</b> ${$el.data('scheduled-date') || 'N/A'}</div>
                 <div><b>Executed:</b> ${$el.data('executed-date') || 'N/A'}</div>
@@ -560,8 +557,7 @@ $(document).ready(function() {
     });
 
     $(document).on('mousemove', '.task-item', function(e) {
-        if ($(e.target).closest('.task-action-dropdown').length) {
-            $tooltip.css('opacity', '0');
+        if ($(e.target).closest('.task-action-dropdown').length) {$tooltip.css('opacity', '0');
             return;
         }
 
@@ -574,13 +570,12 @@ $(document).ready(function() {
         let posY = mouseY + 15;
 
         if (posX + width > $(window).width()) { posX = mouseX - width - 15; }
-        if (posY + height > $(window).height()) { posY = $(window).height() - height - 15; }
+        if (posY + height > $(window).height()) { posY =$(window).height() - height - 15; }
 
         $tooltip.css({ left: posX + 'px', top: posY + 'px', opacity: '1' });
     });
 
-    $(document).on('mouseleave', '.task-item', function() {
-        $tooltip.css('opacity', '0').html('');
+    $(document).on('mouseleave', '.task-item', function() {$tooltip.css('opacity', '0').html('');
     });
 });
 

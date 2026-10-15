@@ -2,7 +2,7 @@
 
 <!-- 
   ======================================================================
-  TASK COMPONENT LAYER (Clean Flexbox Layout)
+  TASK COMPONENT LAYER (Clean Flexbox Layout - ListedInfo Integrated)
   ====================================================================== 
 -->
 <a href="/collection/0?csr_ids={{ task.get_csr_id }}" style="text-decoration:none; color:inherit;" id="task-{{ task.id }}">
@@ -13,8 +13,8 @@
          data-scheduled-date="{{ task.schedule_time }}"
          data-executed-date="{{ task.display_start_time }}"
          data-completed-date="{{ task.display_end_time }}"
-         data-price="{{ task.listingtask.card.listed_card_info.list_price }}"
-         data-thumb="{{ task.listingtask.card.cropped_image.thumbnail.url|default:'' }}"
+         data-price="{% if task.bulklistingtask %}{{ task.bulklistingtask.display_value|default:task.bulklistingtask.get_listed_info.list_price|default:'0.00' }}{% else %}{{ task.listingtask.card.listed_card_info.list_price|default:'0.00' }}{% endif %}"
+         data-thumb="{% if task.bulklistingtask %}{{ task.bulklistingtask.get_listed_info.thumbnail.url|default:'' }}{% else %}{{ task.listingtask.card.cropped_image.thumbnail.url|default:'' }}{% endif %}"
          data-error="{{ task.error_str|default:'' }}"
          data-csr-list="{{ task.get_csr_id }}"
          style="padding: 6px 8px;">
@@ -30,8 +30,8 @@
                     <b style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 12px;" title="{{ task.display_title }}">
                         {{ task.display_title }}<br>
                     {% if task.bulklistingtask %}
-                        ({{ task.bulklistingtask.display_player_name }})
-                    {% else %}               
+                        ({{ task.bulklistingtask.display_player_name }}) [ListedInfo ID: {{ task.bulklistingtask.get_listed_info.id|default:'N/A' }}]
+                    {% else %}              
                         ({{ task.listingtask.display_player_name }})
                     {% endif %}
                     </b>
@@ -41,7 +41,7 @@
                 <div style="font-size: 14px; font-weight: 700; color: #2e7d32;">
                     {% if task.bulklistingtask %}
                         ${{ task.bulklistingtask.display_value|floatformat:2 }}
-                    {% else %}               
+                    {% else %}              
                         ${{ task.listingtask.display_value|floatformat:2 }}
                     {% endif %}
                 </div>

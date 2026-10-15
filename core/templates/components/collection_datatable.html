@@ -2,61 +2,56 @@
     <thead>
         <tr>
             <th><input type="checkbox" id="select-all-table"></th>
-            <th>Year</th>
-            <th>Brand</th>
-            <th>Subset</th>
-            <th>Card Name</th>
-            <th>Parallel</th>
-            <th>Full Name</th>
-            <th>Card Number</th>
-            <th>City</th>
-            <th>Team</th>
-            <th>Overall Status</th>
-
-            <th>Group ID</th>
-            <th>Collection</th>
-            <th>Value ($)</th>
             <th>ID</th>
-            <th>Modified</th>
-            <th>Groups</th>
+            <th>Overall Status</th>
+            <th>Year</th>
+            <th class="long-col">Brand</th>
+            <th class="long-col">Subset</th>
+            <th class="med-col">Card Name</th>
+            <th class="med-col">Parallel</th>
+            <th class="long-col">Full Name</th>
+            <th>Card Number</th>
+            <th class="long-col">City</th>
+            <th class="long-col">Team</th>        
+            <th>Collection ID</th>
+            <th>Value ($)</th>
+            <th>Condition</th>
             <th>Val Range</th>
             <th>Front URL</th>
             <th>CSR ID</th>
-            <th>Task Time</th>
-
-            <th>Primary Tag Group</th>
+            <th>Task Time</th>            
             <th>Reverse URL</th>
-            <th>Front HD URL</th>
-            <th>Reverse HD URL</th>
-            <th>List Price</th>    
-            <th>MSRP</th>        
-            <th>Condition</th>
-            <th>All Price Sort</th>
-            <th>Legacy MSRP</th>
+            <th>Front</th>
+            <th>Reverse</th>  
+            <th>MSRP</th>     
+            <th>List Price</th>     
+            <th>Modified</th>
             <th>Qty</th>
-            <th>DTS Overall</th>
-            <th>DTS Recent</th>
+            <th>DTSO</th>
+            <th>DTSR</th>            
             <th>Natural Sort</th>
-            <th>Overall Sales</th>
-            <th>Recent Sales</th>
-            <th>Raw Sold #</th>
-            <th>Raw Recent #</th>
-            <th>Overall Available</th>
+            <th>SalesO</th>
+            <th>SalesR</th>            
+            <th>Raw Sold Count</th>
+            <th>Raw Recent Sold Count</th>
+            <th>AvailableO</th>
             <th>STR Recent Days</th>
-            <th>Condition Recent Date</th>
+            <th>Condition Recent Date</th>            
             <th>Raw Recent Date</th>
             <th>STR Overall Days</th>
             <th>Raw Overall Date</th>
             <th>Condition Overall Date</th>
             <th>Condition Recent Avail</th>
             <th>Raw Sold Recent Avail</th>
-            <th>Condition Avail Count</th>
+            <th>AvailableR</th>
         </tr>
     </thead>
     <tbody>
         {% for card in cards %}
         <tr>
-            <td></td>
+            <td></td>          
+            <td>{{ card.id }}</td>
+            <td>{{ card.overall_status|default:"Unknown" }}</td>
             <td>{{ card.year|default:"" }}</td>
             <td>{{ card.brand|default:"" }}</td>
             <td>{{ card.subset|default:"" }}</td>
@@ -66,26 +61,19 @@
             <td>{{ card.card_nr|default:"" }}</td>
             <td>{{ card.city|default:"" }}</td>
             <td>{{ card.team|default:"" }}</td>
-            <td>{{ card.overall_status|default:"Unknown" }}</td>
-            <td>{{ card.product_group_key }}</td>
             <td>{{ card.collection_id }}</td>
-            <td>{{ card.value|default:0 }}</td>            
-            <td>{{ card.id }}</td>
-            <td>{{ card.modification_date }}</td>
-            <td>{{ card.product_group_name }}</td>
+            <td>{{ card.value|default:0 }}</td>  
+            <td>{{ card.condition }}</td>
             <td>{{ card.val_range }}</td> 
             <td>{{ card.front_thumb_url }}</td>
             <td>{{ card.csr_id }}</td>
             <td>{{ card.latest_task_scheduled }}</td>
-            <td>{{ card.primary_tag_group }}</td>
             <td>{{ card.reverse_thumb_url }}</td>
             <td>{{ card.front_url }}</td>
             <td>{{ card.reverse_url }}</td>
-            <td>{{ card.list_price }}</td>
-            <td>{{ card.msrp }}</td>
-            <td>{{ card.condition }}</td>
-            <td>{{ card.all_price_sort }}</td>
             <td>{{ card.legacy_msrp }}</td>
+            <td>{{ card.list_price }}</td>
+            <td>{{ card.modification_date }}</td>
             <td>{{ card.qty }}</td>
             <td>{{ card.strt|floatformat:2 }}</td>
             <td>{{ card.strr|floatformat:2 }}</td>

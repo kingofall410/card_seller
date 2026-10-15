@@ -15,7 +15,7 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from django.apps import apps
 from django.views.decorators.http import require_POST
-from django.db.models import F, ExpressionWrapper, DateTimeField, DurationField
+from django.db.models import F, When, Case, IntegerField
 from django.db.models.functions import Now, Abs, Extract
 from django.utils import timezone
 from django.template.loader import render_to_string
@@ -443,34 +443,69 @@ from django.utils import timezone
 from services.models.task import Task
 from core.models.Status import StatusBase
 
-def queue_dashboard(request):
+from datetime import timedelta
 
-    core_config = apps.get_app_config("core")
-    # In-memory tasks currently scheduled in thread queue
-    memory_tasks = core_config.queue.tasks
+from django.shortcuts import render
+from django.utils import timezone
+from django.db.models import Q, Case, When, IntegerField
 
-    # Database summary counts
-    counts = {
-        'pending': Task.objects.filter(status=StatusBase.PENDING).count(),
-        'running': Task.objects.filter(status=StatusBase.RUNNING).count(),
-        'success': Task.objects.filter(status=StatusBase.SUCCESS).count(),
-        'failed': Task.objects.filter(status=StatusBase.FAILED).count(),
-        'staged': Task.objects.filter(status=StatusBase.STAGED).count(),
-    }
+from services.models.task import Task
+from core.models.Status import StatusBase
 
-    # Recent completed or failed database tasks for audit table
-    recent_db_tasks = Task.objects.select_related(
-        'listingtask', 'pricingtask', 'idtask', 'uploadtask', 'confirmtask'
-    ).prefetch_related('successors').order_by('-executed_at')[:25]
 
-    context = {
-        'memory_tasks': memory_tasks,
-        'counts': counts,
-        'recent_db_tasks': recent_db_tasks,
-        'now': timezone.now(),
-    }
-    return render(request, 'services/task_queue.html', context)
+def task_queue_view(request):
+    """
+    Shows:
+      - Tasks scheduled for today
+      - Tasks executed within the previous 3 days
+    """
 
+    now = timezone.now()
+    three_days_ago = now - timedelta(days=3)
+
+    tasks = (
+        Task.objects
+        .filter(
+            Q(scheduled_for__date=now.date())
+            |
+            Q(
+                executed_at__gte=three_days_ago,
+                executed_at__lte=now,
+            )
+        )
+        .select_related(
+            "listingtask",
+            "listingtask__card",
+            "listingtask__csr",
+        )
+        .prefetch_related("successors")
+        .annotate(
+            queue_order=Case(
+                When(status=StatusBase.RUNNING, then=0),
+                When(status=StatusBase.PENDING, then=1),
+                When(status=StatusBase.STAGED, then=2),
+                When(status=StatusBase.FAILED, then=3),
+                When(status=StatusBase.SUCCESS, then=4),
+                default=5,
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("-scheduled_for", "-priority")
+    )
+
+    return render(
+        request,
+        "services/task_queue.html",
+        {
+            "tasks": tasks,
+            "pending_count": tasks.filter(
+                status=StatusBase.PENDING
+            ).count(),
+            "running_count": tasks.filter(
+                status=StatusBase.RUNNING
+            ).count(),
+        },
+    )
 
 @require_POST
 def clear_recent_tasks_view(request):

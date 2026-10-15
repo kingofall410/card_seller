@@ -71,7 +71,7 @@ def load_settings_file(dj_file, file_type, user_settings=None):
                 print(f"Error creating keyword '{keyword}':", e)
 
 def add_token(field_key, value, all_field_data, user_settings=None):
-    print("Add token: ", field_key, value, all_field_data, user_settings)
+    #print("Add token: ", field_key, value, all_field_data, user_settings)
     new_obj = None
     if not user_settings:
         user_settings = User.objects.first().active_settings.first()

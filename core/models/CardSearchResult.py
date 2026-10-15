@@ -194,7 +194,7 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     team_m = models.CharField(max_length=500, blank=True, null=True)
     team_is_manual = models.BooleanField(default=False, blank=True, null=True)
     #team_available_tokens = models.ManyToManyField(Team, blank=True, related_name="csr_as_available_team")
-    team_selected_token = models.ForeignKey(Team, null=True, blank=True, on_delete=models.DO_NOTHING, related_name="csr_as_selected_team")
+    team_selected_token = models.ForeignKey(Team, null=True, blank=True, on_delete=models.SET_NULL, related_name="csr_as_selected_team")
     
     city = models.CharField(max_length=500, blank=True, null=True)
     city_m = models.CharField(max_length=500, blank=True, null=True)
@@ -360,6 +360,8 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
 
     def reset_listing_groups(self, include_graded=False):
         print("reset")
+        if not self.pk:
+            self.save()
         with transaction.atomic():
             sold = self.listing_groups.exclude(label__icontains="ID").delete()
 
@@ -548,7 +550,16 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
                 
                 self.min_avg = raw_sold.last_5_min_price
                 self.max_avg = raw_sold.last_5_max_price
-                self.ebay_msrp = raw_sold.recent_avg_price
+
+                if self.condition:#this was supposed to be conditioned but we didn't find any
+                    if self.condition in ["PR","OC","CR"]:
+                        print("using min")
+                        self.ebay_msrp = min(self.min_avg, raw_sold.min_price)
+                    elif self.condition in ["NM","EXMT","EX","EX-MT"]:
+                        print("using max")
+                        self.ebay_msrp = max(self.max_avg, raw_sold.min_price)
+                    else:
+                        self.ebay_msrp = raw_sold.recent_avg_price
                 self.raw_sold_recent_count = raw_sold.recent_listings_rel.count()
                 self.raw_sold_recent_avail = available.count_from(self.raw_sold_recent_date)
                 self.raw_sold_count = raw_sold.listings.count()

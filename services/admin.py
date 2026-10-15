@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models.models import Brand, Subset, Settings, PlayerYearTeamCity, Team, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
+from .models.models import Brand, Subset, Settings, PlayerYearTeamCity, Team, League, Sport, City, KnownName, Parallel, CardAttribute, Condition, CardName, Season
 from .models.task import Task, ListingTask, PricingTask, IDTask, ConfirmTask
 
 class BrandAdmin(admin.ModelAdmin):
@@ -12,7 +12,6 @@ class SubsetAdmin(admin.ModelAdmin):
 
 admin.site.register(Subset, SubsetAdmin)
 admin.site.register(Settings)
-admin.site.register(Team)
 admin.site.register(City) 
 
 class PYTAdmin(admin.ModelAdmin):
@@ -27,13 +26,23 @@ class KnownNameAdmin(admin.ModelAdmin):
 admin.site.register(KnownName, KnownNameAdmin)
 admin.site.register(CardAttribute)
 admin.site.register(Condition)
+admin.site.register(CardName)
+admin.site.register(Season)
+admin.site.register(Sport)
 
 @admin.register(Parallel)
 class ParallelAdmin(admin.ModelAdmin):
     list_display = ['raw_value', 'field_key', 'year', 'brand', 'subset', 'filter_terms']  # Optional: improves visibility
 
-admin.site.register(CardName)
-admin.site.register(Season)
+
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    list_display = ['id', 'raw_value', 'home_city', 'league']  # Optional: improves visibility
+    
+@admin.register(League)
+class LeagueAdmin(admin.ModelAdmin):
+    list_display = ['raw_value', 'sport']  # Optional: improves visibility
+
 
 class TaskAdmin(admin.ModelAdmin):
     list_display = ['id', 'title', 'status', 'actual_type']
