@@ -53,6 +53,11 @@ def export_zip(csrs):
 
 import cloudinary, base64
 import cloudinary.uploader
+import os
+import mimetypes
+import requests
+from io import BytesIO
+from PIL import Image
 
 #TODO:remove
 cloudinary.config(
@@ -63,19 +68,107 @@ cloudinary.config(
 
 IMGBB_API_KEY = "3d7d29fd0b01908d25e3364c1511a6f5"
 
-def upload_to_catbox(image_path):
-    print("catbox")
-    url = "https://catbox.moe/user/api.php"
+CATBOX_API_URL = "https://catbox.moe/user/api.php"
+
+def upload_image_with_catbox(image_file_path, userhash=None):
+    # 1. Verify file existence
+    if not os.path.exists(image_file_path):
+        raise FileNotFoundError(f"[DEBUG] Local file not found: {image_file_path}")
+        
+    # 2. Prevent uploading 0-byte or unfinished files
+    file_size = os.path.getsize(image_file_path)
+    print(f"[DEBUG] Target file size: {file_size} bytes")
+    if file_size == 0:
+        raise ValueError(f"[DEBUG] Aborting: Local file is completely empty (0 bytes): {image_file_path}")
+
+    # 3. Extract correct filename and MIME type
+    filename = os.path.basename(image_file_path)
+    content_type, _ = mimetypes.guess_type(image_file_path)
+    if not content_type:
+        content_type = "image/jpeg"
+
     data = {"reqtype": "fileupload"}
+    if userhash:
+        data["userhash"] = userhash
+
+    print(f"[DEBUG] Uploading '{filename}' ({content_type}) to Catbox.moe...")
+
+    try:
+        with open(image_file_path, "rb") as f:
+            # Explicitly passing the (filename, file_object, content_type) tuple
+            response = requests.post(
+                CATBOX_API_URL,
+                data=data,
+                files={"fileToUpload": (filename, f, content_type)},
+                timeout=30
+            )
+            
+        print(f"[DEBUG] Response Status Code: {response.status_code}")
+        print(f"[DEBUG] Raw Response Text: {response.text}")
+        
+        if response.status_code == 200 and response.text.startswith("http"):
+            image_url = response.text.strip()
+            print(f"[DEBUG] Successfully uploaded. URL: {image_url}")
+            return image_url
+        else:
+            raise Exception(f"Catbox server rejected upload: {response.text}")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"[DEBUG] Network error during Catbox upload: {e}")
+        raise
+
+FREEIMAGE_API_URL = "https://freeimage.host/api/1/upload"
+
+def upload_image_with_freeimage(image_file_path):
+    # Mimic a real browser User-Agent to pass Cloudflare's bot check
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01"
+    }
     
-    with open(image_path, "rb") as f:
-        files = {"fileToUpload": f}
-        response = requests.post(url, data=data, files=files, timeout=(15, 60))
+    print(f"[DEBUG] [Path] Target file: {image_file_path}")
+    print(f"[DEBUG] [API] Uploading to FreeImage.host with browser User-Agent headers...")
+    
+    try:
+        with open(image_file_path, "rb") as file:
+            response = requests.post(
+                FREEIMAGE_API_URL,
+                headers=headers,
+                data={
+                    "key": "6d207e02198a847aa98d0a2a901485a5",       # Chevereto API v1 looks for key in payload data
+                    "action": "upload",
+                    "format": "json"
+                },
+                files={"source": file},
+                timeout=30
+            )
+            
+        print(f"[DEBUG] [Response Status Code] {response.status_code}")
+        print(f"[DEBUG] [Response Headers] {dict(response.headers)}")
         
-    if response.status_code == 200 and response.text.startswith("http"):
-        return response.text.strip()
+        content_type = response.headers.get("Content-Type", "")
+        print(f"[DEBUG] [Content-Type] {content_type}")
         
-    raise Exception(f"Catbox upload failed: {response.text}")
+        # Catch HTML responses triggered by Cloudflare blocks
+        if "text/html" in content_type:
+            print(f"[DEBUG] [Error] Received HTML instead of JSON. Cloudflare blocked the script.")
+            print(f"[DEBUG] [HTML Snippet] {response.text[:400]}...")
+            raise Exception("FreeImage.host returned an HTML challenge/block page.")
+            
+        data = response.json()
+        print(f"[DEBUG] [Parsed JSON Response] {data}")
+        
+        if response.status_code == 200 and data.get("status_code") == 200:
+            image_url = data.get("image", {}).get("url")
+            print(f"[DEBUG] Successfully uploaded to FreeImage.host. URL: {image_url}")
+            return image_url
+            
+        raise Exception(f"Upload rejected: {data}")
+        
+    except Exception as e:
+        print(f"[DEBUG] [Error] Exception encountered: {e}")
+        raise
+
 def upload_to_imgbb(image_path, public_id=None, folder=None):
     # Build the exact curl command that you know works in your terminal
     cmd = [
@@ -111,6 +204,184 @@ def upload_to_imgbb(image_path, public_id=None, folder=None):
     except subprocess.CalledProcessError as e:
         raise Exception(f"Curl process failed: {e.stderr}")
     
+def upload_to_postimages_account(image_path_or_bytes, account_key="375d65b31ef5453eb9652cc870e769e9"):
+    """
+    Uploads an image to Postimages using an official account API key.
+    """
+    # Official Postimages API endpoint
+    url = "https://api.postimages.org/" # or your specific account API endpoint provided in your dashboard
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"
+    }
+    
+    # Account authentication payload
+    data = {
+        "key": account_key,
+        "expire": "0",  # 0 = never expire
+        "link": "direct"
+    }
+
+    if isinstance(image_path_or_bytes, (str, os.PathLike)):
+        files = {"file": open(image_path_or_bytes, "rb")}
+    else:
+        files = {"file": ("image.jpg", image_path_or_bytes)}
+
+    try:
+        response = requests.post(url, headers=headers, data=data, files=files, timeout=30)
+        
+        if isinstance(image_path_or_bytes, (str, os.PathLike)):
+            files["file"].close()
+
+        if response.status_code == 200:
+            print(response.text)
+            res_json = response.json()
+            # Returns the direct image URL from the official API response
+            return res_json.get("url") or res_json.get("image", {}).get("url")
+        else:
+            raise Exception(f"HTTP Error {response.status_code}: {response.text}")
+            
+    except Exception as e:
+        print(f"[Error] Postimages account upload failed: {e}")
+        return None
+import time
+
+def upload_to_postimages_with_key(image_path_or_bytes, api_key="268fdcc1ff5406aa50f3545e759e2a47", max_retries=3):
+    """
+    Uploads an image to Postimages using your account API key/token.
+    Accepts either a local file path (str) or raw image bytes.
+    """
+    url = "https://postimages.org/json"
+    
+    headers = {
+        "User-Agent": "Postimage Uploader",
+        "Referer": "https://postimages.org/",
+        "Origin": "https://postimages.org"
+    }
+    
+    data = {
+        "token": api_key,
+        "version": "2.0",
+        "app": "desktop",
+        "numfiles": "1",
+        "mode": "php",
+        "link": "direct",
+        "expire": "0",
+        "ui": "1"
+    }
+
+    try:
+        # 1. Load and compress image into memory once to keep file size tiny (<150KB)
+        if isinstance(image_path_or_bytes, (str, os.PathLike)):
+            img = Image.open(image_path_or_bytes)
+        else:
+            img = Image.open(BytesIO(image_path_or_bytes))
+
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        max_width = 1200
+        if img.width > max_width:
+            ratio = max_width / float(img.width)
+            new_height = int(float(img.height) * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+        output_buffer = BytesIO()
+        img.save(output_buffer, format="JPEG", quality=85)
+        
+        # 2. Retry loop to handle transient VPN socket drops/timeouts
+        for attempt in range(1, max_retries + 1):
+            try:
+                output_buffer.seek(0)
+                files = {"file": ("card_image.jpg", output_buffer, "image/jpeg")}
+
+                # Generous timeout: 15s to establish socket, 90s for write/read stream over VPN
+                response = requests.post(
+                    url, 
+                    headers=headers, 
+                    data=data, 
+                    files=files, 
+                    timeout=(15, 90)
+                )
+
+                if response.status_code == 200:
+                    content_type = response.headers.get("Content-Type", "")
+                    if "xml" in content_type or response.text.strip().startswith("<?xml"):
+                        print(f"[Error] Postimages version block on attempt {attempt}: {response.text[:100]}")
+                        return None
+                        
+                    res_json = response.json()
+                    if res_json.get("status") == "success":
+                        return res_json.get("url")  # Success! Returns direct image URL
+                    else:
+                        print(f"[Error] Postimages API rejected upload: {res_json}")
+                        return None
+                else:
+                    print(f"[Warning] HTTP {response.status_code} on attempt {attempt}. Retrying...")
+                    
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as net_err:
+                if attempt < max_retries:
+                    print(f"[Warning] Network timeout/drop on attempt {attempt}/{max_retries}. Retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    print(f"[Error] Postimages upload failed after {max_retries} attempts due to network timeout.")
+                    raise net_err
+
+    except Exception as e:
+        print(f"[Error] Upload process failed: {e}")
+        
+    return None
+
+def upload_to_postimages(image_path_or_bytes):
+    """
+    Uploads an image to Postimages and returns the direct image URL.
+    Accepts either a file path (str) or raw image bytes.
+    """
+    url = "https://postimages.org/json"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Referer": "https://postimages.org/",
+        "Origin": "https://postimages.org"
+    }
+    
+    # Payload fields required by Postimages backend session
+    data = {
+        "upload_session": "",
+        "numfiles": "1",
+        "mode": "php",
+        "link": "direct",
+        "expire": "0",  # 0 means never expire
+        "ui": "1",
+        "optsize": "0"
+    }
+
+    # Handle file path vs raw bytes input
+    if isinstance(image_path_or_bytes, (str, os.PathLike)):
+        files = {"file": open(image_path_or_bytes, "rb")}
+    else:
+        files = {"file": ("image.jpg", image_path_or_bytes)}
+
+    try:
+        response = requests.post(url, headers=headers, data=data, files=files, timeout=30)
+        
+        # Ensure file handle is closed if opened from path
+        if isinstance(image_path_or_bytes, (str, os.PathLike)):
+            files["file"].close()
+
+        if response.status_code == 200:
+            res_json = response.json()
+            if res_json.get("status") == "success":
+                return res_json.get("url")  # Direct hotlink URL
+            else:
+                raise Exception(f"Postimages upload rejected: {res_json}")
+        else:
+            raise Exception(f"HTTP Error {response.status_code}: {response.text}")
+            
+    except Exception as e:
+        print(f"[Error] Postimages upload failed: {e}")
+        return None
+    
 def upload_to_cloudinary(image_path, public_id=None, folder=None):
     response = cloudinary.uploader.upload(
         image_path,
@@ -126,6 +397,14 @@ def upload_to_cloudinary(image_path, public_id=None, folder=None):
     response.raise_for_status()
     return response.json()
 
+def upload_to_telegraph(image_path):
+    url = "https://telegra.ph/upload"
+    with open(image_path, "rb") as f:
+        response = requests.post(url, files={"file": ("image.jpg", f, "image/jpeg")})
+    data = response.json()
+    if isinstance(data, list) and "src" in data[0]:
+        return f"https://telegra.ph{data[0]['src']}"
+    raise Exception(f"Telegraph upload failed: {data}")
 
 def test_create_ebay_location():
     settings = Settings.get_default()

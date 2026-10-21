@@ -358,23 +358,24 @@ class CardSearchResult(OverrideableFieldsMixin, models.Model):
     def reverse_listing_groups(self):
         return self.listing_groups.all().order_by('-id')
 
-    def reset_listing_groups(self, include_graded=False):
+    def reset_listing_groups(self, include_extra_conditions=[]):
         print("reset")
         if not self.pk:
             self.save()
+            
         with transaction.atomic():
-            sold = self.listing_groups.exclude(label__icontains="ID").delete()
+            self.listing_groups.exclude(label__icontains="ID").delete()
 
             self.create_listing_group(label="Available", is_sold=False, is_img=False, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")
             self.create_listing_group(label="Sold Raw", is_sold=True, filter_terms="-graded -psa -sgc -cgc -beckett -bgs")    
-            #if there's a condition already specified, use that, otherwise do a PSA by default
+            
+            #if there's a condition already specified, use that
             if self.condition:
                 self.create_listing_group(label=f"Sold {self.condition}", is_sold=True, filter_terms=f"{self.condition} -graded -psa -sgc -cgc -beckett")
-            
-            if include_graded:
-                self.create_listing_group(label="PSA 10", is_sold=True, filter_terms="psa 10")
-                self.create_listing_group(label="PSA 9", is_sold=True, filter_terms="psa 9")
-                self.create_listing_group(label="PSA 8", is_sold=True, filter_terms="psa 8")
+
+            for condition in include_extra_conditions:
+                self.create_listing_group(label=f"Sold {condition}", is_sold=True, filter_terms=f"{condition} -graded -psa -sgc -cgc -beckett")
+
             #print("done resetting")
             #self.save()
 

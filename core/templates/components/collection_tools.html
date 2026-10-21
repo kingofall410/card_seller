@@ -5,11 +5,113 @@
 {% get_spreads as spreads %}
 {% get_title_formats as title_formats %}
 
+<style>
+  /* Split Button Hybrid Styles */
+  .split-button-container {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+    font-family: inherit;
+  }
+  .split-button-main,
+  .split-button-toggle {
+    background-color: #f8f9fa;
+    border: 1px solid #ccc;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+  .split-button-main:hover,
+  .split-button-toggle:hover {
+    background-color: #e2e6ea;
+  }
+  .split-button-main {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-right: none;
+  }
+  .split-button-toggle {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 10px;
+  }
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background-color: #ffffff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 1000;
+    padding: 4px 0;
+  }
+  .dropdown-menu.show {
+    display: block;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    font-size: 13px;
+    color: #333;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .dropdown-item:hover {
+    background-color: #f1f1f1;
+  }
+  .dropdown-item input[type="checkbox"] {
+    cursor: pointer;
+  }
+</style>
+
 <!-- Collection Header Control Bar -->
 <div class="collection-header">
     <button onclick="submitAndGo('/crop_review/0/')" title="Crop Review">✂</button>
     <button onclick="submitCollection('/identify_collection/0/')" title="Identify">🔍</button>
-    <button onclick="submitCollection('/price_collection/0/')" title="Price">💲</button>
+    
+    <!-- Split Button / Checkbox Parameters Hybrid for Price -->
+    <div class="split-button-container">
+        <button type="button" class="split-button-main" onclick="submitPriceWithParams()" title="Price">💲</button>
+        <button type="button" class="split-button-toggle" onclick="togglePriceDropdown(event)" title="Toggle pricing options">▼</button>
+        
+        <div class="dropdown-menu" id="priceDropdown" onclick="event.stopPropagation()">
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-psa-high" value="true">💲PSA > 7
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-psa-mid" value="true">💲PSA 4 - 7
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-psa-low" value="true">💲PSA < 4
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-nm" value="true">💲Extra NM
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-ex" value="true">💲Extra EX
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-vg" value="true">💲Extra VG
+            </label>
+            <label class="dropdown-item">
+                <input type="checkbox" id="price-pr" value="true">💲Extra PR
+            </label>
+        </div>
+    </div>
+
     <button onclick="submitCollection('/bulk_hold/0/')" title="Hold">✋</button>
     <button onclick="handleBulkUpdate(true)" title="Review">🕶</button>
     <button onclick="submitCollection('/card_test/')" title="Test">🧪</button>
@@ -100,6 +202,33 @@
 <script>
 let activeGroupDropdownElement = null;
 
+function togglePriceDropdown(event) {
+    event.stopPropagation();
+    const menu = document.getElementById('priceDropdown');
+    menu.classList.toggle('show');
+}
+
+function submitPriceWithParams() {
+    const checkboxIds = [
+        'price-psa-high', 
+        'price-psa-mid', 
+        'price-psa-low', 
+        'price-nm', 
+        'price-ex', 
+        'price-vg', 
+        'price-pr'
+    ];
+
+    // Filter down to only checked IDs, forming a string array
+    const checkedArray = checkboxIds.filter(id => {
+        const checkbox = document.getElementById(id);
+        return checkbox && checkbox.checked;
+    });
+
+    // Passes the array of checked IDs as the 5th argument to submitCollection
+    submitCollection('/price_collection/0/', null, null, null, checkedArray);
+}
+
 function openNewGroupModal(element) {
     activeGroupDropdownElement = element;
     document.getElementById('new-group-title-input').value = '';
@@ -131,7 +260,6 @@ document.getElementById('submit-new-group-btn').addEventListener('click', async 
 
     document.getElementById('new-group-modal').style.display = 'none';
 
-    // Build URL including title_format and candidate_query parameters
     const url = `/new_group/${encodeURIComponent(title)}/?title_format=${encodeURIComponent(titleFormat)}&candidate_query=${encodeURIComponent(candidateQuery)}`;
 
     try {
@@ -200,6 +328,14 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     window.addEventListener('click', function(event) {
+        // Close price dropdown if clicking outside its container
+        const priceMenu = document.getElementById('priceDropdown');
+        if (priceMenu && priceMenu.classList.contains('show')) {
+            if (!event.target.closest('.split-button-container')) {
+                priceMenu.classList.remove('show');
+            }
+        }
+
         if (event.target.classList.contains('tag-editor-dialog-overlay')) {
             event.target.style.display = 'none';
         }

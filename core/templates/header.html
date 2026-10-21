@@ -3,12 +3,13 @@
 <style>
     /* Navigation Core */
     .custom-navbar {
-        background-color: #333;
+        background-color: {{ navbar_color|default:"#333" }}; /* Dynamically set via Django */
         padding: 8px 24px;
         display: flex;
         align-items: center;
         position: relative;
         gap: 20px;
+        transition: background-color 0.3s ease;
     }
 
     .dropdown {

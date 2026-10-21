@@ -31,6 +31,7 @@ from core.models.ProductGroup import ProductGroup
 from core.models.ListedInfo import ListedInfo
 from core.models.ListingStatus import ListingStatus
 from django.utils.dateparse import parse_datetime
+
 @require_POST
 @csrf_exempt
 def price_collection(request, collection_id):  
@@ -49,10 +50,20 @@ def price_collection(request, collection_id):
         card_list = list(collection.cards.order_by('id'))
     print(card_list)
 
+    lgs = []
 
-    lgs = list(chain.from_iterable(card.active_search_results.listing_groups.all() for card in card_list))
+    extra_conditions = request.POST.getlist('extra_conditions[]')
+
+    #if listing group doesn't exist, create defaults
+    for card in card_list:
+        if not card.active_search_results.listing_groups.exists():
+            card.active_search_results.reset_listing_groups(include_extra_conditions=extra_conditions)
+
+        lgs += list(card.active_search_results.listing_groups.all())
+
+    print(lgs)
     lgids = [lg.id for lg in lgs]
-
+    print(lgids)
 
     core_config = apps.get_app_config("core")
     core_config.queue.schedule_pricing_task(name=f"price_collection", csr=card_list[0].active_search_results, card=card_list[0], callback=lookup.price_only_collection, params={"lg_ids":lgids,"settings_id":2}, on_success_status=StatusBase.PRICED)

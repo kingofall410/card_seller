@@ -290,13 +290,16 @@ class Queue:
 
         return t
     
-    def schedule_confirm_task(self, name, card, callback, params, on_success_status=StatusBase.CONFIRMED, priority=0, when=timezone.now()):
+    def schedule_confirm_task(self, name, card, callback, params, on_success_status=StatusBase.CONFIRMED, priority=0, when=timezone.now(), predecessor=None):
+        starting_status = StatusBase.STAGED if predecessor else StatusBase.PENDING
         t = ConfirmTask.objects.create(
             title=name, scheduled_for=when, card=card, 
             callback_path=f"{callback.__module__}.{callback.__name__}",
-            params_json=json.dumps(params), status=StatusBase.PENDING, on_success_status=on_success_status, priority=priority
+            params_json=json.dumps(params), status=starting_status, on_success_status=on_success_status, priority=priority
         )
         self.add(MemoryTask(scheduled_for=when, title=name, callback=callback, params=params, db_id=t.id, priority=priority))
+        if predecessor:
+            self._link_pred(predecessor, t)
         return t
     
     def _link_pred(self, predecessor, successor):

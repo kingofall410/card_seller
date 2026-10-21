@@ -4,6 +4,7 @@ DATABASES['default'] = {
     'NAME': 'cardishthings',
     'USER': 'dcrown',
     'PASSWORD': 'nirvana1',
-    'HOST': 'localhost',
+    #'HOST': 'localhost',
+    'HOST': '192.168.132.111',
     'PORT': '5432',
 }

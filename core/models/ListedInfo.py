@@ -265,12 +265,19 @@ class ListedInfo(models.Model):
 
         from services import export
         # Media Asset Upload & SKU Assembly Pipelines
-        #self.shareable_link_front = export.upload_to_cloudinary(front)
-        #self.shareable_link_reverse = export.upload_to_cloudinary(reverse)
-        self.shareable_link_front = export.upload_to_imgbb(front)
-        self.shareable_link_reverse = export.upload_to_imgbb(reverse)
-        #self.shareable_link_front = export.upload_to_catbox(front)
-        #self.shareable_link_reverse = export.upload_to_catbox(reverse)
+        self.shareable_link_front = export.upload_to_cloudinary(front)
+        self.shareable_link_reverse = export.upload_to_cloudinary(reverse)
+        #self.shareable_link_front = export.upload_to_telegraph(front)
+        #self.shareable_link_reverse = export.upload_to_telegraph(reverse)
+        #self.shareable_link_front = export.upload_image_with_freeimage(front)
+        #self.shareable_link_reverse = export.upload_image_with_freeimage(reverse)
+        #self.shareable_link_front = export.upload_to_imgbb(front)
+        #self.shareable_link_reverse = export.upload_to_imgbb(reverse)
+        #self.shareable_link_front = export.upload_image_with_catbox(front)
+        #self.shareable_link_reverse = export.upload_image_with_catbox(reverse)
+        #self.shareable_link_front = export.upload_to_postimages_with_key(front)
+        #self.shareable_link_reverse = export.upload_to_postimages_with_key(reverse)
+
 
 
     def build_sku(self):
