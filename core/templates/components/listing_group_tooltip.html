@@ -1,0 +1,173 @@
+{% load custom_tags %}
+{% load static %}
+<script src="{% static 'js/lg_monitor.js' %}"></script>
+
+<div class="listing-group one-liner" data-listing-group id="lg-{{ listing_group.id }}" data-group-id="{{ listing_group.id }}">
+  <div class="listing-header-container" style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <span class="listing-header-label" style="font-weight: bold; font-size: 1.1rem;">
+        {{ listing_group.label }} 
+      </span>
+      <div class="search-string" style="font-size: 0.8rem; color: #777; font-family: monospace;">
+        {{ listing_group.search_string }}
+      </div>
+      <button class="refresh-lg-btn" title="Refresh Price Search">💲</button>
+    </div>
+    <div class="price-summary" style="display: flex; align-items: center; gap: 15px; font-size: 0.85rem; margin-top: 4px;"> 
+      <b>{{ listing_group.modification_date|date:'m/d/Y H:i:s' }} ({{ listing_group.listings.count }})</b> </span>
+    </div>
+
+  <div class="image-grid scroll-row" id="grid-{{ listing_group.id }}">
+    {% for listing in listing_group.listings.all|slice:":5" %}
+      <!-- Added data-bids and data-format attributes here -->
+      <div class="listing" 
+           data-id="{{ listing.id }}" 
+           data-price="{{ listing.ebay_price|default:0 }}" 
+           data-date="{{ listing.pretty_display_date|date:'c' }}" 
+           data-title="{{ listing.title }}"
+           data-bids="{{ listing.bids|default:0 }}"
+           data-format="{{ listing.format|default:'' }}">
+        <a href="{{ listing.img_url }}" target="_blank">
+          <img src="{{ listing.thumb_url }}" class="listing-thumb" alt="" title="{{ listing.title }}">
+        </a>
+        <div class="listing-caption" style="font-weight: bold; color: #222;">${{ listing.ebay_price }}</div>
+        <div class="listing-caption" style="font-size: 0.7rem; color: #666;">{{ listing.pretty_display_date|date:'M d, Y' }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .listing-group.one-liner .image-grid { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding: 4px 4px 10px 4px; }
+  
+  /* Restored default layout style with clean drop shadow */
+  .listing-group.one-liner .listing { 
+    flex: 0 0 auto; 
+    width: 100px; 
+    background-color: #fff;
+    padding: 4px;
+    border: 2px solid transparent; /* Structural placeholder matching red alert thickness */
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .listing-group.one-liner .listing:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  }
+  
+  /* Thin border around the image thumbnail itself */
+  .listing-group.one-liner .listing-thumb {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+  }
+
+  /* Red alert border for low-bid auctions */
+  .listing-group.one-liner .listing.low-bid-auction { 
+    border-color: #dc3545;
+  }
+  
+  .sort-link { cursor: pointer; margin-right: 10px; font-size: 0.85em; color: #0d6efd; }
+  .sort-link.active { font-weight: bold; text-decoration: underline; color: #212529; }
+  .refresh-lg-btn { background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 0.8rem; color: #666; transition: all 0.2s; }
+  .refresh-lg-btn:hover { background-color: #f0f0f0; border-color: #bbb; color: #333; }
+  .refresh-lg-btn.loading { animation: spin 1s linear infinite; pointer-events: none; opacity: 0.6; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+
+<script>
+(function() {
+    const gid = "{{ listing_group.id }}";
+    const groupEl = document.getElementById(`lg-${gid}`);
+    const gridEl = document.getElementById(`grid-${gid}`);
+    const listingNodes = Array.from(gridEl.querySelectorAll(".listing"));
+    const sortBtns = groupEl.querySelectorAll(".sort-link");
+    const refreshBtn = groupEl.querySelector(".refresh-lg-btn");
+
+    // 1. Data Prep: Cache values for fast sorting & evaluation
+    listingNodes.forEach(l => {
+        l._sortDate = new Date(l.dataset.date).getTime() || 0;
+        l._sortTitle = (l.dataset.title || "").toLowerCase();
+        l._sortPrice = parseFloat(l.dataset.price) || 0;
+        
+        // Check for auction format and 0 or 1 bids
+        const bids = parseInt(l.dataset.bids, 10) || 0;
+        const format = l.dataset.format;
+        if (format === 'Auction' && bids <= 1) {
+            l.classList.add('low-bid-auction');
+        }
+    });
+
+    // 2. Sorting Engine
+    function applySort(mode, dir) {
+        listingNodes.sort((a, b) => {
+            let res = 0;
+            if (mode === "price") res = a._sortPrice - b._sortPrice;
+            else if (mode === "date") res = a._sortDate - b._sortDate;
+            else if (mode === "title") res = a._sortTitle.localeCompare(b._sortTitle);
+            return dir === "asc" ? res : -res;
+        });
+        listingNodes.forEach(l => gridEl.appendChild(l));
+    }
+
+    // 3. Initial Sort Execution
+    applySort("date", "desc");
+
+    // 4. Interaction Events (Dispatched to window)
+    listingNodes.forEach(listing => {
+        const lid = listing.dataset.id;
+        ["mouseenter", "mouseleave", "click"].forEach(evtType => {
+            listing.addEventListener(evtType, () => {
+                const action = evtType === "mouseenter" ? "highlightListing" : 
+                               evtType === "mouseleave" ? "unhighlightListing" : "clickListing";
+                window.dispatchEvent(new CustomEvent(action, { detail: { group_id: gid, listing_id: lid } }));
+            });
+        });
+    });
+
+    // 5. Sort Controls
+    sortBtns.forEach(link => {
+        link.addEventListener("click", () => {
+            const mode = link.dataset.sort;
+            const newDir = link.dataset.dir === "desc" ? "asc" : "desc";
+            link.dataset.dir = newDir;
+            link.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} ${newDir === "desc" ? "↓" : "↑"}`;
+            sortBtns.forEach(l => l.classList.remove("active"));
+            link.classList.add("active");
+            applySort(mode, newDir);
+        });
+    });
+
+    // 6. Refresh + Monitor Logic
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", async function(e) {
+            e.preventDefault();
+            refreshBtn.classList.add('loading');
+            
+            // Start the standalone Monitor for this group
+            if (window.LGMonitor) {
+                LGMonitor.getInstance().watchGroup(gid);
+            }
+
+            try {
+                const response = await fetch(`/async_price_search/${gid}`);
+                if (response.ok) {
+                    refreshBtn.textContent = "⌛"; // Indicate waiting for background task
+                } else {
+                    refreshBtn.classList.remove('loading');
+                    refreshBtn.textContent = "❌";
+                }
+            } catch (err) {
+                console.error(`Refresh error for ${gid}:`, err);
+                refreshBtn.classList.remove('loading');
+            }
+        });
+    }
+})();
+</script>

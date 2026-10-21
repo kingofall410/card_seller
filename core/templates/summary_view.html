@@ -1,0 +1,50 @@
+<!-- Include DataTables CSS in your <head> or right above the table -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
+<table id="summaryTable" class="display" style="width:100%">
+    <thead>
+        <tr>
+            <th>Card Name</th>
+            <th>imported</th>
+            <th>unlisted</th>
+            <th>priced</th>
+            <th>reviewed</th>
+            <th>staged</th>
+            <th>listed</th>
+            <th>confirmed</th>
+            <th>sold</th>
+            <th>held</th>
+            <th>failed</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in name_summary %}
+            <tr>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120">{{ item.full_name }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=imported">{{ item.imported }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=unlisted">{{ item.unlisted }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=priced">{{ item.priced }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=reviewed">{{ item.reviewed }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=staged">{{ item.staged }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=listed">{{ item.listed }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=confirmed">{{ item.confirmed }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=sold">{{ item.sold }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=held">{{ item.held }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120&status=failed">{{ item.failed }}</a></td>
+                <td><a href="{% url 'collection' '0'%}?q={{ item.full_name }}&timeframe=120">{{ item.total_count }}</a></td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Include DataTables JS and Initialize -->
+ <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#summaryTable').DataTable({
+            "order": [[11, "desc"]] // Optional: Sorts by the "Total" column (index 11) descending by default
+        });
+    });
+</script>
